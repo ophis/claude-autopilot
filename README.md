@@ -191,6 +191,9 @@ claude --plugin-dir /path/to/claude-autopilot
 
 # Validate manifests + frontmatter (use --strict in CI to fail on warnings):
 claude plugin validate /path/to/claude-autopilot --strict
+
+# Run the script tests (stdlib unittest, no deps):
+python3 tests/test_scripts.py
 ```
 
 Per-build development docs live in `dev-docs/<date>-<slug>-{spec,progress}.md`,
