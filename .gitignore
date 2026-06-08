@@ -1,5 +1,6 @@
 # OS noise
 .DS_Store
 
-# NOTE: dev-docs/ is intentionally TRACKED — it is the build's audit trail
-# (per-stage <slug>-findings.md / <slug>-progress.md), not throwaway scratch.
+# Design + per-build dev docs — kept local, not committed to the published plugin
+SPEC.md
+dev-docs/
