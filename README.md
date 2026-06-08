@@ -5,11 +5,11 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.2.0** — the `/autopilot:build` and `/autopilot:fix` commands are
-> implemented. The **named spec-review roster** now ships its first slice in
-> `agents/` (see [Review roster](#review-roster-agents)). The work-phase review pack
-> and the selection stage that auto-routes the roster into S1/S5 remain future work;
-> until that wiring lands the commands still summon their review lenses ad-hoc inline.
+> Status: **v0.3.0** — the `/autopilot:build` and `/autopilot:fix` commands are
+> implemented, and the **named review roster** is now complete for both phases in
+> `agents/` (see [Review roster](#review-roster-agents)). The remaining future work is
+> the **selection stage** that auto-routes the roster into the S1/S5 loops; until that
+> wiring lands the commands still summon their review lenses ad-hoc inline.
 
 ## Installation
 
@@ -44,7 +44,7 @@ This repo is its own single-repo marketplace, so add it and install:
 local path works too). You can also browse and install via the interactive
 `/plugin` menu (Marketplaces → add → install).
 
-**Updating:** this plugin uses explicit semver (currently `0.2.0`). A release bumps
+**Updating:** this plugin uses explicit semver (currently `0.3.0`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```
@@ -78,7 +78,7 @@ NON-BLOCKING` contract decided from disk, not vibes.
 State (spec, plan, progress) is persisted so a run survives context compaction and
 can be resumed; where those files live follows your own project convention.
 
-### Smoke test (the v0.2.0 eval)
+### Smoke test (the build eval)
 
 In a throwaway git repo:
 
