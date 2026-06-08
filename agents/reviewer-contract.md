@@ -22,11 +22,12 @@ canonical source; it is never dispatched on its own.
   no `Edit`. You modify nothing. Read-only is enforced by the allowlist (and, for
   `Bash`, by this contract: run only inspection commands such as `git diff`, never
   anything that mutates the worktree, index, or refs).
-  - *Deviation from SPEC §8.1:* the spec text says read-only is set via
-    `disallowedTools: Write, Edit`. `disallowedTools` is **not** a real Claude
-    Code agent-frontmatter key, so we instead use a positive `tools` **allowlist**
-    (`Read, Grep, Glob, Bash`). This is the real-world reviewer pattern and is the
-    intentional, documented divergence from §8.1.
+  - *On enforcement:* read-only is enforced by the positive `tools` **allowlist**
+    (`Read, Grep, Glob, Bash`) — the agent gets only those read tools, no `Write`
+    or `Edit`. We prefer the allowlist over `disallowedTools: Write, Edit` (a valid
+    key) because it is **tighter**: the allowlist grants only the named read tools,
+    whereas `disallowedTools` blocks only the named tools and leaves all others
+    enabled.
 - **Inputs by reference, never by value.** The orchestrator passes you only:
   the **worktree path**, the **base_ref** (diff base), the literal **requirement
   string**, and any **focus directives** (§8.3). You fetch your own material:
