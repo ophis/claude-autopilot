@@ -110,27 +110,44 @@ Together, `build` → review → `fix` → review → … is the human-in-the-lo
 
 ## Review roster (`agents/`)
 
-The first slice of the committed, accountable review roster. Each reviewer is a
-**read-only, single-lens** agent that returns the strict `VERDICT / BLOCKING /
-NON-BLOCKING` contract, so a review is reproducible and a lens is attributable —
-unlike anonymous ad-hoc reviewers chosen anew each time.
+The committed, accountable review roster. Each reviewer is a **read-only,
+single-lens** agent that returns the strict `VERDICT / BLOCKING / NON-BLOCKING`
+contract, so a review is reproducible and a lens is attributable — unlike anonymous
+ad-hoc reviewers chosen anew each time. `phase` is when a lens runs — `spec` (S1
+spec-review), `work` (S5 work-review), or `both`.
 
 | File | Lens | Phase | Tier |
 | --- | --- | --- | --- |
 | `agents/reviewer-contract.md` | Authoring template inlined into each reviewer (not dispatched) | — | — |
 | `agents/spec-fitness-reviewer.md` | Spec fitness, gaps, ambiguity, scope, testability | spec | core |
 | `agents/architecture-reviewer.md` | Structure, boundaries, coupling, extensibility | both | core |
+| `agents/correctness-reviewer.md` | Intent/logic, edge & boundary cases, error paths | work | core |
+| `agents/requirement-satisfaction-reviewer.md` | Work satisfies the original requirement, end to end | work | core |
+| `agents/spec-alignment-reviewer.md` | Work faithfully implements the spec; no drift or scope creep | work | core |
+| `agents/doc-reviewer.md` | Docs current after the change; edits concise / not bloated | work | core |
+| `agents/code-quality-reviewer.md` | Readability, naming, duplication, dead code, needless complexity | work | optional |
+| `agents/test-reviewer.md` | Tests meaningful & assert the spec; coverage of new/changed code | work | optional |
+| `agents/performance-reviewer.md` | Complexity, N+1, allocation, resource leaks, hotspots | work | optional |
 | `agents/security-reviewer.md` | Authz, input validation, secrets, injection, supply chain | both | optional |
 
-`security-reviewer` is the first **conditional** lens (`tier: optional`): it runs only
-when the spec/diff shows auth, input-handling, network, file/DB I/O, dependency, or
-crypto signals (its `applies_to`), and is skipped — auditably — otherwise.
+The new work-phase core lenses form a **requirement → spec → work** chain:
+`requirement-satisfaction` (built the right thing), `spec-alignment` (built per the
+spec), `correctness` (built bug-free); `doc-reviewer` keeps docs current and concise.
+
+The **floor** that always runs is the phase's `core` lenses — spec phase:
+spec-fitness + architecture; work phase: correctness + architecture +
+requirement-satisfaction + spec-alignment + doc-reviewer — so every review is
+non-empty for any deliverable. `optional` lenses are **conditional**: they run only
+when the spec/diff matches their `applies_to`, auditably skipped otherwise. The
+`code-quality`/`test`/`performance` pack matches code files; `security` matches auth,
+input-handling, network, file/DB I/O, dependency, or crypto signals.
 
 Each reviewer's frontmatter is **self-describing** (`lens`/`phase`/`tier`/
 `applies_to`), so a future selection stage discovers and routes the roster with no
-code change; new lenses (the work-phase pack, domain packs) join the same way — a new
-file under `agents/`. The roster is **not yet wired** into the commands' S1/S5 loops;
-that selection stage is the next step.
+code change; new lenses (domain packs) join the same way — a new file under `agents/`.
+The roster is **not yet wired** into the commands' S1/S5 loops; that selection stage
+is the next step (both the spec- and work-phase floors now exist, so it can wire S1
+and S5 together).
 
 ## Configuration
 
