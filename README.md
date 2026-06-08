@@ -5,7 +5,7 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.4.1** — the `/autopilot:build` and `/autopilot:fix` commands are
+> Status: **v0.4.2** — the `/autopilot:build` and `/autopilot:fix` commands are
 > implemented, the **named review roster** is complete for both phases in `agents/`,
 > and the **selection stage** (`scripts/select-panel.py`) wires the roster into the
 > S1/S5 review loops — the commands select the panel from the roster and dispatch each
@@ -44,7 +44,7 @@ This repo is its own single-repo marketplace, so add it and install:
 local path works too). You can also browse and install via the interactive
 `/plugin` menu (Marketplaces → add → install).
 
-**Updating:** this plugin uses explicit semver (currently `0.4.1`). A release bumps
+**Updating:** this plugin uses explicit semver (currently `0.4.2`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```
