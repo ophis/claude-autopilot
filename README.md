@@ -7,8 +7,7 @@ with one explicit command.
 
 > Status: **v0.2.0** — the `/autopilot:build` and `/autopilot:fix` commands are
 > implemented as the first, **agent-free** slice. The full design (named
-> review-agent roster, selection stage) lives in [`SPEC.md`](./SPEC.md) and is
-> future work.
+> review-agent roster, selection stage) is future work.
 
 ## Installation
 
@@ -144,7 +143,5 @@ claude plugin validate /path/to/claude-autopilot --strict
 ```
 
 Per-build development docs live in `dev-docs/<date>-<slug>-{spec,progress}.md`,
-committed with the branch as the build's audit trail (this is our development
-workflow, not something the command imposes on its users).
-
-See [`SPEC.md`](./SPEC.md) for the full design and rationale.
+kept locally (gitignored) as the build's audit trail — this is our development
+workflow, not something the command imposes on its users.
