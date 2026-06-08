@@ -11,8 +11,18 @@ to end. Dispatch and judge; do not do the work yourself.
 
 ## Your input ($ARGUMENTS)
 
-`$ARGUMENTS` is the **requirements** — the thing to build. Treat it as the single
-source of intent. If it is empty, STOP with a handoff asking for requirements.
+`$ARGUMENTS` is the single source of intent and has two modes:
+
+- **Requirements mode (default):** free-text requirements → full pipeline (E1 → E2
+  brainstorm → S1 spec-review → S2 → …).
+- **Spec-file mode:** if `$ARGUMENTS` (trimmed) is a path to an **existing readable
+  file** (a spec the user already wrote), adopt it as the run's spec and **skip E2 and
+  S1** (run E1 → S2 → …). If it is NOT an existing file, treat it as requirements text
+  (normal mode), so a typo'd path safely falls back. The provided spec must be
+  **self-contained** — clear enough to plan, implement, and verify without further
+  clarification (ideally states acceptance/verification criteria).
+
+If it is empty, STOP with a handoff asking for requirements.
 
 ## Preflight (dependencies)
 
@@ -119,7 +129,7 @@ per-phase cap (default 3 rounds). The driver is chosen by config.
 Both drivers obey the same rules: a fresh panel each round; convergence is decided
 from the on-disk verdicts (the marker is printed ONLY when convergence is genuinely
 true — never to escape the loop); on the marker the phase is done and the command
-proceeds (S1→S2, S5→S6); if the per-phase cap (`maxIterations.spec-phase` /
+proceeds (S1→S2, S5→S6) (in spec-file mode the run starts at S2 directly — no S1, no marker); if the per-phase cap (`maxIterations.spec-phase` /
 `.implementation-phase`, default 3) is hit WITHOUT the marker → non-convergence STOP
 with the 3-way classification (oscillation | unfixable | requirements-conflict) and
 a handoff — do not proceed.
@@ -129,21 +139,34 @@ a handoff — do not proceed.
 Legend: **E#** = entry phase (command-specific; `′` = fix variant); **S#** = shared
 spine (common to build & fix).
 
+**Entry modes (build):** *requirements mode* (default) runs E1 → E2 → S1 → S2 → …;
+*spec-file mode* (when `$ARGUMENTS` is an existing spec file) runs **E1 → S2** — E2
+and S1 are skipped, the provided spec becomes the run's spec (record its absolute path
+in the RESUME block as `spec_file=<path>`; S2 plans from it; S5's `spec-alignment`
+reviewer uses it as the work⊨spec reference). Because S1 is skipped, no
+`AUTOPILOT: SPEC READY` marker and no S1 root-contradiction stop occur in this mode.
+
 - **E1 — worktree (step 1).** Use `superpowers:using-git-worktrees` → branch
   `autopilot/<slug>`. Slug = `$ARGUMENTS` lowercased, non-alphanumerics → hyphens,
-  collapsed/trimmed, truncated to ~40 chars. Record worktree/branch/base_ref (HEAD)
-  in the RESUME block; create the spec + progress notes per the project's
+  collapsed/trimmed, truncated to ~40 chars. In **spec-file mode**, derive the slug
+  from the spec file's basename — drop the extension and any leading `YYYY-MM-DD-`
+  date prefix and trailing `-spec`/`-design`, then apply the slug rule above (e.g.
+  `dev-docs/2026-06-08-foo-spec.md` → `foo`). Record worktree/branch/base_ref (HEAD)
+  in the RESUME block; create the **progress note** per the project's
   convention. On worktree/branch collision: one retry with a uniquified slug
   (`-2`, …), else STOP.
 - **E2 — brainstorm (step 2).** Use `superpowers:brainstorming` on `$ARGUMENTS` →
-  write the spec into the spec doc. Decide on doubt; record decisions.
+  write the spec into the spec doc. Decide on doubt; record decisions. (**Spec-file
+  mode:** skipped — the user-provided spec is adopted as-is.)
 - **S1 — spec review (steps 2–3).** Run the **S1 Ralph loop** (above) over the
   (change-)spec. **Fixes:** the orchestrator edits the spec doc directly (the spec
   is a small artifact it holds; only S5 delegates fixes to a producer). On
   convergence it records `AUTOPILOT: SPEC READY`. **Root-contradiction STOP:** if
   the reviewers find the core requirement asks for two things that cannot both be
   true, STOP and hand off — quote the two conflicting clauses (this is a handoff,
-  never a question; mere vagueness is decided, not stopped).
+  never a question; mere vagueness is decided, not stopped). (**Spec-file mode:**
+  skipped — the provided spec is adopted as-is; its `AUTOPILOT: SPEC READY` marker and
+  the root-contradiction stop do not apply in this mode.)
 - **S2 — plan (step 4).** Use `superpowers:writing-plans` → write the plan into the
   spec doc and record how the work will be verified. On a consequential plan fork →
   decide + dispatch ONE challenger.
@@ -193,12 +216,17 @@ only.
 
 ## State & resumption
 
-Persist three things so the run survives compaction: the brainstormed **spec**, the
-**plan**, and a **progress note** carrying a small RESUME block:
+Persist three things so the run survives compaction: the **spec** (E2's output in
+requirements mode, or the user-provided file in spec-file mode — E1 itself writes only
+the progress note), the **plan**, and a **progress note** carrying a small RESUME block:
 
 ```
-RESUME: phase=<E1|E2|S1..S7> worktree=<path> branch=<name> base_ref=<sha> ralph_round=<n>
+RESUME: phase=<E1|E2|S1..S7> worktree=<path> branch=<name> base_ref=<sha> ralph_round=<n> spec_file=<path>
 ```
+
+(`spec_file` is present only in spec-file mode.)
+
+**Keep RESUME current:** rewrite the RESUME block at every phase transition — update `phase=` as you advance (E1→E2→S1…→S7; spec-file mode advances E1→S2) and `ralph_round=` each loop iteration; the resume contract depends on RESUME reflecting the true current phase, and a stale `phase=` breaks resumption.
 
 **Where these live follows the user's / project's existing convention** — honor
 CLAUDE.md preferences and existing repo patterns. The command imposes no fixed path

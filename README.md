@@ -67,6 +67,8 @@ end and without asking you questions:
 8. Squash to one clean commit.
 9. Report for your review. **It never merges** — you review and integrate.
 
+You can also hand `/autopilot:build` a path to an existing spec file instead of free-text requirements — it then skips the brainstorm + spec-review (E2/S1) and plans straight from your spec (e.g. `/autopilot:build path/to/spec.md`).
+
 When in doubt it summons an ad-hoc expert team, decides, has another team challenge
 the decision, then fixes — it does not ask you. It stops only to hand off on a
 safety condition (non-convergence after 3 review rounds; an unrecoverable phase

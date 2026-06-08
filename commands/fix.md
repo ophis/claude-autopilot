@@ -218,7 +218,11 @@ RESUME: phase=<E1'|E2'|S1..S7> worktree=<path> branch=<name> base_ref=<sha> ralp
 ```
 
 (`pre_squash_head` is recorded once **S6** runs, so an interrupted re-squash is detected
-on resume.) **Where these live follows the user's / project's existing convention** —
+on resume.)
+
+**Keep RESUME current:** rewrite the RESUME block at every phase transition — update `phase=` as you advance (E1′→E2′→S1…→S7), `ralph_round=` each loop iteration, and `pre_squash_head=` once the squash runs; the resume contract depends on RESUME reflecting the true current phase, and a stale `phase=` breaks resumption.
+
+**Where these live follows the user's / project's existing convention** —
 honor CLAUDE.md preferences and existing repo patterns. The command imposes no fixed
 path (do not assume `dev-docs/`) and no gitignore-vs-commit policy.
 
