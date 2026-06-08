@@ -1,5 +1,5 @@
 ---
-description: "Autonomous pipeline: worktree → spec+review loop → plan → subagent implementation → verify → review loop → docs → squash. Produces a review-ready branch; never merges. Explicit-only."
+description: "Autonomous pipeline: worktree → spec+review loop → plan → subagent implementation → verify → review loop → squash. Produces a review-ready branch; never merges. Explicit-only."
 argument-hint: "<requirements>"
 disable-model-invocation: true
 ---
