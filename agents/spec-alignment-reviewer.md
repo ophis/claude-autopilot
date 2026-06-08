@@ -8,7 +8,7 @@ description: >-
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: medium
-maxTurns: 8
+maxTurns: 30
 lens: Does the work faithfully implement the spec — every spec'd item present, nothing unspecified added, no drift
 phase: work
 tier: core

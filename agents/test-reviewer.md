@@ -10,7 +10,7 @@ description: >-
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: medium
-maxTurns: 8
+maxTurns: 30
 lens: Tests meaningful and assert the spec'd behavior; coverage of new/changed code & edges (code)
 phase: work
 tier: optional

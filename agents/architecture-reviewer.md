@@ -9,7 +9,7 @@ description: >-
 tools: Read, Grep, Glob, Bash
 model: opus
 effort: high
-maxTurns: 10
+maxTurns: 30
 lens: Structure, boundaries, coupling, extensibility (general)
 phase: both
 tier: core

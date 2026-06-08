@@ -10,7 +10,7 @@ description: >-
 tools: Read, Grep, Glob, Bash
 model: opus
 effort: high
-maxTurns: 10
+maxTurns: 30
 lens: Authz, input validation, secrets, injection, supply chain (code/IO)
 phase: both
 tier: optional

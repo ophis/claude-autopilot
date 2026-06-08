@@ -8,7 +8,7 @@ description: >-
 tools: Read, Grep, Glob, Bash
 model: opus
 effort: high
-maxTurns: 10
+maxTurns: 30
 lens: Does the finished work satisfy the original build/fix requirement (the user's intent), end to end
 phase: work
 tier: core

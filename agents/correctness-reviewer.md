@@ -8,7 +8,7 @@ description: >-
 tools: Read, Grep, Glob, Bash
 model: opus
 effort: high
-maxTurns: 10
+maxTurns: 30
 lens: Does it do what's intended; logic errors, edge/boundary cases
 phase: work
 tier: core

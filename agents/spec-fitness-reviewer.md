@@ -8,7 +8,7 @@ description: >-
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: medium
-maxTurns: 8
+maxTurns: 30
 lens: Spec fitness, gaps, ambiguity, scope, testability (general)
 phase: spec
 tier: core

@@ -9,7 +9,7 @@ description: >-
 tools: Read, Grep, Glob, Bash
 model: opus
 effort: high
-maxTurns: 10
+maxTurns: 30
 lens: Algorithmic complexity, N+1/queries-in-loops, needless allocation, resource leaks, obvious hotspots (code)
 phase: work
 tier: optional

@@ -8,7 +8,7 @@ description: >-
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: medium
-maxTurns: 8
+maxTurns: 30
 lens: Are all docs in the worktree current after the change, and are doc edits concise / not bloated
 phase: work
 tier: core
