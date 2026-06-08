@@ -58,7 +58,7 @@ Explicit-only (never model-invoked). Hand it a requirement and it drives, end to
 end and without asking you questions:
 
 1. Worktree on a new branch (`autopilot/<slug>`).
-2. Brainstorm the spec (summon a team on doubt; decide).
+2. Brainstorm the spec (convene an expert council at decision points; decide).
 3. Review the spec — summon a fresh team, fix, re-review until clean.
 4. Write the execution plan.
 5. Implement (subagent-driven).
@@ -69,8 +69,8 @@ end and without asking you questions:
 
 You can also hand `/autopilot:build` a path to an existing spec file instead of free-text requirements — it then skips the brainstorm + spec-review (E2/S1) and plans straight from your spec (e.g. `/autopilot:build path/to/spec.md`).
 
-When in doubt it summons an ad-hoc expert team, decides, has another team challenge
-the decision, then fixes — it does not ask you. It stops only to hand off on a
+At a genuine decision point it convenes a small **expert council** (ad-hoc sub-agents)
+to deliberate, then decides and records — it does not ask you. It stops only to hand off on a
 safety condition (non-convergence after 3 review rounds; an unrecoverable phase
 failure; a self-contradictory requirement; or — **only when Auto Mode is off** — a
 destructive git op). Reviews converge via a structured `VERDICT/BLOCKING/

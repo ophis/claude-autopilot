@@ -37,10 +37,10 @@ user it is required and how to install it —
 
 ## Operating disciplines
 
-- **Autonomous — never ask the user.** On resolvable doubt: decide, record the
-  decision in the spec doc, proceed. On a *consequential fork*: decide AND dispatch
-  exactly ONE challenger team to stress the decision; reconcile, record, proceed.
-  Only the four safety stops interrupt the autonomous pipeline mid-run.
+- **Autonomous — never ask the user.** At a decision point, **convene the expert
+  council** (see "Deciding at decision points (expert council)") to deliberate, then
+  decide + record; trivial vagueness → decide + record solo. Only the safety stops
+  interrupt the run.
 - **Thin orchestrator.** Dispatch by reference and judge structured output. Never
   hoard whole files, diffs, or logs in the main thread. Read only bounded slices
   when you must inspect something yourself.
@@ -84,6 +84,44 @@ and dispatched natively. Requires the installed plugin **≥0.3.0** (ships `agen
     pattern), same verdict contract — for a gap no roster agent covers.
 - **Collect verdicts → the existing Ralph loop** (unchanged: round-0 short-circuit,
   re-dispatch only FAILed/touched, cap, convergence from on-disk verdicts).
+
+## Deciding at decision points (expert council)
+
+At a **decision point**, the orchestrator **convenes an expert council**: a small team
+(2–4) of **ad-hoc expert sub-agents** (personas derived from the decision's domain),
+dispatched in **one parallel batch** via `superpowers:dispatching-parallel-agents`. Each
+returns a **concise position** (recommendation + rationale + key trade-offs + any
+dissent). The **orchestrator then synthesizes, decides, and records** the decision + the
+council's key points (incl. dissent) in the spec/findings/progress. The orchestrator is
+the decider; the council informs it. Never ask the user.
+
+**Council members are advisors, not reviewers** — they give recommendations, NOT the
+`VERDICT/BLOCKING/NON-BLOCKING` grammar (that's the review panel). Bounded: 2–4,
+parallel, by-reference, no superpowers skills, concise positions.
+
+**Convene when ANY of:**
+- two or more **viable approaches with materially different trade-offs** exist;
+- the choice **shapes architecture / data model / public interface / scope**;
+- the choice is **costly to reverse** once baked in;
+- it is a genuine fork a later review loop **might not catch**.
+
+**Decide solo + record when:**
+- there is a **single obvious default**, or project convention dictates the answer;
+- the choice is **cosmetic / local / easily reversible**;
+- a wrong guess would simply be **caught by S1/S5**.
+
+**Examples.** Council: "which storage model / API shape / module boundaries?",
+"reconcile two conflicting requirements", "pick between two non-trivial strategies".
+Solo: "name a variable", "pick a file path under convention", "fill an obvious default
+for a low-stakes detail".
+
+**Single-persona fallback:** if a decision admits fewer than two distinct lenses, use a
+smaller council or decide solo with recorded rationale — don't fabricate personas to hit
+a count.
+
+**Dissent / split handling:** the orchestrator rules and records *why*; a minority
+position is logged as "considered, not adopted"; the orchestrator breaks ties (it is the
+decider).
 
 ## Verdict grammar (paste inline into every summon prompt)
 
@@ -146,7 +184,9 @@ spine (common to build & fix).
     Mode is on (then proceed, deferring to Auto Mode).
 - **E2′ — brainstorm the feedback.** Use `superpowers:brainstorming` on `$ARGUMENTS`
   (the feedback) → write a **change-spec** appended to the existing spec doc (the
-  original spec stays as context). Decide on doubt; record decisions.
+  original spec stays as context). At decision points, convene the expert council (see
+  "Deciding at decision points (expert council)") to discuss and decide; record the
+  decision + rationale. (Trivial defaults: decide + record.)
 - **S1 — change-spec review (Ralph loop).** Review the **change-spec** (with the
   original as context), not the original. Panel derived from the change-spec's
   keywords; reviewers read the change-spec doc (as in build's S1). Run the **S1
@@ -159,7 +199,8 @@ spine (common to build & fix).
   stopped).
 - **S2 — plan the delta.** Use `superpowers:writing-plans` → write the plan for the
   change into the spec doc; record how the work will be verified. On a consequential
-  plan fork → decide + dispatch ONE challenger.
+  plan fork → convene the expert council (see "Deciding at decision points (expert
+  council)") to decide.
 - **S3 — produce.** Code → `superpowers:subagent-driven-development` (it may commit
   per task and run its own task-level review — that is fine; S5 is the authoritative
   gate and the S6 re-squash folds its commits). Non-code → producer subagents via
@@ -206,7 +247,8 @@ smallest panel (2–4, conditional lenses only on signal) · round-0 short-circu
 per-phase cap (`maxIterations.spec-phase` / `.implementation-phase`, default 3),
 re-dispatch only FAILed/touched lenses · bounded subagent prompts, no
 superpowers skills loaded into reviewers · producer primed by blockers + cited files
-only.
+only · expert councils bounded (2–4), convened only at genuine decision points, in one
+parallel batch.
 
 ## State & resumption
 
