@@ -6,8 +6,10 @@ replaces a copy-pasted "do all this, summon a team to review, never ask me" prom
 with one explicit command.
 
 > Status: **v0.2.0** — the `/autopilot:build` and `/autopilot:fix` commands are
-> implemented as the first, **agent-free** slice. The full design (named
-> review-agent roster, selection stage) is future work.
+> implemented. The **named spec-review roster** now ships its first slice in
+> `agents/` (see [Review roster](#review-roster-agents)). The work-phase review pack
+> and the selection stage that auto-routes the roster into S1/S5 remain future work;
+> until that wiring lands the commands still summon their review lenses ad-hoc inline.
 
 ## Installation
 
@@ -105,6 +107,25 @@ Together, `build` → review → `fix` → review → … is the human-in-the-lo
 
 (Phase prefixes you'll see in both commands: **E#** = entry phase, command-specific
 — `build` E1/E2, `fix` E1′/E2′; **S#** = the shared spine S1–S8 both run.)
+
+## Review roster (`agents/`)
+
+The first slice of the committed, accountable review roster. Each reviewer is a
+**read-only, single-lens** agent that returns the strict `VERDICT / BLOCKING /
+NON-BLOCKING` contract, so a review is reproducible and a lens is attributable —
+unlike anonymous ad-hoc reviewers chosen anew each time.
+
+| File | Lens | Phase | Tier |
+| --- | --- | --- | --- |
+| `agents/reviewer-contract.md` | Authoring template inlined into each reviewer (not dispatched) | — | — |
+| `agents/spec-reviewer.md` | Spec fitness, gaps, ambiguity, scope, testability | spec | core |
+| `agents/architecture-reviewer.md` | Structure, boundaries, coupling, extensibility | both | core |
+
+Each reviewer's frontmatter is **self-describing** (`lens`/`phase`/`tier`/
+`applies_to`), so a future selection stage discovers and routes the roster with no
+code change; new lenses (the work-phase pack, domain packs) join the same way — a new
+file under `agents/`. The roster is **not yet wired** into the commands' S1/S5 loops;
+that selection stage is the next step.
 
 ## Configuration
 
