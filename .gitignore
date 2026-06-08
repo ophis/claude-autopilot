@@ -1,0 +1,5 @@
+# OS noise
+.DS_Store
+
+# NOTE: dev-docs/ is intentionally TRACKED — it is the build's audit trail
+# (per-stage <slug>-findings.md / <slug>-progress.md), not throwaway scratch.
