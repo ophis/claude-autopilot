@@ -4,3 +4,6 @@
 # Design + per-build dev docs — kept local, not committed to the published plugin
 SPEC.md
 dev-docs/
+
+# Local autopilot worktrees (created by EnterWorktree / git worktree add)
+.claude/worktrees/
