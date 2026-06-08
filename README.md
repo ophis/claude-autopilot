@@ -36,13 +36,14 @@ you these instructions rather than failing midway.
 This repo is its own single-repo marketplace, so add it and install:
 
 ```
-/plugin marketplace add ophis/claude-autopilot
+/plugin marketplace add https://github.com/ophis/claude-autopilot.git
 /plugin install autopilot@claude-autopilot
 ```
 
-`ophis/claude-autopilot` is the GitHub `owner/repo` shorthand (a full git URL or a
-local path works too). You can also browse and install via the interactive
-`/plugin` menu (Marketplaces → add → install).
+`https://github.com/ophis/claude-autopilot.git` is the marketplace's git URL (the
+`owner/repo` shorthand `ophis/claude-autopilot` or a local path works too). You can
+also browse and install via the interactive `/plugin` menu (Marketplaces → add →
+install).
 
 **Updating:** this plugin uses explicit semver (currently `0.5.1`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
