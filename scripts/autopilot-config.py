@@ -3,7 +3,7 @@
 
 The build/fix commands run this once at startup. It:
   1. locates the plugin's own data dir (``$CLAUDE_PLUGIN_DATA``; falls back to
-     ``~/.claude/plugins/data/autopilot`` if the env var is unset),
+     ``~/.claude/plugins/data/autopilot-claude-autopilot`` if the env var is unset),
   2. ensures ``<data-dir>/config.json`` exists, writing DEFAULTS if it is absent
      or unparseable,
   3. prints the *effective* config (DEFAULTS deep-merged with the user's file) as
@@ -40,8 +40,10 @@ def deep_merge(base, override):
 
 
 def main():
+    # fallback {id} = "<plugin-name>-<marketplace-name>" = autopilot-claude-autopilot
+    # (Claude Code sanitizes non-[A-Za-z0-9_-] to '-')
     data_dir = os.environ.get("CLAUDE_PLUGIN_DATA") or os.path.expanduser(
-        "~/.claude/plugins/data/autopilot"
+        "~/.claude/plugins/data/autopilot-claude-autopilot"
     )
     os.makedirs(data_dir, exist_ok=True)
     path = os.path.join(data_dir, "config.json")

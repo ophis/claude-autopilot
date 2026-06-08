@@ -226,6 +226,27 @@ class AutopilotConfigTests(unittest.TestCase):
         with open(os.path.join(d, "config.json")) as fh:
             self.assertEqual(fh.read(), "{ not valid json")            # left intact
 
+    def test_fallback_dir_when_env_unset(self):
+        # When CLAUDE_PLUGIN_DATA is unset, the script must fall back to the real
+        # per-plugin {id} dir under HOME, not the old wrong ".../autopilot" path.
+        home = tempfile.mkdtemp()
+        env = dict(os.environ, HOME=home)
+        env.pop("CLAUDE_PLUGIN_DATA", None)
+        proc = subprocess.run(
+            [sys.executable, CONFIG],
+            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(json.loads(proc.stdout), self.DEFAULTS)        # printed effective
+        good = os.path.join(home, ".claude", "plugins", "data",
+                            "autopilot-claude-autopilot", "config.json")
+        bad = os.path.join(home, ".claude", "plugins", "data",
+                           "autopilot", "config.json")
+        self.assertTrue(os.path.exists(good), "fallback config.json not at {id} dir")
+        with open(good) as fh:
+            self.assertEqual(json.load(fh), self.DEFAULTS)
+        self.assertFalse(os.path.exists(bad), "config.json written to old wrong path")
+
 
 if __name__ == "__main__":
     unittest.main()
