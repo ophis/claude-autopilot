@@ -118,8 +118,13 @@ unlike anonymous ad-hoc reviewers chosen anew each time.
 | File | Lens | Phase | Tier |
 | --- | --- | --- | --- |
 | `agents/reviewer-contract.md` | Authoring template inlined into each reviewer (not dispatched) | — | — |
-| `agents/spec-reviewer.md` | Spec fitness, gaps, ambiguity, scope, testability | spec | core |
+| `agents/spec-fitness-reviewer.md` | Spec fitness, gaps, ambiguity, scope, testability | spec | core |
 | `agents/architecture-reviewer.md` | Structure, boundaries, coupling, extensibility | both | core |
+| `agents/security-reviewer.md` | Authz, input validation, secrets, injection, supply chain | both | optional |
+
+`security-reviewer` is the first **conditional** lens (`tier: optional`): it runs only
+when the spec/diff shows auth, input-handling, network, file/DB I/O, dependency, or
+crypto signals (its `applies_to`), and is skipped — auditably — otherwise.
 
 Each reviewer's frontmatter is **self-describing** (`lens`/`phase`/`tier`/
 `applies_to`), so a future selection stage discovers and routes the roster with no
