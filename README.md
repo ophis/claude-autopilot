@@ -5,9 +5,10 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.1** — the `/autopilot:build` command is implemented as the first,
-> **agent-free** slice. The full design (named review-agent roster, `fix` command,
-> selection stage) lives in [`SPEC.md`](./SPEC.md) and is future work.
+> Status: **v0.2.0** — the `/autopilot:build` and `/autopilot:fix` commands are
+> implemented as the first, **agent-free** slice. The full design (named
+> review-agent roster, selection stage) lives in [`SPEC.md`](./SPEC.md) and is
+> future work.
 
 ## Installation
 
@@ -24,9 +25,10 @@ mechanism**, so you must install superpowers yourself first:
 /plugin install superpowers@superpowers
 ```
 
-(`planning-with-files` is optional.) `/autopilot:build` also **preflight-checks**
-for superpowers and, if it's missing, stops and hands you these instructions rather
-than failing midway.
+(`planning-with-files` is optional.) (`ralph-loop` is optional — needed only if you
+enable `ralphLoop` in config; see Configuration.) Both
+commands also **preflight-check** for superpowers and, if it's missing, stop and hand
+you these instructions rather than failing midway.
 
 ### 2. Install Claude Autopilot
 
@@ -41,8 +43,8 @@ This repo is its own single-repo marketplace, so add it and install:
 local path works too). You can also browse and install via the interactive
 `/plugin` menu (Marketplaces → add → install).
 
-**Updating:** `plugin.json` has no `version`, so Claude Code tracks this plugin by
-commit SHA — every push is a new version. Refresh with:
+**Updating:** this plugin uses explicit semver (currently `0.2.0`). A release bumps
+`version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```
 /plugin marketplace update claude-autopilot
@@ -75,7 +77,7 @@ NON-BLOCKING` contract decided from disk, not vibes.
 State (spec, plan, progress) is persisted so a run survives context compaction and
 can be resumed; where those files live follows your own project convention.
 
-### Smoke test (the v0.1 eval)
+### Smoke test (the v0.2.0 eval)
 
 In a throwaway git repo:
 
@@ -86,6 +88,44 @@ In a throwaway git repo:
 Expect: a new `autopilot/<slug>` worktree+branch; the spec and work review loops
 each reach `VERDICT: PASS`; the test actually runs and passes; the run ends at a
 **single squashed commit with no merge** and a final report.
+
+## `/autopilot:fix <feedback>`
+
+The feedback half of the loop. After you review a `build` result, hand `fix` your
+review feedback and it drives the **same pipeline on the existing autopilot branch**:
+it locates that branch (no new worktree), brainstorms your feedback into a
+change-spec, then plans → implements → verifies → reviews → updates docs →
+**re-squashes** to one clean commit. Still never merges. If there's no autopilot
+branch yet, it stops and tells you to run `/autopilot:build` first.
+
+```
+/autopilot:fix the token-refresh path isn't covered by tests
+```
+
+Together, `build` → review → `fix` → review → … is the human-in-the-loop cycle.
+
+(Phase prefixes you'll see in both commands: **E#** = entry phase, command-specific
+— `build` E1/E2, `fix` E1′/E2′; **S#** = the shared spine S1–S8 both run.)
+
+## Configuration
+
+The plugin keeps its own config in its data dir — never Claude's managed
+`settings.json`. Edit `${CLAUDE_PLUGIN_DATA}/config.json`
+(`~/.claude/plugins/data/<plugin-id>/config.json`):
+
+```json
+{ "ralphLoop": { "enabled": false, "maxIterations": { "spec-phase": 3, "implementation-phase": 3 } } }
+```
+
+- **`ralphLoop.enabled`** — when `true`, the S1/S5 review-convergence loops are
+  driven by the optional `ralph-loop` plugin (per-phase completion markers
+  `AUTOPILOT: SPEC READY` / `AUTOPILOT: WORK READY`, cap 3). Default `false` uses the
+  built-in native loop. `ralph-loop` is required only when enabled.
+- **`ralphLoop.maxIterations.spec-phase` / `.implementation-phase`** — per-phase
+  round cap for the S1 spec-review / S5 work-review loop (default 3 each).
+
+The commands run `scripts/autopilot-config.py` at startup; it creates this file with
+defaults if absent, so editing it takes effect on the next run.
 
 ## Local development
 

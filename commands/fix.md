@@ -1,33 +1,35 @@
 ---
-description: "Autonomous pipeline: worktree → spec+review loop → plan → subagent implementation → verify → review loop → docs → squash. Produces a review-ready branch; never merges. Explicit-only."
-argument-hint: "<requirements>"
+description: "Autonomous feedback loop: find the existing autopilot branch, brainstorm your review feedback into a change-spec, then plan → implement → verify → review → docs → re-squash. Updates a review-ready branch; never merges. Explicit-only."
+argument-hint: "<feedback>"
 disable-model-invocation: true
 ---
 
-# Autopilot: build
+# Autopilot: fix
 
-You are the orchestrator for an autonomous build run. Drive the pipeline below end
-to end. Dispatch and judge; do not do the work yourself.
+You are the orchestrator for an autonomous feedback round on an existing autopilot
+branch. Drive the pipeline below end to end. Dispatch and judge; do not do the work
+yourself.
 
 ## Your input ($ARGUMENTS)
 
-`$ARGUMENTS` is the **requirements** — the thing to build. Treat it as the single
-source of intent. If it is empty, STOP with a handoff asking for requirements.
+`$ARGUMENTS` is the human **review feedback** on an existing autopilot branch. Treat
+it as the single source of intent for this round. If it is empty, STOP with a
+handoff asking for feedback.
 
 ## Preflight (dependencies)
 
 **Load config (run first, every run):** run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config. Note `ralphLoop.enabled` and the per-phase caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` for the S1/S5 Ralph loop. User edits to that file take effect on the next run.
 
-Before E1, confirm the **superpowers** plugin is available — its skills must appear
+Before E1′, confirm the **superpowers** plugin is available — its skills must appear
 in your skill list (brainstorming, writing-plans, subagent-driven-development,
-using-git-worktrees, verification-before-completion, finishing-a-development-branch,
+verification-before-completion, finishing-a-development-branch,
 dispatching-parallel-agents). This whole pipeline is built on them, and Claude Code
 has no plugin auto-dependency mechanism, so this preflight is the safety net.
 
 If superpowers is **not** available, STOP with a handoff (not a question): tell the
 user it is required and how to install it —
 `/plugin marketplace add obra/superpowers` then
-`/plugin install superpowers@superpowers` — and to re-run `/autopilot:build` after.
+`/plugin install superpowers@superpowers` — and to re-run `/autopilot:fix` after.
 (`planning-with-files` is optional.)
 
 `ralph-loop` is required only when `ralphLoop.enabled` is `true` in
@@ -38,25 +40,23 @@ user it is required and how to install it —
 - **Autonomous — never ask the user.** On resolvable doubt: decide, record the
   decision in the spec doc, proceed. On a *consequential fork*: decide AND dispatch
   exactly ONE challenger team to stress the decision; reconcile, record, proceed.
-  Only the four safety stops interrupt the run.
+  Only the four safety stops interrupt the autonomous pipeline mid-run.
 - **Thin orchestrator.** Dispatch by reference and judge structured output. Never
   hoard whole files, diffs, or logs in the main thread. Read only bounded slices
   when you must inspect something yourself.
-- **Disk-backed.** Persist the spec, the plan, and a progress note (with a RESUME
-  block) so the run survives compaction. Location follows the user's/project's
-  convention — see **State & resumption**.
+- **Disk-backed.** Persist the change-spec, the plan, and a progress note (with a
+  RESUME block) so the run survives compaction. Location follows the
+  user's/project's convention — see **State & resumption**.
 - **A STOP is a handoff, never a question:** emit current state + the exact next
   step a human (or a resumed run) would take. Do not pose questions.
 - **No merge.** The run ends at a review-ready branch. You never merge to the base.
 
 ## Resume first
 
-Before anything else, look for an existing progress note with a RESUME block in the
-project's convention location. If found: reconcile worktree/branch/base_ref
-existence on disk, then continue from `phase`. An interrupted review round is
-**re-run from scratch** (re-dispatch the whole frozen panel — bounded and
-idempotent), so trust only `ralph_round` for loop position. If no progress note
-exists, start at E1.
+Look for an existing progress note with a RESUME block in the project's convention
+location. If found: reconcile worktree/branch/base_ref existence on disk, then
+continue from `phase` (an interrupted review round re-runs whole). **If none, that
+is the normal first run → go to E1′ (locate); never create a branch.**
 
 ## Summoning a team (ad-hoc, fresh, inline — no agent files)
 
@@ -64,19 +64,20 @@ Use `superpowers:dispatching-parallel-agents` to summon reviewers/producers inli
 Personas are derived per phase from deterministic signals — never persisted as agent
 files.
 
-- **Derive the panel** from signals: spec keywords for S1; `git diff --name-only
-  base_ref...HEAD` for S5. Always include a **floor lens** (S1: spec-fitness +
-  structure; S5: correctness + quality). Add domain lenses by signal: code →
-  quality + tests; auth/IO/deps/net/crypto → security; docs-only → prose/structure.
+- **Derive the panel** from signals: change-spec keywords for S1; `git diff
+  --name-only base_ref...HEAD` for S5. Always include a **floor lens** (S1:
+  spec-fitness + structure; S5: correctness + quality). Add domain lenses by signal:
+  code → quality + tests; auth/IO/deps/net/crypto → security; docs-only →
+  prose/structure.
 - **Cap ~4 lenses.** Pick the smallest panel that covers the signals.
 - **Freeze the panel** for the phase. Log the chosen panel AND the skips to the
   progress doc, e.g. "skipped security: no IO/auth signal".
 - **Dispatch template (short, by-reference):** role + one-line lens; inputs =
-  worktree path, base_ref, the requirement string, a focus line; read-only
-  ("modify nothing"); the reviewer fetches its own material (S1 reads the spec doc;
-  S5 runs a path-scoped `git diff`). Each reviewer MUST return the verdict block
-  below. Reviewers load no superpowers skills. Tier model/effort per lens (soft —
-  let the dispatch tool decide).
+  worktree path, base_ref, the requirement/feedback string, a focus line; read-only
+  ("modify nothing"); the reviewer fetches its own material (S1 reads the
+  change-spec doc; S5 runs a path-scoped `git diff`). Each reviewer MUST return the
+  verdict block below. Reviewers load no superpowers skills. Tier model/effort per
+  lens (soft — let the dispatch tool decide).
 
 ## Verdict grammar (paste inline into every summon prompt)
 
@@ -120,50 +121,64 @@ proceeds (S1→S2, S5→S6); if the per-phase cap (`maxIterations.spec-phase` /
 with the 3-way classification (oscillation | unfixable | requirements-conflict) and
 a handoff — do not proceed.
 
-## Pipeline (E1, E2, S1–S8)
+## Pipeline (E1′, E2′, S1–S8)
 
 Legend: **E#** = entry phase (command-specific; `′` = fix variant); **S#** = shared
 spine (common to build & fix).
 
-- **E1 — worktree (step 1).** Use `superpowers:using-git-worktrees` → branch
-  `autopilot/<slug>`. Slug = `$ARGUMENTS` lowercased, non-alphanumerics → hyphens,
-  collapsed/trimmed, truncated to ~40 chars. Record worktree/branch/base_ref (HEAD)
-  in the RESUME block; create the spec + progress notes per the project's
-  convention. On worktree/branch collision: one retry with a uniquified slug
-  (`-2`, …), else STOP.
-- **E2 — brainstorm (step 2).** Use `superpowers:brainstorming` on `$ARGUMENTS` →
-  write the spec into the spec doc. Decide on doubt; record decisions.
-- **S1 — spec review (steps 2–3).** Run the **S1 Ralph loop** (above) over the
-  (change-)spec. **Fixes:** the orchestrator edits the spec doc directly (the spec
-  is a small artifact it holds; only S5 delegates fixes to a producer). On
-  convergence it records `AUTOPILOT: SPEC READY`. **Root-contradiction STOP:** if
-  the reviewers find the core requirement asks for two things that cannot both be
-  true, STOP and hand off — quote the two conflicting clauses (this is a handoff,
-  never a question; mere vagueness is decided, not stopped).
-- **S2 — plan (step 4).** Use `superpowers:writing-plans` → write the plan into the
-  spec doc and record how the work will be verified. On a consequential plan fork →
-  decide + dispatch ONE challenger.
-- **S3 — produce (step 5).** Produce the work product. Code →
-  `superpowers:subagent-driven-development` (it may commit per task and run its own
-  task-level review — that is fine; S5 is the authoritative gate and the S7 squash
-  folds its commits). Non-code → producer subagents via the same dispatch pattern.
-  The orchestrator never edits the work product itself.
-- **S4 — verify (step 6).** Use `superpowers:verification-before-completion`: run
-  the discovered checks. For THIS plugin = `claude plugin validate` + the documented
-  manual smoke. Cap fixes at 3. Never weaken, skip, or delete a check; a drop in the
+- **E1′ — locate the existing branch (no new worktree).** Find the target autopilot
+  branch: read the project's RESUME note if present; else the most recent
+  `autopilot/*` branch. **If none → STOP** ("no autopilot branch found — run
+  `/autopilot:build <requirements>` first"). Never create a new branch.
+  - **Worktree:** use the branch's existing worktree; if it was removed, check the
+    branch out in place — never create a second worktree for it.
+  - **base_ref:** reuse the value in that branch's RESUME note if present; else
+    `git merge-base main autopilot/<slug>` (default branch = `main` unless the repo
+    says otherwise). Record worktree/branch/base_ref.
+  - **Dirty tree:** if the worktree has uncommitted changes, STOP with a handoff
+    (commit or stash first) so they aren't folded into the re-squash — unless Auto
+    Mode is on (then proceed, deferring to Auto Mode).
+- **E2′ — brainstorm the feedback.** Use `superpowers:brainstorming` on `$ARGUMENTS`
+  (the feedback) → write a **change-spec** appended to the existing spec doc (the
+  original spec stays as context). Decide on doubt; record decisions.
+- **S1 — change-spec review (Ralph loop).** Review the **change-spec** (with the
+  original as context), not the original. Panel derived from the change-spec's
+  keywords; reviewers read the change-spec doc (as in build's S1). Run the **S1
+  Ralph loop** (above) over the (change-)spec. **Fixes:** the orchestrator edits the
+  spec doc directly (the spec is a small artifact it holds; only S5 delegates fixes
+  to a producer). On convergence it records `AUTOPILOT: SPEC READY`.
+  **Root-contradiction STOP:** if the reviewers find the core requirement asks for
+  two things that cannot both be true, STOP and hand off — quote the two conflicting
+  clauses (this is a handoff, never a question; mere vagueness is decided, not
+  stopped).
+- **S2 — plan the delta.** Use `superpowers:writing-plans` → write the plan for the
+  change into the spec doc; record how the work will be verified. On a consequential
+  plan fork → decide + dispatch ONE challenger.
+- **S3 — produce.** Code → `superpowers:subagent-driven-development` (it may commit
+  per task and run its own task-level review — that is fine; S5 is the authoritative
+  gate and the S7 re-squash folds its commits). Non-code → producer subagents via
+  the same dispatch pattern. The orchestrator never edits the work product itself.
+- **S4 — verify.** Use `superpowers:verification-before-completion`: run the
+  discovered checks. For THIS plugin = `claude plugin validate` + the documented
+  manual smoke. Cap fixes at 3; never weaken, skip, or delete a check; a drop in the
   check count → STOP.
-- **S5 — work review (step 7).** Run the **S5 Ralph loop** (above) over the work.
-  **Fixes:** ONE fresh producer subagent primed with the deduped open blockers + the
-  cited files only. On convergence it records `AUTOPILOT: WORK READY`.
-- **S6 — docs (step 8).** Update the README (document the command + the manual
-  smoke) and add a one-line SPEC status note. Keep doc edits bounded.
-- **S7 — squash (step 9).** Idempotent squash to one commit (skip if already exactly
-  1 ahead of base_ref). Working notes (spec/plan/progress) are committed or ignored
-  per the project's convention — do not force either.
-- **S8 — finish (step 10).** Use `superpowers:finishing-a-development-branch` →
+- **S5 — work review (Ralph loop).** Panel derived from the **delta diff**
+  (`git diff --name-only base_ref...HEAD`); reviewers run a path-scoped diff. Run the
+  **S5 Ralph loop** (above) over the work. **Fixes:** ONE fresh producer subagent
+  primed with the deduped open blockers + cited files only. On convergence it records
+  `AUTOPILOT: WORK READY`.
+- **S6 — docs.** Update the README/companion docs to match the change. Keep doc
+  edits bounded.
+- **S7 — re-squash.** Squash the branch back to **one** clean commit (fold the new
+  feedback commits into the existing single commit). Local, unpushed history rewrite
+  **within the branch's own commits** — permitted by the destructive-op stop (and
+  skipped under Auto Mode). Idempotent: if already exactly 1 ahead of base_ref, skip.
+  Record the pre-squash HEAD SHA in the RESUME block so an interrupted re-squash is
+  detected on resume.
+- **S8 — report (no merge).** Use `superpowers:finishing-a-development-branch` →
   report: review history, decisions, deferred non-blockers (stop-reason first if the
   run stopped); offer integration options as an informational report menu, NOT a
-  question. NO merge.
+  question. **NO merge.**
 
 ## Safety stops (handoffs, not questions)
 
@@ -175,8 +190,8 @@ Stop and hand off (state + exact next step) only on:
    Auto Mode. The other three stops below apply regardless of Auto Mode.
 2. **Non-convergence at cap** — a Ralph loop hits `cap` (with the classification).
 3. **Non-review phase failure** — one retry, then STOP.
-4. **Root-contradiction** — the core requirement is self-contradictory; cite the
-   two clauses.
+4. **Root-contradiction** — the feedback irreconcilably contradicts a locked
+   requirement (or the core requirement is self-contradictory); cite the two clauses.
 
 ## Token discipline
 
@@ -189,18 +204,19 @@ only.
 
 ## State & resumption
 
-Persist three things so the run survives compaction: the brainstormed **spec**, the
-**plan**, and a **progress note** carrying a small RESUME block:
+Persist three things so the run survives compaction: the brainstormed
+**change-spec**, the **plan**, and a **progress note** carrying a small RESUME block:
 
 ```
-RESUME: phase=<E1|E2|S1..S8> worktree=<path> branch=<name> base_ref=<sha> ralph_round=<n>
+RESUME: phase=<E1'|E2'|S1..S8> worktree=<path> branch=<name> base_ref=<sha> ralph_round=<n> pre_squash_head=<sha>
 ```
 
-**Where these live follows the user's / project's existing convention** — honor
-CLAUDE.md preferences and existing repo patterns. The command imposes no fixed path
-(do not assume `dev-docs/`) and no gitignore-vs-commit policy.
+(`pre_squash_head` is recorded once S7 runs, so an interrupted re-squash is detected
+on resume.) **Where these live follows the user's / project's existing convention** —
+honor CLAUDE.md preferences and existing repo patterns. The command imposes no fixed
+path (do not assume `dev-docs/`) and no gitignore-vs-commit policy.
 
-**Resume contract:** on resume, reconcile worktree/branch existence first, then
-continue from `phase`; an interrupted review round is re-run from scratch
+**Resume contract:** on resume, reconcile worktree/branch/base_ref existence first,
+then continue from `phase`; an interrupted review round is re-run from scratch
 (re-dispatch the whole frozen panel — bounded, idempotent), so only `ralph_round`
 need be persisted to locate the loop.
