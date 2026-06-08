@@ -124,7 +124,7 @@ spec-review), `work` (S5 work-review), or `both`.
 | `agents/requirement-satisfaction-reviewer.md` | Work satisfies the original requirement, end to end | work | core |
 | `agents/spec-alignment-reviewer.md` | Work faithfully implements the spec; no drift or scope creep | work | core |
 | `agents/doc-reviewer.md` | Docs current after the change; edits concise / not bloated | work | core |
-| `agents/code-quality-reviewer.md` | Readability, naming, duplication, dead code, needless complexity | work | optional |
+| `agents/code-quality-reviewer.md` | Readability, naming, duplication, dead code, needless complexity, comment quality | work | optional |
 | `agents/test-reviewer.md` | Tests meaningful & assert the spec; coverage of new/changed code | work | optional |
 | `agents/performance-reviewer.md` | Complexity, N+1, allocation, resource leaks, hotspots | work | optional |
 | `agents/security-reviewer.md` | Authz, input validation, secrets, injection, supply chain | both | optional |

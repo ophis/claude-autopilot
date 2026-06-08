@@ -3,14 +3,15 @@ name: code-quality-reviewer
 description: >-
   Conditional code-quality reviewer (SPEC §8). Read-only, single-lens, runs in
   the work phase (S5), optional (code domain). Judges readability, naming,
-  duplication, dead code, and needless complexity. Runs only when the selector
+  duplication, dead code, and needless complexity, and whether code comments are
+  necessary, right-sized, and non-redundant. Runs only when the selector
   matches its applies_to (code-source files), and returns the strict verdict
   grammar.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: medium
 maxTurns: 8
-lens: Readability, naming, duplication, dead code, needless complexity (code)
+lens: Readability, naming, duplication, dead code, needless complexity, comment quality (code)
 phase: work
 tier: optional
 applies_to: ["*.py","*.js","*.jsx","*.ts","*.tsx","*.go","*.rs","*.java","*.kt","*.rb","*.php","*.c","*.h","*.cc","*.cpp","*.hpp","*.cs","*.swift","*.scala","*.sh","*.bash","*.lua","*.m","*.mm","*.ex","*.exs","*.clj","*.dart"]
@@ -55,13 +56,20 @@ be?
 - **Duplication (DRY) & dead code.** Is logic copy-pasted where it should be
   shared? Is there unreachable code, unused symbols, or commented-out blocks
   left behind?
+- **Comments.** *Necessity* — each comment earns its place by explaining *why*
+  (intent / a non-obvious constraint), not restating *what* the code already says;
+  flag obvious narration that merely echoes the code. *Length* — comments are
+  right-sized; flag rambling blocks or a paragraph where a line would do.
+  *Redundancy* — flag comments that duplicate the code, the function name, or a
+  docstring, or repeat across sites.
 - **Needless complexity / simpler equivalent.** Is there an obviously simpler
   equivalent — fewer branches, less indirection, no speculative generality?
 - **Consistency with surrounding conventions.** Does the change follow the
   patterns, idioms, and style already established in the surrounding code?
 
 A blocker = a quality defect that will materially impede maintenance (not
-taste).
+taste) — e.g. a comment that actively misleads or so noisy it impedes reading;
+pure verbosity or style is NON-BLOCKING.
 
 ## Verdict grammar (strict, machine-parseable)
 
