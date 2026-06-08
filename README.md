@@ -57,17 +57,17 @@ install).
 Explicit-only (never model-invoked). Hand it a requirement and it drives, end to
 end and without asking you questions:
 
-1. Worktree on a new branch (`autopilot/<slug>`).
-2. Brainstorm the spec (convene an expert council at decision points; decide).
-3. Review the spec — summon a fresh team, fix, re-review until clean.
-4. Write the execution plan.
-5. Implement (subagent-driven).
-6. Run/verify tests & checks.
-7. Review the work — select a fresh panel from the roster (incl. doc currency), fix, re-review until clean.
-8. Squash to one clean commit.
-9. Report for your review. **It never merges** — you review and integrate.
+- **E1 — Worktree:** create `autopilot/<slug>` worktree+branch; write the progress note.
+- **E2 — Brainstorm:** turn requirements into the spec (expert council at decision points).
+- **S1 — Spec review:** Ralph loop over the spec until the panel passes.
+- **S2 — Plan:** write the execution plan + how it will be verified.
+- **S3 — Produce:** implement (subagent-driven for code).
+- **S4 — Verify:** run the discovered checks.
+- **S5 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates doc currency.
+- **S6 — Squash:** idempotent squash to one clean commit.
+- **S7 — Finish:** report + integration menu. **Never merges.**
 
-You can also hand `/autopilot:build` a path to an existing spec file instead of free-text requirements — it then skips the brainstorm + spec-review (E2/S1) and plans straight from your spec (e.g. `/autopilot:build path/to/spec.md`).
+You can also hand `/autopilot:build` a path to an existing spec file instead of free-text requirements — it then skips the brainstorm + spec-review (E2/S1) and plans straight from your spec (`E1 → S2`; e.g. `/autopilot:build path/to/spec.md`).
 
 At a genuine decision point it convenes a small **expert council** (ad-hoc sub-agents)
 to deliberate, then decides and records — it does not ask you. It stops only to hand off on a
@@ -100,14 +100,24 @@ change-spec, then plans → implements → verifies → reviews (docs currency i
 **re-squashes** to one clean commit. Still never merges. If there's no autopilot
 branch yet, it stops and tells you to run `/autopilot:build` first.
 
+- **E1′ — Locate:** find the existing autopilot branch (no new worktree); none → stop.
+- **E2′ — Brainstorm:** turn feedback into a change-spec appended to the spec doc.
+- **S1 — Change-spec review.**
+- **S2 — Plan the delta.**
+- **S3 — Produce.**
+- **S4 — Verify.**
+- **S5 — Work review** (docs currency included).
+- **S6 — Re-squash:** fold the new commits back into one clean commit.
+- **S7 — Finish:** report. **Never merges.**
+
+Legend: **E#** = entry phase (command-specific; `′` = fix variant); **S#** = the
+shared spine S1–S7 both commands run.
+
 ```
 /autopilot:fix the token-refresh path isn't covered by tests
 ```
 
 Together, `build` → review → `fix` → review → … is the human-in-the-loop cycle.
-
-(Phase prefixes you'll see in both commands: **E#** = entry phase, command-specific
-— `build` E1/E2, `fix` E1′/E2′; **S#** = the shared spine S1–S7 both run.)
 
 ## Review roster (`agents/`)
 
