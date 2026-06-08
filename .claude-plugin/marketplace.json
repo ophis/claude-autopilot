@@ -1,0 +1,20 @@
+{
+  "name": "claude-autopilot",
+  "description": "Marketplace for the Claude Autopilot plugin",
+  "owner": {
+    "name": "Frank Wang",
+    "email": "ophis.w@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "autopilot",
+      "description": "Autonomous end-to-end feature pipeline driven by named expert review teams and Ralph convergence loops.",
+      "version": "0.1.0",
+      "source": "./",
+      "author": {
+        "name": "Frank Wang",
+        "email": "ophis.w@gmail.com"
+      }
+    }
+  ]
+}
