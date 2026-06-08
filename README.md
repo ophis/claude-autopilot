@@ -6,10 +6,10 @@ replaces a copy-pasted "do all this, summon a team to review, never ask me" prom
 with one explicit command.
 
 > Status: **v0.3.0** — the `/autopilot:build` and `/autopilot:fix` commands are
-> implemented, and the **named review roster** is now complete for both phases in
-> `agents/` (see [Review roster](#review-roster-agents)). The remaining future work is
-> the **selection stage** that auto-routes the roster into the S1/S5 loops; until that
-> wiring lands the commands still summon their review lenses ad-hoc inline.
+> implemented, the **named review roster** is complete for both phases in `agents/`,
+> and the **selection stage** (`scripts/select-panel.py`) now wires the roster into the
+> S1/S5 review loops (see [Review roster](#review-roster-agents)). The wired commands
+> ship in the next published release.
 
 ## Installation
 
@@ -63,10 +63,9 @@ end and without asking you questions:
 4. Write the execution plan.
 5. Implement (subagent-driven).
 6. Run/verify tests & checks.
-7. Review the work — summon a fresh team, fix, re-review until clean.
-8. Update the docs.
-9. Squash to one clean commit.
-10. Report for your review. **It never merges** — you review and integrate.
+7. Review the work — select a fresh panel from the roster (incl. doc currency), fix, re-review until clean.
+8. Squash to one clean commit.
+9. Report for your review. **It never merges** — you review and integrate.
 
 When in doubt it summons an ad-hoc expert team, decides, has another team challenge
 the decision, then fixes — it does not ask you. It stops only to hand off on a
@@ -106,7 +105,7 @@ branch yet, it stops and tells you to run `/autopilot:build` first.
 Together, `build` → review → `fix` → review → … is the human-in-the-loop cycle.
 
 (Phase prefixes you'll see in both commands: **E#** = entry phase, command-specific
-— `build` E1/E2, `fix` E1′/E2′; **S#** = the shared spine S1–S8 both run.)
+— `build` E1/E2, `fix` E1′/E2′; **S#** = the shared spine S1–S7 both run.)
 
 ## Review roster (`agents/`)
 
@@ -143,11 +142,20 @@ when the spec/diff matches their `applies_to`, auditably skipped otherwise. The
 input-handling, network, file/DB I/O, dependency, or crypto signals.
 
 Each reviewer's frontmatter is **self-describing** (`lens`/`phase`/`tier`/
-`applies_to`), so a future selection stage discovers and routes the roster with no
-code change; new lenses (domain packs) join the same way — a new file under `agents/`.
-The roster is **not yet wired** into the commands' S1/S5 loops; that selection stage
-is the next step (both the spec- and work-phase floors now exist, so it can wire S1
-and S5 together).
+`applies_to`), so the selection stage discovers and routes the roster with no code
+change; new lenses (domain packs) join the same way — a new file under `agents/`.
+
+**Selection stage (`scripts/select-panel.py`).** S1 and S5 call this script to pick the
+panel: it globs `agents/`, reads each frontmatter, and returns the selected reviewers as
+`{agent, subagent_type, tier, matched}` — every `core` agent for the phase, plus every
+`optional` whose `applies_to` matches the signals (spec keywords for S1; changed paths,
+`git diff --name-only base...HEAD`, for S5). The orchestrator then runs **all** core
+(the floor), **curates** the optionals (may drop a marginal one), and may add an
+**ad-hoc** lens for a gap no roster agent covers. Each roster member is dispatched
+natively as `Task(subagent_type="autopilot:<name>")` — so it runs at its own model and
+read-only tool allowlist. (Requires the installed plugin to ship the roster, ≥ v0.3.0.)
+Doc upkeep is folded into S5: the core `doc-reviewer` flags stale/missing docs as
+BLOCKING (fixed in the S5 loop), so there is no separate docs phase.
 
 ## Configuration
 

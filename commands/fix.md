@@ -58,26 +58,33 @@ location. If found: reconcile worktree/branch/base_ref existence on disk, then
 continue from `phase` (an interrupted review round re-runs whole). **If none, that
 is the normal first run → go to E1′ (locate); never create a branch.**
 
-## Summoning a team (ad-hoc, fresh, inline — no agent files)
+## Selecting & dispatching the review panel
 
-Use `superpowers:dispatching-parallel-agents` to summon reviewers/producers inline.
-Personas are derived per phase from deterministic signals — never persisted as agent
-files.
+The S1/S5 panels are **selected by script** from the installed roster, then composed
+and dispatched natively. Requires the installed plugin **≥0.3.0** (ships `agents/`).
 
-- **Derive the panel** from signals: change-spec keywords for S1; `git diff
-  --name-only base_ref...HEAD` for S5. Always include a **floor lens** (S1:
-  spec-fitness + structure; S5: correctness + quality). Add domain lenses by signal:
-  code → quality + tests; auth/IO/deps/net/crypto → security; docs-only →
-  prose/structure.
-- **Cap ~4 lenses.** Pick the smallest panel that covers the signals.
-- **Freeze the panel** for the phase. Log the chosen panel AND the skips to the
-  progress doc, e.g. "skipped security: no IO/auth signal".
-- **Dispatch template (short, by-reference):** role + one-line lens; inputs =
-  worktree path, base_ref, the requirement/feedback string, a focus line; read-only
-  ("modify nothing"); the reviewer fetches its own material (S1 reads the
-  change-spec doc; S5 runs a path-scoped `git diff`). Each reviewer MUST return the
-  verdict block below. Reviewers load no superpowers skills. Tier model/effort per
-  lens (soft — let the dispatch tool decide).
+- **Select.** Run the selector for the phase:
+  - S1 → `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py" --phase spec --spec-file <change-spec doc>`
+  - S5 → `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py" --phase work --worktree <worktree> --base <base_ref>`
+  It returns JSON with a `selected` list of `{agent, subagent_type, tier, matched}`.
+- **Compose the panel:** ALL returned `core` agents (mandatory floor) + the
+  `optional` agents the orchestrator judges relevant (it may drop a marginal
+  optional) + any **ad-hoc** inline lens for a genuine gap no roster agent covers.
+- **Freeze & log** the composed panel to the progress note: which core (all), which
+  optionals included/excluded + why, any ad-hoc added. Reuse the frozen panel every
+  round of that phase.
+- **Dispatch** each panel member fresh, in parallel, via
+  `superpowers:dispatching-parallel-agents`:
+  - *Roster member:* `Task(subagent_type="autopilot:<name>", …)` — the agent's body
+    is its system prompt (persona/contract/checklist/verdict already loaded); pass
+    ONLY the run inputs: "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…,
+    requirement=…, focus=…. Return ONLY the verdict block." It runs at its own
+    `model` and read-only `tools` allowlist (read-only genuinely enforced;
+    cost-tiering automatic).
+  - *Ad-hoc member:* `general-purpose` with an inline persona (the pre-existing
+    pattern), same verdict contract — for a gap no roster agent covers.
+- **Collect verdicts → the existing Ralph loop** (unchanged: round-0 short-circuit,
+  re-dispatch only FAILed/touched, cap, convergence from on-disk verdicts).
 
 ## Verdict grammar (paste inline into every summon prompt)
 
@@ -121,7 +128,7 @@ proceeds (S1→S2, S5→S6); if the per-phase cap (`maxIterations.spec-phase` /
 with the 3-way classification (oscillation | unfixable | requirements-conflict) and
 a handoff — do not proceed.
 
-## Pipeline (E1′, E2′, S1–S8)
+## Pipeline (E1′, E2′, S1–S7)
 
 Legend: **E#** = entry phase (command-specific; `′` = fix variant); **S#** = shared
 spine (common to build & fix).
@@ -156,7 +163,7 @@ spine (common to build & fix).
   plan fork → decide + dispatch ONE challenger.
 - **S3 — produce.** Code → `superpowers:subagent-driven-development` (it may commit
   per task and run its own task-level review — that is fine; S5 is the authoritative
-  gate and the S7 re-squash folds its commits). Non-code → producer subagents via
+  gate and the S6 re-squash folds its commits). Non-code → producer subagents via
   the same dispatch pattern. The orchestrator never edits the work product itself.
 - **S4 — verify.** Use `superpowers:verification-before-completion`: run the
   discovered checks. For THIS plugin = `claude plugin validate` + the documented
@@ -164,18 +171,18 @@ spine (common to build & fix).
   check count → STOP.
 - **S5 — work review (Ralph loop).** Panel derived from the **delta diff**
   (`git diff --name-only base_ref...HEAD`); reviewers run a path-scoped diff. Run the
-  **S5 Ralph loop** (above) over the work. **Fixes:** ONE fresh producer subagent
-  primed with the deduped open blockers + cited files only. On convergence it records
-  `AUTOPILOT: WORK READY`.
-- **S6 — docs.** Update the README/companion docs to match the change. Keep doc
-  edits bounded.
-- **S7 — re-squash.** Squash the branch back to **one** clean commit (fold the new
+  **S5 Ralph loop** (above) over the work. The core `doc-reviewer` is always in the
+  S5 panel and now gates docs: stale / missing / contradictory docs = BLOCKING (the
+  S5 producer fix updates them); bloat = NON-BLOCKING. **Fixes:** ONE fresh producer
+  subagent primed with the deduped open blockers + cited files only. On convergence
+  it records `AUTOPILOT: WORK READY`.
+- **S6 — re-squash.** Squash the branch back to **one** clean commit (fold the new
   feedback commits into the existing single commit). Local, unpushed history rewrite
   **within the branch's own commits** — permitted by the destructive-op stop (and
   skipped under Auto Mode). Idempotent: if already exactly 1 ahead of base_ref, skip.
   Record the pre-squash HEAD SHA in the RESUME block so an interrupted re-squash is
   detected on resume.
-- **S8 — report (no merge).** Use `superpowers:finishing-a-development-branch` →
+- **S7 — finish (no merge).** Use `superpowers:finishing-a-development-branch` →
   report: review history, decisions, deferred non-blockers (stop-reason first if the
   run stopped); offer integration options as an informational report menu, NOT a
   question. **NO merge.**
@@ -208,10 +215,10 @@ Persist three things so the run survives compaction: the brainstormed
 **change-spec**, the **plan**, and a **progress note** carrying a small RESUME block:
 
 ```
-RESUME: phase=<E1'|E2'|S1..S8> worktree=<path> branch=<name> base_ref=<sha> ralph_round=<n> pre_squash_head=<sha>
+RESUME: phase=<E1'|E2'|S1..S7> worktree=<path> branch=<name> base_ref=<sha> ralph_round=<n> pre_squash_head=<sha>
 ```
 
-(`pre_squash_head` is recorded once S7 runs, so an interrupted re-squash is detected
+(`pre_squash_head` is recorded once **S6** runs, so an interrupted re-squash is detected
 on resume.) **Where these live follows the user's / project's existing convention** —
 honor CLAUDE.md preferences and existing repo patterns. The command imposes no fixed
 path (do not assume `dev-docs/`) and no gitignore-vs-commit policy.

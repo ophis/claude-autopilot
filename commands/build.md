@@ -58,25 +58,29 @@ existence on disk, then continue from `phase`. An interrupted review round is
 idempotent), so trust only `ralph_round` for loop position. If no progress note
 exists, start at E1.
 
-## Summoning a team (ad-hoc, fresh, inline — no agent files)
+## Selecting & dispatching the review panel
 
-Use `superpowers:dispatching-parallel-agents` to summon reviewers/producers inline.
-Personas are derived per phase from deterministic signals — never persisted as agent
-files.
+- **Select from the script.** Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py"
+  --phase spec --spec-file <spec doc>` for S1, and `... --phase work --worktree <worktree>
+  --base <base_ref>` for S5. It returns JSON: a `selected` list, each entry
+  `{agent, subagent_type, tier, matched}`.
+- **Compose the panel:** run ALL returned `core` agents (mandatory floor — never skip
+  a core); include the `optional` agents the orchestrator judges relevant (may drop a
+  marginal optional); and you MAY add ad-hoc inline lenses for a genuine gap no roster
+  agent covers.
+- **Freeze & log** the composed panel to the progress note: which core (all), which
+  optionals in/out + why, any ad-hoc added. Reuse the frozen panel every round of that
+  phase.
+- **Dispatch** each member fresh, in parallel (`superpowers:dispatching-parallel-agents`):
+  - *Roster member* → `Task(subagent_type="autopilot:<name>", …)` (use the
+    `subagent_type` from the script). The agent's body is its system prompt; pass ONLY
+    run inputs: "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…, requirement=…,
+    focus=…. Return ONLY the verdict block." It runs at its own model + read-only
+    allowlist.
+  - *Ad-hoc member* → `general-purpose` with an inline persona, same verdict contract.
+- Each reviewer returns the verdict block; collect verdicts → the Ralph loop (unchanged).
 
-- **Derive the panel** from signals: spec keywords for S1; `git diff --name-only
-  base_ref...HEAD` for S5. Always include a **floor lens** (S1: spec-fitness +
-  structure; S5: correctness + quality). Add domain lenses by signal: code →
-  quality + tests; auth/IO/deps/net/crypto → security; docs-only → prose/structure.
-- **Cap ~4 lenses.** Pick the smallest panel that covers the signals.
-- **Freeze the panel** for the phase. Log the chosen panel AND the skips to the
-  progress doc, e.g. "skipped security: no IO/auth signal".
-- **Dispatch template (short, by-reference):** role + one-line lens; inputs =
-  worktree path, base_ref, the requirement string, a focus line; read-only
-  ("modify nothing"); the reviewer fetches its own material (S1 reads the spec doc;
-  S5 runs a path-scoped `git diff`). Each reviewer MUST return the verdict block
-  below. Reviewers load no superpowers skills. Tier model/effort per lens (soft —
-  let the dispatch tool decide).
+Requires the installed plugin to ship the roster (≥0.3.0).
 
 ## Verdict grammar (paste inline into every summon prompt)
 
@@ -120,7 +124,7 @@ proceeds (S1→S2, S5→S6); if the per-phase cap (`maxIterations.spec-phase` /
 with the 3-way classification (oscillation | unfixable | requirements-conflict) and
 a handoff — do not proceed.
 
-## Pipeline (E1, E2, S1–S8)
+## Pipeline (E1, E2, S1–S7)
 
 Legend: **E#** = entry phase (command-specific; `′` = fix variant); **S#** = shared
 spine (common to build & fix).
@@ -145,7 +149,7 @@ spine (common to build & fix).
   decide + dispatch ONE challenger.
 - **S3 — produce (step 5).** Produce the work product. Code →
   `superpowers:subagent-driven-development` (it may commit per task and run its own
-  task-level review — that is fine; S5 is the authoritative gate and the S7 squash
+  task-level review — that is fine; S5 is the authoritative gate and the S6 squash
   folds its commits). Non-code → producer subagents via the same dispatch pattern.
   The orchestrator never edits the work product itself.
 - **S4 — verify (step 6).** Use `superpowers:verification-before-completion`: run
@@ -154,13 +158,13 @@ spine (common to build & fix).
   check count → STOP.
 - **S5 — work review (step 7).** Run the **S5 Ralph loop** (above) over the work.
   **Fixes:** ONE fresh producer subagent primed with the deduped open blockers + the
-  cited files only. On convergence it records `AUTOPILOT: WORK READY`.
-- **S6 — docs (step 8).** Update the README (document the command + the manual
-  smoke) and add a one-line SPEC status note. Keep doc edits bounded.
-- **S7 — squash (step 9).** Idempotent squash to one commit (skip if already exactly
+  cited files only. Docs are now part of S5: the core `doc-reviewer` gates doc
+  currency/concision (stale/missing/contradictory docs = BLOCKING → fixed by the S5
+  producer; bloat = NON-BLOCKING). On convergence it records `AUTOPILOT: WORK READY`.
+- **S6 — squash (step 8).** Idempotent squash to one commit (skip if already exactly
   1 ahead of base_ref). Working notes (spec/plan/progress) are committed or ignored
   per the project's convention — do not force either.
-- **S8 — finish (step 10).** Use `superpowers:finishing-a-development-branch` →
+- **S7 — finish (step 9).** Use `superpowers:finishing-a-development-branch` →
   report: review history, decisions, deferred non-blockers (stop-reason first if the
   run stopped); offer integration options as an informational report menu, NOT a
   question. NO merge.
@@ -193,7 +197,7 @@ Persist three things so the run survives compaction: the brainstormed **spec**, 
 **plan**, and a **progress note** carrying a small RESUME block:
 
 ```
-RESUME: phase=<E1|E2|S1..S8> worktree=<path> branch=<name> base_ref=<sha> ralph_round=<n>
+RESUME: phase=<E1|E2|S1..S7> worktree=<path> branch=<name> base_ref=<sha> ralph_round=<n>
 ```
 
 **Where these live follows the user's / project's existing convention** — honor
