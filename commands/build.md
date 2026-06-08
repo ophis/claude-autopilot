@@ -16,7 +16,7 @@ source of intent. If it is empty, STOP with a handoff asking for requirements.
 
 ## Preflight (dependencies)
 
-**Load config (run first, every run):** run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config. Note `ralphLoop.enabled` and the per-phase caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` for the S1/S5 Ralph loop. User edits to that file take effect on the next run.
+**Load config (run first, every run):** run `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. The `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}'` prefix is **required**: Claude Code inline-substitutes the value into the command text but does *not* export it to the bash subprocess, so the script only receives it when forwarded explicitly (otherwise it uses its fallback dir). It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config. Note `ralphLoop.enabled` and the per-phase caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` for the S1/S5 Ralph loop. User edits to that file take effect on the next run.
 
 Before E1, confirm the **superpowers** plugin is available — its skills must appear
 in your skill list (brainstorming, writing-plans, subagent-driven-development,
