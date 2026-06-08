@@ -71,7 +71,7 @@ exists, start at E1.
 - **Freeze & log** the composed panel to the progress note: which core (all), which
   optionals in/out + why, any ad-hoc added. Reuse the frozen panel every round of that
   phase.
-- **Dispatch** each member fresh, in parallel (`superpowers:dispatching-parallel-agents`):
+- **Dispatch the whole round's panel in one parallel batch** — issue every `Task` call together in a single message (`superpowers:dispatching-parallel-agents`), never one at a time. This applies to **every** review round in both S1 and S5 (including re-review rounds — whatever subset of lenses a round dispatches, send them together). Parallel dispatch is the intended efficiency; reviewers are independent and read-only.
   - *Roster member* → `Task(subagent_type="autopilot:<name>", …)` (use the
     `subagent_type` from the script). The agent's body is its system prompt; pass ONLY
     run inputs: "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…, requirement=…,
@@ -106,7 +106,7 @@ per-phase cap (default 3 rounds). The driver is chosen by config.
 `ralphLoop.enabled` picks the driver; `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` is the per-phase round cap (default 3). `ralph-loop` is required only when enabled.
 
 - **Default (`enabled: false`) — native loop.** The orchestrator runs the rounds
-  itself: each round, dispatch the frozen panel fresh and collect verdicts to disk;
+  itself: each round, dispatch the frozen panel fresh **in parallel (all that round's members in one batch)** and collect verdicts to disk;
   round-0 all-PASS short-circuits; advance on all-PASS with no open BLOCKING, else
   apply fixes and re-dispatch; cap = `maxIterations.spec-phase` (S1) /
   `maxIterations.implementation-phase` (S5), default 3.
