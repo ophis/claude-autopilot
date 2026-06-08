@@ -1,5 +1,5 @@
 ---
-description: "Autonomous feedback loop: find the existing autopilot branch, brainstorm your review feedback into a change-spec, then plan → implement → verify → review → docs → re-squash. Updates a review-ready branch; never merges. Explicit-only."
+description: "Autonomous feedback loop: find the existing autopilot branch, brainstorm your review feedback into a change-spec, then plan → implement → verify → review → re-squash. Updates a review-ready branch; never merges. Explicit-only."
 argument-hint: "<feedback>"
 disable-model-invocation: true
 ---

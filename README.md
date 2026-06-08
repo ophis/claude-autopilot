@@ -94,7 +94,7 @@ each reach `VERDICT: PASS`; the test actually runs and passes; the run ends at a
 The feedback half of the loop. After you review a `build` result, hand `fix` your
 review feedback and it drives the **same pipeline on the existing autopilot branch**:
 it locates that branch (no new worktree), brainstorms your feedback into a
-change-spec, then plans → implements → verifies → reviews → updates docs →
+change-spec, then plans → implements → verifies → reviews (docs currency included) →
 **re-squashes** to one clean commit. Still never merges. If there's no autopilot
 branch yet, it stops and tells you to run `/autopilot:build` first.
 
