@@ -5,11 +5,11 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.3.0** — the `/autopilot:build` and `/autopilot:fix` commands are
+> Status: **v0.4.0** — the `/autopilot:build` and `/autopilot:fix` commands are
 > implemented, the **named review roster** is complete for both phases in `agents/`,
-> and the **selection stage** (`scripts/select-panel.py`) now wires the roster into the
-> S1/S5 review loops (see [Review roster](#review-roster-agents)). The wired commands
-> ship in the next published release.
+> and the **selection stage** (`scripts/select-panel.py`) wires the roster into the
+> S1/S5 review loops — the commands select the panel from the roster and dispatch each
+> reviewer natively as `autopilot:<name>` (see [Review roster](#review-roster-agents)).
 
 ## Installation
 
@@ -44,7 +44,7 @@ This repo is its own single-repo marketplace, so add it and install:
 local path works too). You can also browse and install via the interactive
 `/plugin` menu (Marketplaces → add → install).
 
-**Updating:** this plugin uses explicit semver (currently `0.3.0`). A release bumps
+**Updating:** this plugin uses explicit semver (currently `0.4.0`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```
@@ -153,7 +153,7 @@ panel: it globs `agents/`, reads each frontmatter, and returns the selected revi
 (the floor), **curates** the optionals (may drop a marginal one), and may add an
 **ad-hoc** lens for a gap no roster agent covers. Each roster member is dispatched
 natively as `Task(subagent_type="autopilot:<name>")` — so it runs at its own model and
-read-only tool allowlist. (Requires the installed plugin to ship the roster, ≥ v0.3.0.)
+read-only tool allowlist. (Requires the installed plugin with the wired commands + roster, ≥ v0.4.0.)
 Doc upkeep is folded into S5: the core `doc-reviewer` flags stale/missing docs as
 BLOCKING (fixed in the S5 loop), so there is no separate docs phase.
 
