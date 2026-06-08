@@ -36,8 +36,7 @@ has no plugin auto-dependency mechanism, so this preflight is the safety net.
 
 If superpowers is **not** available, STOP with a handoff (not a question): tell the
 user it is required and how to install it —
-`/plugin marketplace add obra/superpowers` then
-`/plugin install superpowers@superpowers` — and to re-run `/autopilot:build` after.
+`/plugin install superpowers@claude-plugins-official` — and to re-run `/autopilot:build` after.
 (`planning-with-files` is optional.)
 
 `ralph-loop` is required only when `ralphLoop.enabled` is `true` in

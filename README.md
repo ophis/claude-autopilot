@@ -22,8 +22,7 @@ dispatching-parallel-agents). Claude Code has **no plugin dependency / auto-inst
 mechanism**, so you must install superpowers yourself first:
 
 ```
-/plugin marketplace add obra/superpowers
-/plugin install superpowers@superpowers
+/plugin install superpowers@claude-plugins-official
 ```
 
 (`planning-with-files` is optional.) (`ralph-loop` is optional — needed only if you
