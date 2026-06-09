@@ -20,6 +20,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(REPO, "scripts")
 SELECT_PANEL = os.path.join(SCRIPTS, "select-panel.py")
 CONFIG = os.path.join(SCRIPTS, "autopilot-config.py")
+LINT_ROSTER = os.path.join(SCRIPTS, "lint-roster.py")
 
 AGENT_TEMPLATE = """\
 ---
@@ -246,6 +247,258 @@ class AutopilotConfigTests(unittest.TestCase):
         with open(good) as fh:
             self.assertEqual(json.load(fh), self.DEFAULTS)
         self.assertFalse(os.path.exists(bad), "config.json written to old wrong path")
+
+
+# A valid reviewer body: inlines the four contract markers and ends with the
+# verdict-grammar section as the last "## " heading.
+GOOD_BODY = """\
+# {name}
+
+## Contract
+
+- **Read-only.** Tools allowlist is Read, Grep, Glob, Bash.
+- **Inputs by reference.** The orchestrator passes you the worktree path.
+- **Cite evidence.** Anchor every finding to file:line.
+- **Load no superpowers skills.**
+
+## Verdict grammar (strict, machine-parseable)
+
+VERDICT: PASS
+BLOCKING: none
+NON-BLOCKING: none
+"""
+
+# A complete, valid reviewer frontmatter + body. Callers override individual
+# lines (or the body) to construct each failure-mode fixture.
+GOOD_REVIEWER = """\
+---
+name: {name}
+description: >-
+  synthetic test reviewer body that folds over a couple of lines so the block
+  scalar path is exercised.
+tools: Read, Grep, Glob, Bash
+model: opus
+effort: high
+maxTurns: 30
+lens: synthetic lens for testing
+phase: work
+tier: core
+applies_to: ["**"]
+---
+""" + GOOD_BODY
+
+# A valid selector-inert contract template (no phase/tier/lens/applies_to).
+GOOD_TEMPLATE = """\
+---
+name: reviewer-contract
+description: >-
+  Authoring-time template; selector-inert by design.
+---
+
+# Reviewer contract (authoring template)
+
+Body with Read-only, Inputs by reference, Cite evidence, and
+Load no superpowers skills — but no selector metadata.
+"""
+
+
+def run_lint(agents_dir):
+    return subprocess.run(
+        [sys.executable, LINT_ROSTER, "--agents-dir", agents_dir],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+
+
+class LintRosterTests(unittest.TestCase):
+    def setUp(self):
+        self.agents = tempfile.mkdtemp()
+
+    def _reviewer(self, name="r1", reviewer=None, body=None):
+        """Write a reviewer file; `reviewer`/`body` override the defaults."""
+        if reviewer is None:
+            reviewer = GOOD_REVIEWER.format(name=name)
+        if body is not None:
+            # Replace the body (everything after the closing frontmatter fence).
+            head = reviewer.split("\n---\n", 1)[0] + "\n---\n"
+            reviewer = head + body
+        write_raw(self.agents, name + ".md", reviewer)
+
+    def _template(self, name="reviewer-contract", text=None):
+        write_raw(self.agents, name + ".md", text if text is not None else GOOD_TEMPLATE)
+
+    def test_all_valid_roster_passes(self):
+        self._reviewer("r1")
+        self._template()
+        proc = run_lint(self.agents)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("OK r1", proc.stdout)
+        self.assertIn("OK reviewer-contract", proc.stdout)
+
+    def test_no_agents_found_fails(self):
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("no agent files", (proc.stdout + proc.stderr).lower())
+
+    def test_missing_max_turns(self):
+        reviewer = GOOD_REVIEWER.format(name="r1").replace("maxTurns: 30\n", "")
+        self._reviewer("r1", reviewer=reviewer)
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("maxTurns", proc.stdout)
+
+    def test_tools_includes_write(self):
+        reviewer = GOOD_REVIEWER.format(name="r1").replace(
+            "tools: Read, Grep, Glob, Bash", "tools: Read, Grep, Glob, Bash, Write"
+        )
+        self._reviewer("r1", reviewer=reviewer)
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("tools", proc.stdout)
+        self.assertIn("Write", proc.stdout)
+
+    def test_bad_tier(self):
+        reviewer = GOOD_REVIEWER.format(name="r1").replace(
+            "tier: core", "tier: cor"
+        )
+        self._reviewer("r1", reviewer=reviewer)
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("tier", proc.stdout)
+
+    def test_bad_phase(self):
+        reviewer = GOOD_REVIEWER.format(name="r1").replace(
+            "phase: work", "phase: bogus"
+        )
+        self._reviewer("r1", reviewer=reviewer)
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("phase", proc.stdout)
+
+    def test_tools_missing_member(self):
+        reviewer = GOOD_REVIEWER.format(name="r1").replace(
+            "tools: Read, Grep, Glob, Bash", "tools: Read, Grep, Glob"
+        )
+        self._reviewer("r1", reviewer=reviewer)
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("tools", proc.stdout)
+        self.assertIn("Bash", proc.stdout)
+
+    def test_broken_reviewer_has_tier_lens_no_phase(self):
+        # A file with tier+lens but NO phase is classified as a template (no
+        # phase) and must fail selector-inert — surfacing the dropped phase.
+        reviewer = GOOD_REVIEWER.format(name="r1").replace("phase: work\n", "")
+        self._reviewer("r1", reviewer=reviewer)
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("selector-inert", proc.stdout)
+
+    def test_missing_verdict_block(self):
+        body = """\
+# r1
+
+## Contract
+
+- **Read-only.** Inputs by reference. Cite evidence.
+- **Load no superpowers skills.**
+"""
+        self._reviewer("r1", body=body)
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("verdict", proc.stdout.lower())
+
+    def test_verdict_block_not_last(self):
+        body = """\
+# r1
+
+## Contract
+
+- **Read-only.** Inputs by reference. Cite evidence.
+- **Load no superpowers skills.**
+
+## Verdict grammar
+
+VERDICT: PASS
+BLOCKING: none
+NON-BLOCKING: none
+
+## Appendix
+
+Some trailing section that wrongly follows the verdict block.
+"""
+        self._reviewer("r1", body=body)
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("last", proc.stdout.lower())
+
+    def test_missing_load_no_superpowers_marker(self):
+        body = """\
+# r1
+
+## Contract
+
+- **Read-only.** Inputs by reference. Cite evidence.
+
+## Verdict grammar
+
+VERDICT: PASS
+BLOCKING: none
+NON-BLOCKING: none
+"""
+        self._reviewer("r1", body=body)
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("Load no superpowers skills", proc.stdout)
+
+    def test_name_mismatch(self):
+        # name in frontmatter is "r1" but the file is "other.md".
+        self._reviewer("other", reviewer=GOOD_REVIEWER.format(name="r1"))
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("name", proc.stdout)
+
+    def test_template_carrying_phase_tier_fails(self):
+        text = """\
+---
+name: reviewer-contract
+description: >-
+  Template that wrongly carries selector metadata.
+phase: work
+tier: core
+---
+
+Body with Read-only, Inputs by reference, Cite evidence,
+Load no superpowers skills.
+"""
+        # This declares phase -> classified as a reviewer; it will fail on the
+        # many missing reviewer keys. Verify it still fails loudly.
+        self._template(text=text)
+        self._reviewer("r1")  # keep a valid reviewer so the run isn't empty
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("FAIL reviewer-contract", proc.stdout)
+
+    def test_template_carrying_tier_lens_no_phase_fails(self):
+        # Selector metadata WITHOUT phase -> classified as template, must fail
+        # the selector-inert check (this is the spec's "template wrongly carrying
+        # tier" case, kept phase-less so it routes to the template branch).
+        text = """\
+---
+name: reviewer-contract
+description: >-
+  Template that wrongly carries tier/lens.
+tier: core
+lens: should not be here
+---
+
+Body.
+"""
+        self._template(text=text)
+        self._reviewer("r1")
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("selector-inert", proc.stdout)
+        self.assertIn("tier", proc.stdout)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 │   └── fix.md                    # /autopilot:fix   (explicit-only)
 ├── scripts/
 │   ├── autopilot-config.py       # reads/initializes ${CLAUDE_PLUGIN_DATA}/config.json
+│   ├── lint-roster.py            # A3 roster lint: validates each reviewer's frontmatter + contract
 │   └── select-panel.py           # selector: (phase, signals) → panel JSON
 ├── agents/                       # named review roster (read-only)
 │   ├── reviewer-contract.md      # authoring template, inlined into each reviewer
@@ -235,6 +236,9 @@ claude --plugin-dir /path/to/claude-autopilot
 
 # Validate manifests + frontmatter (use --strict in CI to fail on warnings):
 claude plugin validate /path/to/claude-autopilot --strict
+
+# Lint the review roster (A3: validates each reviewer's frontmatter + contract):
+python3 scripts/lint-roster.py
 
 # Run the script tests (stdlib unittest, no deps):
 python3 tests/test_scripts.py

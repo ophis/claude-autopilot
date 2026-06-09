@@ -1,6 +1,10 @@
 # OS noise
 .DS_Store
 
+# Python bytecode
+__pycache__/
+*.pyc
+
 # Design + per-build dev docs — kept local, not committed to the published plugin
 SPEC.md
 dev-docs/

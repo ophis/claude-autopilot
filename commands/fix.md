@@ -207,9 +207,10 @@ spine (common to build & fix).
   gate and the S6 re-squash folds its commits). Non-code → producer subagents via
   the same dispatch pattern. The orchestrator never edits the work product itself.
 - **S4 — verify.** Use `superpowers:verification-before-completion`: run the
-  discovered checks. For THIS plugin = `claude plugin validate` + the documented
-  manual smoke. Cap fixes at 3; never weaken, skip, or delete a check; a drop in the
-  check count → STOP.
+  discovered checks. For THIS plugin = `claude plugin validate` +
+  `python3 scripts/lint-roster.py` (A3 roster lint) + `python3 tests/test_scripts.py`
+  + the documented manual smoke. Cap fixes at 3; never weaken, skip, or delete a
+  check; a drop in the check count → STOP.
 - **S5 — work review (Ralph loop).** Panel derived from the **delta diff**
   (`git diff --name-only base_ref...HEAD`); reviewers run a path-scoped diff. Run the
   **S5 Ralph loop** (above) over the work. The core `doc-reviewer` is always in the
