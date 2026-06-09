@@ -33,7 +33,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 │   ├── architecture-reviewer.md  # both / core
 │   ├── correctness-reviewer.md   # work / core — purely behavioral
 │   ├── requirement-fidelity-reviewer.md   # work / core — work ⊨ requirement & spec
-│   ├── doc-reviewer.md           # work / core — docs current + concise
+│   ├── doc-reviewer.md           # work / core — repo-wide docs vs the change + concise
 │   ├── code-quality-reviewer.md  # work / optional (code)
 │   ├── test-reviewer.md          # work / optional (code)
 │   ├── performance-reviewer.md   # work / optional (code)
@@ -96,7 +96,7 @@ end and without asking you questions:
 - **S2 — Plan:** write the execution plan + how it will be verified.
 - **S3 — Produce:** implement (subagent-driven for code).
 - **S4 — Verify:** run the discovered checks.
-- **S5 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates doc currency.
+- **S5 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency.
 - **S6 — Squash:** idempotent squash to one clean commit.
 - **S7 — Finish:** report + integration menu. **Never merges.**
 
@@ -167,7 +167,7 @@ spec-review), `work` (S5 work-review), or `both`.
 | `agents/architecture-reviewer.md` | Structure, boundaries, coupling, extensibility | both | core |
 | `agents/correctness-reviewer.md` | Intent/logic, edge & boundary cases, error paths | work | core |
 | `agents/requirement-fidelity-reviewer.md` | Work realizes the requirement & spec — right thing built, no missing items, no drift/scope creep | work | core |
-| `agents/doc-reviewer.md` | Docs current after the change; edits concise / not bloated | work | core |
+| `agents/doc-reviewer.md` | Docs **repo-wide** still accurate after the change (not just touched files); edits concise / not bloated | work | core |
 | `agents/code-quality-reviewer.md` | Readability, naming, duplication, dead code, needless complexity, comment quality | work | optional |
 | `agents/test-reviewer.md` | Tests meaningful & assert the spec; coverage of new/changed code | work | optional |
 | `agents/performance-reviewer.md` | Complexity, N+1, allocation, resource leaks, hotspots | work | optional |
@@ -176,7 +176,7 @@ spec-review), `work` (S5 work-review), or `both`.
 The work-phase core lenses form a **requirement → spec → work** chain:
 `requirement-fidelity` (the right thing built, faithfully per the spec — no
 missing items, no drift or scope creep), `correctness` (built bug-free);
-`doc-reviewer` keeps docs current and concise.
+`doc-reviewer` keeps docs **repo-wide** current (not just touched files) and concise.
 
 The **floor** that always runs is the phase's `core` lenses — spec phase:
 spec-fitness + architecture; work phase: correctness + architecture +
@@ -199,8 +199,9 @@ panel: it globs `agents/`, reads each frontmatter, and returns the selected revi
 **ad-hoc** lens for a gap no roster agent covers. Each roster member is dispatched
 natively as `Task(subagent_type="autopilot:<name>")` — so it runs at its own model and
 read-only tool allowlist. (Requires the installed plugin with the wired commands + roster, ≥ v0.4.0.)
-Doc upkeep is folded into S5: the core `doc-reviewer` flags stale/missing docs as
-BLOCKING (fixed in the S5 loop), so there is no separate docs phase.
+Doc upkeep is folded into S5: the core `doc-reviewer` flags stale/missing docs **repo-wide**
+(touched files and docs elsewhere the change contradicts) as BLOCKING (fixed in the S5 loop),
+so there is no separate docs phase.
 
 ## Configuration
 

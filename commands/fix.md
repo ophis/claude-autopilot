@@ -213,7 +213,7 @@ spine (common to build & fix).
 - **S5 — work review (Ralph loop).** Panel derived from the **delta diff**
   (`git diff --name-only base_ref...HEAD`); reviewers run a path-scoped diff. Run the
   **S5 Ralph loop** (above) over the work. The core `doc-reviewer` is always in the
-  S5 panel and now gates docs: stale / missing / contradictory docs = BLOCKING (the
+  S5 panel and now gates docs repo-wide: stale / missing / contradictory docs = BLOCKING (the
   S5 producer fix updates them); bloat = NON-BLOCKING. **Fixes:** ONE fresh producer
   subagent primed with the deduped open blockers + cited files only. On convergence
   it records `AUTOPILOT: WORK READY`.

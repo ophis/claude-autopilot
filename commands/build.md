@@ -222,7 +222,7 @@ reviewer uses it as the work⊨spec reference). Because S1 is skipped, no
   Never weaken, skip, or delete a check; a drop in the check count → STOP.
 - **S5 — work review (step 7).** Run the **S5 Ralph loop** (above) over the work.
   **Fixes:** ONE fresh producer subagent primed with the deduped open blockers + the
-  cited files only. Docs are now part of S5: the core `doc-reviewer` gates doc
+  cited files only. Docs are now part of S5: the core `doc-reviewer` gates repo-wide doc
   currency/concision (stale/missing/contradictory docs = BLOCKING → fixed by the S5
   producer; bloat = NON-BLOCKING). On convergence it records `AUTOPILOT: WORK READY`.
 - **S6 — squash (step 8).** Idempotent squash to one commit (skip if already exactly
