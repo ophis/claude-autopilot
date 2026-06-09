@@ -218,9 +218,8 @@ reviewer uses it as the work⊨spec reference). Because S1 is skipped, no
   The orchestrator never edits the work product itself.
 - **S4 — verify (step 6).** Use `superpowers:verification-before-completion`: run
   the discovered checks. For THIS plugin = `claude plugin validate` +
-  `python3 scripts/lint-roster.py` (A3 roster lint) + `python3 tests/test_scripts.py`
-  + the documented manual smoke. Cap fixes at 3. Never weaken, skip, or delete a
-  check; a drop in the check count → STOP.
+  `python3 tests/test_scripts.py` + the documented manual smoke. Cap fixes at 3.
+  Never weaken, skip, or delete a check; a drop in the check count → STOP.
 - **S5 — work review (step 7).** Run the **S5 Ralph loop** (above) over the work.
   **Fixes:** ONE fresh producer subagent primed with the deduped open blockers + the
   cited files only. Docs are now part of S5: the core `doc-reviewer` gates doc
