@@ -179,7 +179,7 @@ spine (common to build & fix).
 **Entry modes (build):** *requirements mode* (default) runs E1 → E2 → S1 → S2 → …;
 *spec-file mode* (when `$ARGUMENTS` is an existing spec file) runs **E1 → S2** — E2
 and S1 are skipped, the provided spec becomes the run's spec (record its absolute path
-in the RESUME block as `spec_file=<path>`; S2 plans from it; S5's `spec-alignment`
+in the RESUME block as `spec_file=<path>`; S2 plans from it; S5's `requirement-fidelity`
 reviewer uses it as the work⊨spec reference). Because S1 is skipped, no
 `AUTOPILOT: SPEC READY` marker and no S1 root-contradiction stop occur in this mode.
 
