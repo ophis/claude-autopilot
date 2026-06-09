@@ -11,6 +11,39 @@ with one explicit command.
 > S1/S5 review loops — the commands select the panel from the roster and dispatch each
 > reviewer natively as `autopilot:<name>` (see [Review roster](#review-roster-agents)).
 
+## Repository structure
+
+The git repo is **both the marketplace and the plugin**:
+
+```
+claude-autopilot/                 # git repo = marketplace + plugin
+├── .claude-plugin/
+│   ├── plugin.json               # name: autopilot (version 0.5.2)
+│   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
+├── commands/
+│   ├── build.md                  # /autopilot:build (explicit-only)
+│   └── fix.md                    # /autopilot:fix   (explicit-only)
+├── scripts/
+│   ├── autopilot-config.py       # reads/initializes ${CLAUDE_PLUGIN_DATA}/config.json
+│   └── select-panel.py           # selector: (phase, signals) → panel JSON
+├── agents/                       # named review roster (read-only)
+│   ├── reviewer-contract.md      # authoring template, inlined into each reviewer
+│   ├── spec-fitness-reviewer.md  # spec / core
+│   ├── architecture-reviewer.md  # both / core
+│   ├── correctness-reviewer.md   # work / core — purely behavioral
+│   ├── requirement-satisfaction-reviewer.md  # work / core — work ⊨ requirement
+│   ├── spec-alignment-reviewer.md            # work / core — work ⊨ spec
+│   ├── doc-reviewer.md           # work / core — docs current + concise
+│   ├── code-quality-reviewer.md  # work / optional (code)
+│   ├── test-reviewer.md          # work / optional (code)
+│   ├── performance-reviewer.md   # work / optional (code)
+│   └── security-reviewer.md      # both / optional — conditional, dual-phase
+├── tests/
+│   └── test_scripts.py           # stdlib unittest for the helper scripts
+├── README.md
+└── .gitignore                    # ignores per-run state files
+```
+
 ## Installation
 
 ### 1. Install the dependency: superpowers (required)
