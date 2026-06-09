@@ -43,8 +43,8 @@ user it is required and how to install it —
 - **Thin orchestrator.** Dispatch by reference and judge structured output. Never
   hoard whole files, diffs, or logs in the main thread. Read only bounded slices
   when you must inspect something yourself.
-- **Disk-backed.** Persist the change-spec, the plan, and a progress note (with a
-  RESUME block) so the run survives compaction. Location follows the
+- **Disk-backed.** Persist the change-spec and a **plan doc** (implementation plan +
+  progress section + a RESUME block) so the run survives compaction. Location follows the
   user's/project's convention — see **State & resumption**.
 - **A STOP is a handoff, never a question:** emit current state + the exact next
   step a human (or a resumed run) would take. Do not pose questions.
@@ -52,7 +52,7 @@ user it is required and how to install it —
 
 ## Resume first
 
-Look for an existing progress note with a RESUME block in the project's convention
+Look for an existing **plan doc** with a RESUME block in the project's convention
 location. If found: reconcile worktree/branch/base_ref existence on disk, then
 continue from `phase` (an interrupted review round re-runs whole). **If none, that
 is the normal first run → go to E1′ (locate); never create a branch.**
@@ -69,7 +69,7 @@ and dispatched natively. Requires the installed plugin **≥0.3.0** (ships `agen
 - **Compose the panel:** ALL returned `core` agents (mandatory floor) + the
   `optional` agents the orchestrator judges relevant (it may drop a marginal
   optional) + any **ad-hoc** inline lens for a genuine gap no roster agent covers.
-- **Freeze & log** the composed panel to the progress note: which core (all), which
+- **Freeze & log** the composed panel to the **plan doc** (progress section): which core (all), which
   optionals included/excluded + why, any ad-hoc added. Reuse the frozen panel every
   round of that phase.
 - **Dispatch the whole round's panel in one parallel batch** — issue every `Task` call together in a single message (`superpowers:dispatching-parallel-agents`), never one at a time. This applies to **every** review round in both S1 and S5 (including re-review rounds — whatever subset of lenses a round dispatches, send them together). Parallel dispatch is the intended efficiency; reviewers are independent and read-only.
@@ -153,7 +153,7 @@ per-phase cap (default 3 rounds). The driver is chosen by config.
 - **`enabled: true` — ralph-loop plugin.** Drive the phase with one
   `/ralph-loop:ralph-loop` whose looped prompt is ONE round and whose
   completion-promise is the phase marker:
-  - **S1** → `/ralph-loop:ralph-loop "Run ONE spec-review round: dispatch the frozen S1 panel fresh (read the spec doc); write each VERDICT to the progress doc. If every lens is PASS with no open BLOCKING, print exactly 'AUTOPILOT: SPEC READY'; otherwise edit the spec to resolve every BLOCKING item and do NOT print the marker." --max-iterations <maxIterations.spec-phase> --completion-promise "AUTOPILOT: SPEC READY"`
+  - **S1** → `/ralph-loop:ralph-loop "Run ONE spec-review round: dispatch the frozen S1 panel fresh (read the spec doc); write each VERDICT to the plan doc. If every lens is PASS with no open BLOCKING, print exactly 'AUTOPILOT: SPEC READY'; otherwise edit the spec to resolve every BLOCKING item and do NOT print the marker." --max-iterations <maxIterations.spec-phase> --completion-promise "AUTOPILOT: SPEC READY"`
   - **S5** → `/ralph-loop:ralph-loop "Run ONE work-review round: dispatch the frozen S5 panel fresh against the diff (git diff base_ref...HEAD); write each VERDICT. If every lens is PASS with no open BLOCKING, print exactly 'AUTOPILOT: WORK READY'; otherwise dispatch ONE producer subagent to fix every BLOCKING item, then do NOT print the marker." --max-iterations <maxIterations.implementation-phase> --completion-promise "AUTOPILOT: WORK READY"`
 
 Both drivers obey the same rules: a fresh panel each round; convergence is decided
@@ -170,12 +170,13 @@ Legend: **E#** = entry phase (command-specific; `′` = fix variant); **S#** = s
 spine (common to build & fix).
 
 - **E1′ — locate the existing branch (no new worktree).** Find the target autopilot
-  branch: read the project's RESUME note if present; else the most recent
+  branch: read the project's **plan doc** (RESUME block) if present; else the most recent
   `autopilot/*` branch. **If none → STOP** ("no autopilot branch found — run
-  `/autopilot:build <requirements>` first"). Never create a new branch.
+  `/autopilot:build <requirements>` first"). Never create a new branch. E1′ **reuses
+  the existing plan doc if present, else creates one.**
   - **Worktree:** use the branch's existing worktree; if it was removed, check the
     branch out in place — never create a second worktree for it.
-  - **base_ref:** reuse the value in that branch's RESUME note if present; else
+  - **base_ref:** reuse the value in that branch's **plan doc** RESUME block if present; else
     `git merge-base main autopilot/<slug>` (default branch = `main` unless the repo
     says otherwise). Record worktree/branch/base_ref.
   - **Dirty tree:** if the worktree has uncommitted changes, STOP with a handoff
@@ -196,8 +197,9 @@ spine (common to build & fix).
   two things that cannot both be true, STOP and hand off — quote the two conflicting
   clauses (this is a handoff, never a question; mere vagueness is decided, not
   stopped).
-- **S2 — plan the delta.** Use `superpowers:writing-plans` → write the plan for the
-  change into the spec doc; record how the work will be verified. On a consequential
+- **S2 — plan the delta.** Use `superpowers:writing-plans` → write the implementation
+  plan for the change into the **plan doc** (separate from the change-spec), appended
+  under a change-scoped heading; record how the work will be verified. On a consequential
   plan fork → convene the expert council (see "Deciding at decision points (expert
   council)") to decide.
 - **S3 — produce.** Code → `superpowers:subagent-driven-development` (it may commit
@@ -251,8 +253,8 @@ parallel batch.
 
 ## State & resumption
 
-Persist three things so the run survives compaction: the brainstormed
-**change-spec**, the **plan**, and a **progress note** carrying a small RESUME block:
+Persist two things so the run survives compaction: the brainstormed
+**change-spec** and the **plan doc** (implementation plan + progress section, carrying a small RESUME block):
 
 ```
 RESUME: phase=<E1'|E2'|S1..S7> worktree=<path> branch=<name> base_ref=<sha> ralph_round=<n> pre_squash_head=<sha>

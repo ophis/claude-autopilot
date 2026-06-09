@@ -57,7 +57,7 @@ install).
 Explicit-only (never model-invoked). Hand it a requirement and it drives, end to
 end and without asking you questions:
 
-- **E1 — Worktree:** create `autopilot/<slug>` worktree+branch; write the progress note.
+- **E1 — Worktree:** create `autopilot/<slug>` worktree+branch; create the plan doc (progress + RESUME).
 - **E2 — Brainstorm:** turn requirements into the spec (expert council at decision points).
 - **S1 — Spec review:** Ralph loop over the spec until the panel passes.
 - **S2 — Plan:** write the execution plan + how it will be verified.
@@ -76,7 +76,7 @@ failure; a self-contradictory requirement; or — **only when Auto Mode is off**
 destructive git op). Reviews converge via a structured `VERDICT/BLOCKING/
 NON-BLOCKING` contract decided from disk, not vibes.
 
-State (spec, plan, progress) is persisted so a run survives context compaction and
+State (the spec doc and the plan doc) is persisted so a run survives context compaction and
 can be resumed; where those files live follows your own project convention.
 
 ### Smoke test (the build eval)
@@ -208,6 +208,6 @@ claude plugin validate /path/to/claude-autopilot --strict
 python3 tests/test_scripts.py
 ```
 
-Per-build development docs live in `dev-docs/<date>-<slug>-{spec,progress}.md`,
+Per-build development docs live in `dev-docs/<date>-<slug>-{spec,plan}.md`,
 kept locally (gitignored) as the build's audit trail — this is our development
 workflow, not something the command imposes on its users.

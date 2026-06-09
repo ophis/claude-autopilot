@@ -51,20 +51,20 @@ user it is required and how to install it —
 - **Thin orchestrator.** Dispatch by reference and judge structured output. Never
   hoard whole files, diffs, or logs in the main thread. Read only bounded slices
   when you must inspect something yourself.
-- **Disk-backed.** Persist the spec, the plan, and a progress note (with a RESUME
-  block) so the run survives compaction. Location follows the user's/project's
-  convention — see **State & resumption**.
+- **Disk-backed.** Persist the spec and a **plan doc** — the implementation plan, a
+  progress section, and a RESUME block — so the run survives compaction. Location
+  follows the user's/project's convention — see **State & resumption**.
 - **A STOP is a handoff, never a question:** emit current state + the exact next
   step a human (or a resumed run) would take. Do not pose questions.
 - **No merge.** The run ends at a review-ready branch. You never merge to the base.
 
 ## Resume first
 
-Before anything else, look for an existing progress note with a RESUME block in the
+Before anything else, look for an existing **plan doc** with a RESUME block in the
 project's convention location. If found: reconcile worktree/branch/base_ref
 existence on disk, then continue from `phase`. An interrupted review round is
 **re-run from scratch** (re-dispatch the whole frozen panel — bounded and
-idempotent), so trust only `ralph_round` for loop position. If no progress note
+idempotent), so trust only `ralph_round` for loop position. If no plan doc
 exists, start at E1.
 
 ## Selecting & dispatching the review panel
@@ -77,7 +77,7 @@ exists, start at E1.
   a core); include the `optional` agents the orchestrator judges relevant (may drop a
   marginal optional); and you MAY add ad-hoc inline lenses for a genuine gap no roster
   agent covers.
-- **Freeze & log** the composed panel to the progress note: which core (all), which
+- **Freeze & log** the composed panel to the **plan doc** (progress section): which core (all), which
   optionals in/out + why, any ad-hoc added. Reuse the frozen panel every round of that
   phase.
 - **Dispatch the whole round's panel in one parallel batch** — issue every `Task` call together in a single message (`superpowers:dispatching-parallel-agents`), never one at a time. This applies to **every** review round in both S1 and S5 (including re-review rounds — whatever subset of lenses a round dispatches, send them together). Parallel dispatch is the intended efficiency; reviewers are independent and read-only.
@@ -160,7 +160,7 @@ per-phase cap (default 3 rounds). The driver is chosen by config.
 - **`enabled: true` — ralph-loop plugin.** Drive the phase with one
   `/ralph-loop:ralph-loop` whose looped prompt is ONE round and whose
   completion-promise is the phase marker:
-  - **S1** → `/ralph-loop:ralph-loop "Run ONE spec-review round: dispatch the frozen S1 panel fresh (read the spec doc); write each VERDICT to the progress doc. If every lens is PASS with no open BLOCKING, print exactly 'AUTOPILOT: SPEC READY'; otherwise edit the spec to resolve every BLOCKING item and do NOT print the marker." --max-iterations <maxIterations.spec-phase> --completion-promise "AUTOPILOT: SPEC READY"`
+  - **S1** → `/ralph-loop:ralph-loop "Run ONE spec-review round: dispatch the frozen S1 panel fresh (read the spec doc); write each VERDICT to the plan doc. If every lens is PASS with no open BLOCKING, print exactly 'AUTOPILOT: SPEC READY'; otherwise edit the spec to resolve every BLOCKING item and do NOT print the marker." --max-iterations <maxIterations.spec-phase> --completion-promise "AUTOPILOT: SPEC READY"`
   - **S5** → `/ralph-loop:ralph-loop "Run ONE work-review round: dispatch the frozen S5 panel fresh against the diff (git diff base_ref...HEAD); write each VERDICT. If every lens is PASS with no open BLOCKING, print exactly 'AUTOPILOT: WORK READY'; otherwise dispatch ONE producer subagent to fix every BLOCKING item, then do NOT print the marker." --max-iterations <maxIterations.implementation-phase> --completion-promise "AUTOPILOT: WORK READY"`
 
 Both drivers obey the same rules: a fresh panel each round; convergence is decided
@@ -189,7 +189,7 @@ reviewer uses it as the work⊨spec reference). Because S1 is skipped, no
   from the spec file's basename — drop the extension and any leading `YYYY-MM-DD-`
   date prefix and trailing `-spec`/`-design`, then apply the slug rule above (e.g.
   `dev-docs/2026-06-08-foo-spec.md` → `foo`). Record worktree/branch/base_ref (HEAD)
-  in the RESUME block; create the **progress note** per the project's
+  in the RESUME block; create the **plan doc** (RESUME + progress section) per the project's
   convention. On worktree/branch collision: one retry with a uniquified slug
   (`-2`, …), else STOP.
 - **E2 — brainstorm (step 2).** Use `superpowers:brainstorming` on `$ARGUMENTS` →
@@ -206,8 +206,9 @@ reviewer uses it as the work⊨spec reference). Because S1 is skipped, no
   never a question; mere vagueness is decided, not stopped). (**Spec-file mode:**
   skipped — the provided spec is adopted as-is; its `AUTOPILOT: SPEC READY` marker and
   the root-contradiction stop do not apply in this mode.)
-- **S2 — plan (step 4).** Use `superpowers:writing-plans` → write the plan into the
-  spec doc and record how the work will be verified. On a consequential plan fork →
+- **S2 — plan (step 4).** Use `superpowers:writing-plans` → generate the
+  implementation plan and write it into the **plan doc's implementation-plan section**
+  (NOT the spec doc); record how the work will be verified. On a consequential plan fork →
   convene the expert council (see "Deciding at decision points (expert council)") to
   decide.
 - **S3 — produce (step 5).** Produce the work product. Code →
@@ -257,9 +258,10 @@ parallel batch.
 
 ## State & resumption
 
-Persist three things so the run survives compaction: the **spec** (E2's output in
-requirements mode, or the user-provided file in spec-file mode — E1 itself writes only
-the progress note), the **plan**, and a **progress note** carrying a small RESUME block:
+Persist two things so the run survives compaction: the **spec** (E2's output in
+requirements mode, or the user-provided file in spec-file mode — E1 writes only the
+plan doc (its progress section); S2 fills the implementation-plan section), and the
+**plan doc** (implementation plan + progress section, carrying the RESUME block):
 
 ```
 RESUME: phase=<E1|E2|S1..S7> worktree=<path> branch=<name> base_ref=<sha> ralph_round=<n> spec_file=<path>
