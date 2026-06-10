@@ -18,7 +18,7 @@ handoff asking for feedback.
 
 ## Preflight (dependencies)
 
-**Load config (run first, every run):** run `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. The `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}'` prefix is **required**: Claude Code inline-substitutes the value into the command text but does *not* export it to the bash subprocess, so the script only receives it when forwarded explicitly (otherwise it uses its fallback dir). It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config. Note `ralphLoop.enabled` and the per-phase caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` for the S1/S5 Ralph loop. User edits to that file take effect on the next run.
+**Load config (run first, every run):** run `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config. Note `ralphLoop.enabled` and the per-phase caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` for the S1/S5 Ralph loop. User edits to that file take effect on the next run.
 
 Before E1′, confirm the **superpowers** plugin is available — its skills must appear
 in your skill list (brainstorming, writing-plans, subagent-driven-development,
@@ -81,8 +81,8 @@ and dispatched natively. Requires the installed plugin **≥0.3.0** (ships `agen
     cost-tiering automatic).
   - *Ad-hoc member:* `general-purpose` with an inline persona (the pre-existing
     pattern), same verdict contract — for a gap no roster agent covers.
-- **Collect verdicts → the existing Ralph loop** (unchanged: round-0 short-circuit,
-  re-dispatch only FAILed/touched, cap, convergence from on-disk verdicts).
+- **Collect verdicts → the Ralph loop** (round-0 short-circuit, re-review rounds
+  dispatch the `(FAILed ∪ touched)` subset, cap, convergence from on-disk verdicts).
 
 ## Deciding at decision points (expert council)
 
@@ -130,7 +130,7 @@ BLOCKING: none           # or one "- " item per line
 NON-BLOCKING: none       # or one "- " item per line
 ```
 
-PASS ⟺ `BLOCKING: none`; FAIL ⟹ ≥1 blocker. Cite evidence (file:line / spec
+PASS ⟺ `BLOCKING: none`. Cite evidence (file:line / spec
 clause); flag blockers, not preferences. A missing, unparseable, or empty-on-FAIL
 verdict counts as **FAIL**. Convergence is decided from these on-disk verdicts,
 never from vibes.
@@ -146,9 +146,21 @@ per-phase cap (default 3 rounds). The driver is chosen by config.
 `ralphLoop.enabled` picks the driver; `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` is the per-phase round cap (default 3). `ralph-loop` is required only when enabled.
 
 - **Default (`enabled: false`) — native loop.** The orchestrator runs the rounds
-  itself: each round, dispatch the frozen panel fresh **in parallel (all that round's members in one batch)** and collect verdicts to disk;
-  round-0 all-PASS short-circuits; advance on all-PASS with no open BLOCKING, else
-  apply fixes and re-dispatch; cap = `maxIterations.spec-phase` (S1) /
+  itself; each round's members go out **in one parallel batch**, and the
+  orchestrator records each lens's verdict (+ blocking items, terse) in the plan
+  doc. **Round 0** = the full frozen panel; all-PASS short-circuits.
+  **Re-review rounds (N>0)** dispatch only **`(FAILed ∪ touched) ∩ frozen panel`**:
+  *FAILed* = last verdict FAIL (or missing/unparseable). *touched* (S5) = every
+  lens whose `applies_to` matches the fix's changed files — record the **pre-fix
+  HEAD** (in the plan doc) before dispatching the producer, then re-run
+  `select-panel.py --phase work --worktree <worktree> --base <pre-fix HEAD>`;
+  its `selected` list is the touched set (cores match any path and always re-run —
+  skips come from unmatched optionals). Ad-hoc lenses re-run iff FAILed; S1
+  re-reviews stay full-panel (S1 fixes edit the spec itself). A skipped lens keeps
+  its PASS as its current verdict; the `∪ touched` half is the correctness guard —
+  a fix can regress a lens that passed. Advance when every frozen-panel lens's
+  current verdict (fresh or carried) is PASS with no open BLOCKING; else fix and
+  re-dispatch; cap = `maxIterations.spec-phase` (S1) /
   `maxIterations.implementation-phase` (S5), default 3.
 - **`enabled: true` — ralph-loop plugin.** Drive the phase with one
   `/ralph-loop:ralph-loop` whose looped prompt is ONE round and whose
@@ -156,13 +168,15 @@ per-phase cap (default 3 rounds). The driver is chosen by config.
   - **S1** → `/ralph-loop:ralph-loop "Run ONE spec-review round: dispatch the frozen S1 panel fresh (read the spec doc); write each VERDICT to the plan doc. If every lens is PASS with no open BLOCKING, print exactly 'AUTOPILOT: SPEC READY'; otherwise edit the spec to resolve every BLOCKING item and do NOT print the marker." --max-iterations <maxIterations.spec-phase> --completion-promise "AUTOPILOT: SPEC READY"`
   - **S5** → `/ralph-loop:ralph-loop "Run ONE work-review round: dispatch the frozen S5 panel fresh against the diff (git diff base_ref...HEAD); write each VERDICT. If every lens is PASS with no open BLOCKING, print exactly 'AUTOPILOT: WORK READY'; otherwise dispatch ONE producer subagent to fix every BLOCKING item, then do NOT print the marker." --max-iterations <maxIterations.implementation-phase> --completion-promise "AUTOPILOT: WORK READY"`
 
-Both drivers obey the same rules: a fresh panel each round; convergence is decided
-from the on-disk verdicts (the marker is printed ONLY when convergence is genuinely
-true — never to escape the loop); on the marker the phase is done and the command
+Both drivers obey the same rules: every dispatched reviewer is a fresh instance;
+convergence is decided from the on-disk verdicts (the marker is printed ONLY when
+convergence is genuinely true — never to escape the loop); on the marker the phase
+is done and the command
 proceeds (S1→S2, S5→S6); if the per-phase cap (`maxIterations.spec-phase` /
 `.implementation-phase`, default 3) is hit WITHOUT the marker → non-convergence STOP
 with the 3-way classification (oscillation | unfixable | requirements-conflict) and
-a handoff — do not proceed.
+a handoff — do not proceed. One divergence: the ralph-loop driver cannot express
+the re-review subset and re-runs the full frozen panel every round (safe, costlier).
 
 ## Pipeline (E1′, E2′, S1–S7)
 
@@ -246,7 +260,7 @@ Stop and hand off (state + exact next step) only on:
 Thin orchestrator · by-reference dispatch (never pipe diffs into N prompts) ·
 smallest panel (2–4, conditional lenses only on signal) · round-0 short-circuit ·
 per-phase cap (`maxIterations.spec-phase` / `.implementation-phase`, default 3),
-re-dispatch only FAILed/touched lenses · bounded subagent prompts, no
+re-dispatch only the `(FAILed ∪ touched)` subset (native loop) · bounded subagent prompts, no
 superpowers skills loaded into reviewers · producer primed by blockers + cited files
 only · expert councils bounded (2–4), convened only at genuine decision points, in one
 parallel batch.

@@ -25,10 +25,7 @@ and completely satisfy the requirement, and is it verifiable?
 
 - **Read-only.** Your `tools` allowlist is `Read, Grep, Glob, Bash` — no `Write`,
   no `Edit`. You modify nothing. For `Bash`, run only inspection commands; never
-  anything that mutates the worktree, index, or refs. (Read-only is enforced by
-  the `tools` allowlist — only Read/Grep/Glob/Bash, no Write/Edit; tighter than
-  `disallowedTools`, which only blocks the named tools.)
-- **Inputs by reference.** The orchestrator passes you the **worktree path**, the
+  anything that mutates the worktree, index, or refs.- **Inputs by reference.** The orchestrator passes you the **worktree path**, the
   **base_ref**, the literal **requirement string**, and any **focus directives**.
   Fetch your own material: read the spec under review and `findings.md` in the
   worktree directly.
@@ -66,8 +63,4 @@ BLOCKING: none           # or one "- " item per line
 NON-BLOCKING: none       # or one "- " item per line
 ```
 
-Invariants:
-- `VERDICT` is exactly `PASS` or `FAIL`, on its own line.
-- **PASS ⟺ `BLOCKING: none`.**
-- **FAIL ⟹ ≥1 blocking item** (one `- ` line each).
-- An unparseable verdict, or a `FAIL` with no blocking items, counts as **FAIL**.
+`VERDICT` is exactly `PASS` or `FAIL` on its own line; PASS ⟺ `BLOCKING: none`; an unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.

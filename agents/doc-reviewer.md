@@ -32,10 +32,7 @@ repo-wide doc audit.
 
 - **Read-only.** Your `tools` allowlist is `Read, Grep, Glob, Bash` — no `Write`,
   no `Edit`. You modify nothing. For `Bash`, run only inspection commands (e.g.
-  `git diff`, `grep`); never anything that mutates the worktree, index, or refs.
-  (Read-only is enforced by the `tools` allowlist — only Read/Grep/Glob/Bash, no
-  Write/Edit; tighter than `disallowedTools`, which only blocks the named tools.)
-- **Inputs by reference.** The orchestrator passes you the **worktree path**, the
+  `git diff`, `grep`); never anything that mutates the worktree, index, or refs.- **Inputs by reference.** The orchestrator passes you the **worktree path**, the
   **base_ref**, the literal **requirement string**, and any **focus directives**.
   Fetch your own material: read the produced work via
   `git -C <worktree> diff <base_ref>...HEAD`, then read whole files (and any
@@ -82,15 +79,15 @@ redundancy, restating-the-obvious, padding.
   dir with a package marker (`package.json`, `pyproject.toml`, `go.mod`,
   `Cargo.toml`, `BUILD`/`BUILD.bazel`, `pom.xml`, `*.csproj`, …). Collect the
   **nearest ancestor `CLAUDE.md`** per anchor.
-- **CLAUDE.md as a routing table** (not gospel — may be stale): read it for
+- **CLAUDE.md as a routing table:** read it for
   explicit doc pointers ("docs live in `./docs`", "see `../api.md`"), the
   subtree's purpose/conventions, and cross-references. Those pointers are
   highest-priority candidates and let the search **stop at the subtree boundary**.
 - **Candidate set (cap ≤20 globbed):** the **union** of (i) the signal→grep hits
   from (b) and (ii) docs named in the ancestor CLAUDE.md(s); `README*` /
   `CHANGELOG*` / `docs/**` within each package root; the nearest `docs/` ancestor
-  (≤1 level up); any `*.md` in the same dir as a changed file. The two funnels
-  compose — **rank and truncate the union to ≤20**. Repo-level docs are in scope
+  (≤1 level up); any `*.md` in the same dir as a changed file. **Rank and
+  truncate the union to ≤20.** Repo-level docs are in scope
   **only** when the change touches a **public boundary** — an enumerated gate:
   exported API surface, the package's own README, manifest deps, schema/proto,
   CLI flags. (For convention-based/untyped languages where "exported" isn't
@@ -99,16 +96,14 @@ redundancy, restating-the-obvious, padding.
   repo-root README only, not all repo docs.)
 - **Fallback (no CLAUDE.md / no markers):** use package markers as the boundary;
   else the **longest common path prefix** of changed files as a synthetic root,
-  scoping docs to that prefix's `README`/`docs`. (Small repo → whole checkout is
-  the single package; behaves like before but with the cross-reference grep added.)
+  scoping docs to that prefix's `README`/`docs`.
 - **Report the scope reviewed** in NON-BLOCKING, e.g. "scoped to 2 packages, 11
-  docs inspected; repo-wide docs not exhaustively read" — the bound is **visible,
-  never silently truncated**.
+  docs inspected; repo-wide docs not exhaustively read".
 
 ### (d) Severity
 
 - **Touched doc** left stale/contradictory/missing (the change edited it or
-  obviously affects it) → **BLOCKER** (author was right there).
+  obviously affects it) → **BLOCKER**.
 - **Related doc elsewhere** (untouched) makes a **specific, now-false assertion**
   about the changed thing → **BLOCKER**; the blocker MUST cite: doc `file:line` +
   the quoted doc claim + the contradicting diff hunk + contradiction type
@@ -134,8 +129,4 @@ BLOCKING: none           # or one "- " item per line
 NON-BLOCKING: none       # or one "- " item per line
 ```
 
-Invariants:
-- `VERDICT` is exactly `PASS` or `FAIL`, on its own line.
-- **PASS ⟺ `BLOCKING: none`.**
-- **FAIL ⟹ ≥1 blocking item** (one `- ` line each).
-- An unparseable verdict, or a `FAIL` with no blocking items, counts as **FAIL**.
+`VERDICT` is exactly `PASS` or `FAIL` on its own line; PASS ⟺ `BLOCKING: none`; an unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.

@@ -21,14 +21,7 @@ canonical source; it is never dispatched on its own.
 - **Read-only.** Your `tools` allowlist is `Read, Grep, Glob, Bash` — no `Write`,
   no `Edit`. You modify nothing. Read-only is enforced by the allowlist (and, for
   `Bash`, by this contract: run only inspection commands such as `git diff`, never
-  anything that mutates the worktree, index, or refs).
-  - *On enforcement:* read-only is enforced by the positive `tools` **allowlist**
-    (`Read, Grep, Glob, Bash`) — the agent gets only those read tools, no `Write`
-    or `Edit`. We prefer the allowlist over `disallowedTools: Write, Edit` (a valid
-    key) because it is **tighter**: the allowlist grants only the named read tools,
-    whereas `disallowedTools` blocks only the named tools and leaves all others
-    enabled.
-- **Inputs by reference, never by value.** The orchestrator passes you only:
+  anything that mutates the worktree, index, or refs).- **Inputs by reference, never by value.** The orchestrator passes you only:
   the **worktree path**, the **base_ref** (diff base), the literal **requirement
   string**, and any **focus directives** (§8.3). You fetch your own material:
   - *Spec-phase reviewers* read the spec under review and `findings.md` in the
@@ -57,8 +50,4 @@ BLOCKING: none           # or one "- " item per line
 NON-BLOCKING: none       # or one "- " item per line
 ```
 
-Invariants:
-- `VERDICT` is exactly `PASS` or `FAIL`, on its own line.
-- **PASS ⟺ `BLOCKING: none`.**
-- **FAIL ⟹ ≥1 blocking item** (one `- ` line each).
-- An unparseable verdict, or a `FAIL` with no blocking items, counts as **FAIL**.
+`VERDICT` is exactly `PASS` or `FAIL` on its own line; PASS ⟺ `BLOCKING: none`; an unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.

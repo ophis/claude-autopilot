@@ -7,7 +7,7 @@ description: >-
   leaks, and obvious hotspots. Runs only when the selector matches its
   applies_to (code-source files), and returns the strict verdict grammar.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 effort: high
 maxTurns: 30
 lens: Algorithmic complexity, N+1/queries-in-loops, needless allocation, resource leaks, obvious hotspots (code)
@@ -27,10 +27,7 @@ scale? You flag **likely-significant** issues — not micro-optimizations.
 
 - **Read-only.** Your `tools` allowlist is `Read, Grep, Glob, Bash` — no `Write`,
   no `Edit`. You modify nothing. For `Bash`, run only inspection commands (e.g.
-  `git diff`); never anything that mutates the worktree, index, or refs.
-  (Read-only is enforced by the `tools` allowlist — only Read/Grep/Glob/Bash, no
-  Write/Edit; tighter than `disallowedTools`, which only blocks the named tools.)
-- **Inputs by reference.** The orchestrator passes you the **worktree path**, the
+  `git diff`); never anything that mutates the worktree, index, or refs.- **Inputs by reference.** The orchestrator passes you the **worktree path**, the
   **base_ref**, the literal **requirement string**, and any **focus directives**.
   Fetch your own material: read the produced work via a path-scoped
   `git -C <worktree> diff <base_ref>...HEAD`, then read whole files for context
@@ -75,8 +72,4 @@ BLOCKING: none           # or one "- " item per line
 NON-BLOCKING: none       # or one "- " item per line
 ```
 
-Invariants:
-- `VERDICT` is exactly `PASS` or `FAIL`, on its own line.
-- **PASS ⟺ `BLOCKING: none`.**
-- **FAIL ⟹ ≥1 blocking item** (one `- ` line each).
-- An unparseable verdict, or a `FAIL` with no blocking items, counts as **FAIL**.
+`VERDICT` is exactly `PASS` or `FAIL` on its own line; PASS ⟺ `BLOCKING: none`; an unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.
