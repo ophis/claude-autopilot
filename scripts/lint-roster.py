@@ -8,10 +8,10 @@ silently mis-routed by the §8.6 selector or mis-run at dispatch.
 
 A file is a **reviewer** iff its frontmatter declares a ``phase`` key; otherwise
 it is the selector-inert **contract template** (today: ``reviewer-contract.md``).
-NOTE: this "reviewer iff frontmatter has ``phase``" rule mirrors the
-classification in ``select-panel.py`` (which skips ``phase``-less files as
-selector-inert) — the two scripts re-derive it independently, so keep them in
-lockstep if that definition ever changes.
+Frontmatter *reading* is shared with select-panel.py via ``_frontmatter.py``
+(one fence/key-value reader, no drift). NOTE: the "reviewer iff frontmatter has
+``phase``" *classification* is still re-derived independently in both scripts —
+keep the two in lockstep if that definition ever changes.
 
 Checks per REVIEWER (file with ``phase``):
   * frontmatter parses;
@@ -42,6 +42,8 @@ import glob
 import os
 import re
 import sys
+
+from _frontmatter import iter_kv, split_frontmatter
 
 REQUIRED_KEYS = (
     "name",
@@ -74,18 +76,15 @@ SELECTOR_KEYS = ("phase", "tier", "lens", "applies_to")
 def parse_agent(path):
     """Read an agent markdown file into (frontmatter dict, body str).
 
-    The frontmatter is the block between the first two ``---`` fences. Returns
-    ``(None, "")`` if the file has no well-formed frontmatter block. This is an
-    extended version of select-panel.py's reader: in addition to name / phase /
-    tier / applies_to it also captures tools, model, effort, maxTurns and lens.
-
-    Value parsing (stdlib only, no nested YAML):
+    Fence-finding and ``key: value`` scanning live in the shared
+    ``_frontmatter`` module (one reader for this script and select-panel.py).
+    Returns ``(None, "")`` if the file has no well-formed frontmatter block.
+    Unlike the selector, the lint captures EVERY key, with its own typing:
       * simple ``key: value``                       -> string;
       * comma list ``tools: Read, Grep, Glob, Bash`` -> list (for ``tools``);
       * flow list ``applies_to: ["**", "*.py"]``     -> list (for ``applies_to``);
       * block scalar ``description: >-`` (empty inline value) -> "" (only its
         presence matters for the lint).
-    Unknown keys are ignored; continuation/indented lines are skipped.
     """
     try:
         with open(path, "r", encoding="utf-8") as fh:
@@ -93,28 +92,12 @@ def parse_agent(path):
     except OSError:
         return None, ""
 
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return None, ""
-    end = None
-    for i in range(1, len(lines)):
-        if lines[i].strip() == "---":
-            end = i
-            break
-    if end is None:
+    fm_lines, body = split_frontmatter(text)
+    if fm_lines is None:
         return None, ""
 
     fm = {}
-    for raw in lines[1:end]:
-        # Only top-level "key: value" lines matter; skip blanks, comments, and
-        # continuation/indented lines (e.g. folded description bodies).
-        if not raw.strip() or raw.lstrip() != raw:
-            continue
-        if ":" not in raw:
-            continue
-        key, _, value = raw.partition(":")
-        key = key.strip()
-        value = value.strip()
+    for key, value in iter_kv(fm_lines):
         if key in ("applies_to", "tools"):
             fm[key] = _parse_list(value)
         else:
@@ -124,7 +107,6 @@ def parse_agent(path):
                 value = ""
             fm[key] = value
 
-    body = "\n".join(lines[end + 1 :])
     return fm, body
 
 

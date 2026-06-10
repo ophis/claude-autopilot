@@ -45,6 +45,8 @@ import os
 import subprocess
 import sys
 
+from _frontmatter import iter_kv, split_frontmatter
+
 # Characters that make an applies_to entry a glob pattern rather than a keyword.
 _GLOB_CHARS = set("*?[/")
 
@@ -57,43 +59,28 @@ def _is_glob(entry):
 def parse_frontmatter(path):
     """Parse the YAML frontmatter block of an agent markdown file.
 
-    The frontmatter is the block between the first two ``---`` lines. We parse
-    it simply (stdlib only): ``key: value`` lines, where ``applies_to`` is a
-    JSON-style array on a single line. Returns a dict of the keys we care about
-    (``name``, ``phase``, ``tier``, ``applies_to``); missing keys are simply
-    absent. A file without a proper frontmatter block yields ``{}``.
+    Fence-finding and ``key: value`` scanning live in the shared
+    ``_frontmatter`` module (one reader for this script and lint-roster.py).
+    This wrapper keeps only the selector's typing: the keys we care about
+    (``name``, ``phase``, ``tier``, ``applies_to``), with ``applies_to`` as a
+    JSON-style array on a single line. Missing keys are simply absent; a file
+    without a proper frontmatter block yields ``{}``.
 
     Tolerant by design: unknown keys are ignored, an unparseable ``applies_to``
     falls back to an empty list, and malformed files never raise.
     """
     try:
         with open(path, "r", encoding="utf-8") as fh:
-            lines = fh.read().splitlines()
+            text = fh.read()
     except OSError:
         return {}
 
-    # Find the frontmatter block: first line must be '---', then up to the next.
-    if not lines or lines[0].strip() != "---":
-        return {}
-    end = None
-    for i in range(1, len(lines)):
-        if lines[i].strip() == "---":
-            end = i
-            break
-    if end is None:
+    fm_lines, _body = split_frontmatter(text)
+    if fm_lines is None:
         return {}
 
     fm = {}
-    for raw in lines[1:end]:
-        # Only top-level "key: value" lines matter; skip blanks, comments, and
-        # continuation/indented lines (e.g. folded description bodies).
-        if not raw.strip() or raw.lstrip() != raw:
-            continue
-        if ":" not in raw:
-            continue
-        key, _, value = raw.partition(":")
-        key = key.strip()
-        value = value.strip()
+    for key, value in iter_kv(fm_lines):
         if key not in ("name", "phase", "tier", "applies_to"):
             continue
         if key == "applies_to":
