@@ -18,7 +18,7 @@ handoff asking for feedback.
 
 ## Preflight (dependencies)
 
-**Load config (run first, every run):** run `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config. Note `ralphLoop.enabled` and the per-phase caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` for the S1/S5 Ralph loop. User edits to that file take effect on the next run.
+**Load config (run first, every run):** run `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config. Note the per-phase caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` for the S1/S5 Ralph loop. User edits to that file take effect on the next run.
 
 Before E1′, confirm the **superpowers** plugin is available — its skills must appear
 in your skill list (brainstorming, writing-plans, subagent-driven-development,
@@ -30,9 +30,6 @@ If superpowers is **not** available, STOP with a handoff (not a question): tell 
 user it is required and how to install it —
 `/plugin install superpowers@claude-plugins-official` — and to re-run `/autopilot:fix` after.
 (`planning-with-files` is optional.)
-
-`ralph-loop` is required only when `ralphLoop.enabled` is `true` in
-`${CLAUDE_PLUGIN_DATA}/config.json`; otherwise it is not needed.
 
 ## Operating disciplines
 
@@ -140,13 +137,13 @@ never from vibes.
 
 The two review-convergence phases — **S1** (spec review) and **S5** (work review) —
 run a Ralph loop: review → fix → re-review until the panel passes, capped at the
-per-phase cap (default 3 rounds). The driver is chosen by config.
+per-phase cap (default 3 rounds). The orchestrator drives the loop natively.
 
 **Config (loaded in Preflight):** from `${CLAUDE_PLUGIN_DATA}/config.json` →
-`{ "ralphLoop": { "enabled": false, "maxIterations": { "spec-phase": 3, "implementation-phase": 3 } } }`.
-`ralphLoop.enabled` picks the driver; `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` is the per-phase round cap (default 3). `ralph-loop` is required only when enabled.
+`{ "ralphLoop": { "maxIterations": { "spec-phase": 3, "implementation-phase": 3 } } }`.
+`ralphLoop.maxIterations.spec-phase` / `.implementation-phase` is the per-phase round cap (default 3). (`ralphLoop.enabled`, the old `ralph-loop`-plugin driver toggle, is deprecated and ignored.)
 
-- **Default (`enabled: false`) — native loop.** The orchestrator runs the rounds
+- **The native loop.** The orchestrator runs the rounds
   itself; each round's members go out **in one parallel batch**, and the
   orchestrator records each lens's verdict (+ blocking items, terse) in the plan
   doc. **Round 0** = the full frozen panel; all-PASS short-circuits.
@@ -163,21 +160,15 @@ per-phase cap (default 3 rounds). The driver is chosen by config.
   current verdict (fresh or carried) is PASS with no open BLOCKING; else fix and
   re-dispatch; cap = `maxIterations.spec-phase` (S1) /
   `maxIterations.implementation-phase` (S5), default 3.
-- **`enabled: true` — ralph-loop plugin.** Drive the phase with one
-  `/ralph-loop:ralph-loop` whose looped prompt is ONE round and whose
-  completion-promise is the phase marker:
-  - **S1** → `/ralph-loop:ralph-loop "Run ONE spec-review round: dispatch the frozen S1 panel fresh (read the spec doc); write each VERDICT to the plan doc. If every lens is PASS with no open BLOCKING, print exactly 'AUTOPILOT: SPEC READY'; otherwise edit the spec to resolve every BLOCKING item and do NOT print the marker." --max-iterations <maxIterations.spec-phase> --completion-promise "AUTOPILOT: SPEC READY"`
-  - **S5** → `/ralph-loop:ralph-loop "Run ONE work-review round: dispatch the frozen S5 panel fresh against the diff (git diff base_ref...HEAD); write each VERDICT. If every lens is PASS with no open BLOCKING, print exactly 'AUTOPILOT: WORK READY'; otherwise dispatch ONE producer subagent to fix every BLOCKING item, then do NOT print the marker." --max-iterations <maxIterations.implementation-phase> --completion-promise "AUTOPILOT: WORK READY"`
 
-Both drivers obey the same rules: every dispatched reviewer is a fresh instance;
+The loop obeys these rules: every dispatched reviewer is a fresh instance;
 convergence is decided from the on-disk verdicts (the marker is printed ONLY when
 convergence is genuinely true — never to escape the loop); on the marker the phase
 is done and the command
 proceeds (S1→S2, S5→S6); if the per-phase cap (`maxIterations.spec-phase` /
 `.implementation-phase`, default 3) is hit WITHOUT the marker → non-convergence STOP
 with the 3-way classification (oscillation | unfixable | requirements-conflict) and
-a handoff — do not proceed. One divergence: the ralph-loop driver cannot express
-the re-review subset and re-runs the full frozen panel every round (safe, costlier).
+a handoff — do not proceed.
 
 ## Pipeline (E1′, E2′, S1–S7)
 
@@ -261,7 +252,7 @@ Stop and hand off (state + exact next step) only on:
 Thin orchestrator · by-reference dispatch (never pipe diffs into N prompts) ·
 smallest panel (2–4, conditional lenses only on signal) · round-0 short-circuit ·
 per-phase cap (`maxIterations.spec-phase` / `.implementation-phase`, default 3),
-re-dispatch only the `(FAILed ∪ touched)` subset (native loop) · bounded subagent prompts, no
+re-dispatch only the `(FAILed ∪ touched)` subset · bounded subagent prompts, no
 superpowers skills loaded into reviewers · producer primed by blockers + cited files
 only · expert councils bounded (2–4), convened only at genuine decision points, in one
 parallel batch.

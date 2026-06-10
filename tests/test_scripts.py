@@ -182,8 +182,7 @@ class SelectPanelTests(unittest.TestCase):
 
 
 class AutopilotConfigTests(unittest.TestCase):
-    DEFAULTS = {"ralphLoop": {"enabled": False,
-                              "maxIterations": {"spec-phase": 3, "implementation-phase": 3}}}
+    DEFAULTS = {"ralphLoop": {"maxIterations": {"spec-phase": 3, "implementation-phase": 3}}}
 
     def run_config(self, data_dir):
         return subprocess.run(
@@ -204,9 +203,11 @@ class AutopilotConfigTests(unittest.TestCase):
 
     def test_partial_override_is_deep_merged(self):
         d = tempfile.mkdtemp()
+        # "enabled" is the deprecated driver toggle: gone from DEFAULTS, but a
+        # user config still carrying it merges through harmlessly (ignored).
         write_raw(d, "config.json", json.dumps({"ralphLoop": {"enabled": True}}))
         eff = json.loads(self.run_config(d).stdout)
-        self.assertTrue(eff["ralphLoop"]["enabled"])                    # user override wins
+        self.assertTrue(eff["ralphLoop"]["enabled"])                    # user key passes through
         self.assertEqual(eff["ralphLoop"]["maxIterations"],            # defaults preserved
                          {"spec-phase": 3, "implementation-phase": 3})
 
@@ -217,7 +218,7 @@ class AutopilotConfigTests(unittest.TestCase):
         eff = json.loads(self.run_config(d).stdout)
         self.assertEqual(eff["ralphLoop"]["maxIterations"]["spec-phase"], 5)
         self.assertEqual(eff["ralphLoop"]["maxIterations"]["implementation-phase"], 3)
-        self.assertFalse(eff["ralphLoop"]["enabled"])
+        self.assertNotIn("enabled", eff["ralphLoop"])    # deprecated key not in defaults
 
     def test_unparseable_config_falls_back_without_overwrite(self):
         d = tempfile.mkdtemp()

@@ -17,10 +17,12 @@ import os
 import sys
 
 DEFAULTS = {
-    # Inner review-convergence loop driver for the two review phases.
+    # Inner review-convergence (Ralph) loop settings for the two review phases.
+    # The old "enabled" driver toggle (native vs. ralph-loop plugin) is
+    # deprecated: the native loop is the only driver. A user config still
+    # carrying "enabled" merges through harmlessly; the commands ignore it.
     "ralphLoop": {
-        "enabled": False,  # False -> native loop; True -> ralph-loop plugin
-        # per-phase round cap (also --max-iterations when enabled):
+        # per-phase round cap:
         #   spec-phase           = S1 spec review
         #   implementation-phase = S5 work/implementation review
         "maxIterations": {"spec-phase": 3, "implementation-phase": 3},

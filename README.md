@@ -58,8 +58,7 @@ mechanism**, so you must install superpowers yourself first:
 /plugin install superpowers@claude-plugins-official
 ```
 
-(`planning-with-files` is optional.) (`ralph-loop` is optional — needed only if you
-enable `ralphLoop` in config; see Configuration.) Both
+(`planning-with-files` is optional.) Both
 commands also **preflight-check** for superpowers and, if it's missing, stop and hand
 you these instructions rather than failing midway.
 
@@ -210,15 +209,15 @@ The plugin keeps its own config in its data dir — never Claude's managed
 (`~/.claude/plugins/data/<plugin-id>/config.json`):
 
 ```json
-{ "ralphLoop": { "enabled": false, "maxIterations": { "spec-phase": 3, "implementation-phase": 3 } } }
+{ "ralphLoop": { "maxIterations": { "spec-phase": 3, "implementation-phase": 3 } } }
 ```
 
-- **`ralphLoop.enabled`** — when `true`, the S1/S5 review-convergence loops are
-  driven by the optional `ralph-loop` plugin (per-phase completion markers
-  `AUTOPILOT: SPEC READY` / `AUTOPILOT: WORK READY`, cap 3). Default `false` uses the
-  built-in native loop. `ralph-loop` is required only when enabled.
 - **`ralphLoop.maxIterations.spec-phase` / `.implementation-phase`** — per-phase
   round cap for the S1 spec-review / S5 work-review loop (default 3 each).
+- **Deprecated: `ralphLoop.enabled`.** The old toggle that drove the loops via the
+  optional `ralph-loop` plugin is ignored — the built-in native loop (which can
+  re-dispatch only the affected lens subset on re-review rounds) is the only
+  driver. A config file still carrying the key is harmless.
 
 The commands run `scripts/autopilot-config.py` at startup; it creates this file with
 defaults if absent, so editing it takes effect on the next run.

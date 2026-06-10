@@ -67,8 +67,9 @@ command files plus `agents/` and `scripts/` together:
 
 - **Config (`scripts/autopilot-config.py`).** Reads/initializes
   `${CLAUDE_PLUGIN_DATA}/config.json` (the plugin's own data dir, never Claude's
-  `settings.json`). Toggles the Ralph driver (`ralphLoop.enabled`: native loop vs. the
-  optional `ralph-loop` plugin) and per-phase caps.
+  `settings.json`). Holds the Ralph-loop per-phase caps (`ralphLoop.maxIterations.*`).
+  The old `ralphLoop.enabled` driver toggle (native vs. `ralph-loop` plugin) is
+  deprecated and ignored — the native loop is the only driver.
 
 - **Disk-backed state.** A run persists a **spec doc** and a **plan doc** (implementation
   plan + a progress section + a `RESUME:` block). The RESUME block
