@@ -76,9 +76,10 @@ and dispatched natively. Requires the installed plugin **≥0.3.0** (ships `agen
   - *Roster member:* `Task(subagent_type="autopilot:<name>", …)` — the agent's body
     is its system prompt (persona/contract/checklist/verdict already loaded); pass
     ONLY the run inputs: "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…,
-    requirement=…, focus=…. Return ONLY the verdict block." It runs at its own
-    `model` and read-only `tools` allowlist (read-only genuinely enforced;
-    cost-tiering automatic).
+    spec_doc=…, plan_doc=…, requirement=…, focus=…. Return ONLY the verdict block."
+    (`spec_doc`/`plan_doc` = absolute paths of the run's spec doc and plan doc.)
+    It runs at its own `model` and read-only `tools` allowlist (read-only genuinely
+    enforced; cost-tiering automatic).
   - *Ad-hoc member:* `general-purpose` with an inline persona (the pre-existing
     pattern), same verdict contract — for a gap no roster agent covers.
 - **Collect verdicts → the Ralph loop** (round-0 short-circuit, re-review rounds
@@ -91,7 +92,7 @@ At a **decision point**, the orchestrator **convenes an expert council**: a smal
 dispatched in **one parallel batch** via `superpowers:dispatching-parallel-agents`. Each
 returns a **concise position** (recommendation + rationale + key trade-offs + any
 dissent). The **orchestrator then synthesizes, decides, and records** the decision + the
-council's key points (incl. dissent) in the spec/findings/progress. The orchestrator is
+council's key points (incl. dissent) in the spec doc / plan doc (progress section). The orchestrator is
 the decider; the council informs it. Never ask the user.
 
 **Council members are advisors, not reviewers** — they give recommendations, NOT the
@@ -122,7 +123,7 @@ a count.
 position is logged as "considered, not adopted"; the orchestrator breaks ties (it is the
 decider).
 
-## Verdict grammar (paste inline into every summon prompt)
+## Verdict grammar (paste into ad-hoc summon prompts only — roster agents already embed it)
 
 ```
 VERDICT: PASS            # or exactly: VERDICT: FAIL

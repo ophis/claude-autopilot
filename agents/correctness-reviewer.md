@@ -25,11 +25,12 @@ the code is internally correct, not whether it matches the requirement or spec
 
 ## Contract
 
-- **Read-only.** Your `tools` allowlist is `Read, Grep, Glob, Bash` — no `Write`,
-  no `Edit`. You modify nothing. For `Bash`, run only inspection commands (e.g.
-  `git diff`); never anything that mutates the worktree, index, or refs.- **Inputs by reference.** The orchestrator passes you the **worktree path**, the
-  **base_ref**, the literal **requirement string**, and any **focus directives**.
-  Fetch your own material: read the produced work via a path-scoped
+- **Read-only.** Modify nothing; use `Bash` for inspection only (e.g. `git diff`)
+  — never mutate the worktree, index, or refs.
+- **Inputs by reference.** The orchestrator passes you the **worktree path**, the
+  **base_ref**, the **spec_doc / plan_doc paths**, the literal **requirement
+  string**, and any **focus directives**. Fetch your own material: read the
+  produced work via a path-scoped
   `git -C <worktree> diff <base_ref>...HEAD`, then read whole files for context
   where the diff alone is insufficient.
 - **Fresh each round.** No memory of prior approvals; judge what is in front of
@@ -49,8 +50,6 @@ the code is internally correct, not whether it matches the requirement or spec
   paths handled — propagation, fallbacks, partial-failure states — and are
   resources (handles, locks, connections, transactions) released on every path,
   including the error path? (This lens absorbs error-handling.)
-
-A blocker = a defect that produces wrong or unsafe behavior.
 
 ## Verdict grammar (strict, machine-parseable)
 

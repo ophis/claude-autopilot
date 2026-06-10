@@ -83,9 +83,10 @@ exists, start at E1.
 - **Dispatch the whole round's panel in one parallel batch** — issue every `Task` call together in a single message (`superpowers:dispatching-parallel-agents`), never one at a time. This applies to **every** review round in both S1 and S5 (including re-review rounds — whatever subset of lenses a round dispatches, send them together). Parallel dispatch is the intended efficiency; reviewers are independent and read-only.
   - *Roster member* → `Task(subagent_type="autopilot:<name>", …)` (use the
     `subagent_type` from the script). The agent's body is its system prompt; pass ONLY
-    run inputs: "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…, requirement=…,
-    focus=…. Return ONLY the verdict block." It runs at its own model + read-only
-    allowlist.
+    run inputs: "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…, spec_doc=…,
+    plan_doc=…, requirement=…, focus=…. Return ONLY the verdict block."
+    (`spec_doc`/`plan_doc` = absolute paths of the run's spec doc and plan doc.)
+    It runs at its own model + read-only allowlist.
   - *Ad-hoc member* → `general-purpose` with an inline persona, same verdict contract.
 - Each reviewer returns the verdict block; collect verdicts → the Ralph loop (unchanged).
 
@@ -98,7 +99,7 @@ At a **decision point**, the orchestrator **convenes an expert council**: a smal
 dispatched in **one parallel batch** via `superpowers:dispatching-parallel-agents`. Each
 returns a **concise position** (recommendation + rationale + key trade-offs + any
 dissent). The **orchestrator then synthesizes, decides, and records** the decision + the
-council's key points (incl. dissent) in the spec/findings/progress. The orchestrator is
+council's key points (incl. dissent) in the spec doc / plan doc (progress section). The orchestrator is
 the decider; the council informs it. Never ask the user.
 
 **Council members are advisors, not reviewers** — they give recommendations, NOT the
@@ -129,7 +130,7 @@ a count.
 position is logged as "considered, not adopted"; the orchestrator breaks ties (it is the
 decider).
 
-## Verdict grammar (paste inline into every summon prompt)
+## Verdict grammar (paste into ad-hoc summon prompts only — roster agents already embed it)
 
 ```
 VERDICT: PASS            # or exactly: VERDICT: FAIL

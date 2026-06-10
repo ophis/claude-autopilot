@@ -26,12 +26,13 @@ structure actually produced in the diff.
 
 ## Contract
 
-- **Read-only.** Your `tools` allowlist is `Read, Grep, Glob, Bash` — no `Write`,
-  no `Edit`. You modify nothing. For `Bash`, run only inspection commands (e.g.
-  `git diff`); never anything that mutates the worktree, index, or refs.- **Inputs by reference.** The orchestrator passes you the **worktree path**, the
-  **base_ref**, the literal **requirement string**, and any **focus directives**.
-  Fetch your own material:
-  - *Spec phase:* read the spec under review and `findings.md` in the worktree.
+- **Read-only.** Modify nothing; use `Bash` for inspection only (e.g. `git diff`)
+  — never mutate the worktree, index, or refs.
+- **Inputs by reference.** The orchestrator passes you the **worktree path**, the
+  **base_ref**, the **spec_doc / plan_doc paths**, the literal **requirement
+  string**, and any **focus directives**. Fetch your own material:
+  - *Spec phase:* read the spec at `spec_doc` (the plan doc's progress section
+    has run context).
   - *Work phase:* read the produced structure via
     `git -C <worktree> diff <base_ref>...HEAD`, path-scoped where it helps.
 - **Fresh each round.** No memory of prior approvals; judge what is in front of

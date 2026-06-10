@@ -18,14 +18,14 @@ canonical source; it is never dispatched on its own.
 
 ## Contract
 
-- **Read-only.** Your `tools` allowlist is `Read, Grep, Glob, Bash` — no `Write`,
-  no `Edit`. You modify nothing. Read-only is enforced by the allowlist (and, for
-  `Bash`, by this contract: run only inspection commands such as `git diff`, never
-  anything that mutates the worktree, index, or refs).- **Inputs by reference, never by value.** The orchestrator passes you only:
-  the **worktree path**, the **base_ref** (diff base), the literal **requirement
-  string**, and any **focus directives** (§8.3). You fetch your own material:
-  - *Spec-phase reviewers* read the spec under review and `findings.md` in the
-    worktree directly.
+- **Read-only.** Modify nothing; use `Bash` for inspection only (e.g. `git diff`)
+  — never mutate the worktree, index, or refs.
+- **Inputs by reference, never by value.** The orchestrator passes you only:
+  the **worktree path**, the **base_ref** (diff base), the **spec_doc / plan_doc
+  paths** (the run's spec doc and plan doc), the literal **requirement string**,
+  and any **focus directives** (§8.3). You fetch your own material:
+  - *Spec-phase reviewers* read the spec at `spec_doc` (the plan doc's progress
+    section has run context) directly.
   - *Work-phase reviewers* obtain the produced artifact with a path-scoped
     `git -C <worktree> diff <base_ref>...HEAD` — scoped to your lens's
     `applies_to` when narrow, so you do not ingest the whole diff (§15).
