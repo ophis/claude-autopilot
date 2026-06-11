@@ -26,6 +26,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 ├── scripts/
 │   ├── autopilot-config.py       # reads/initializes ${CLAUDE_PLUGIN_DATA}/config.json
 │   ├── lint-roster.py            # A3 roster lint: validates each reviewer's frontmatter + contract
+│   ├── review-round.js           # Dynamic Workflows transport: one review round → verdict JSON
 │   └── select-panel.py           # selector: (phase, signals) → panel JSON
 ├── agents/                       # named review roster (read-only)
 │   ├── reviewer-contract.md      # authoring template, inlined into each reviewer
@@ -195,9 +196,15 @@ panel: it globs `agents/`, reads each frontmatter, and returns the selected revi
 `optional` whose `applies_to` matches the signals (spec keywords for S1; changed paths,
 `git diff --name-only base...HEAD`, for S5). The orchestrator then runs **all** core
 (the floor), **curates** the optionals (may drop a marginal one), and may add an
-**ad-hoc** lens for a gap no roster agent covers. Each roster member is dispatched
-natively as `Task(subagent_type="autopilot:<name>")` — so it runs at its own model and
-read-only tool allowlist. (Requires the installed plugin with the wired commands + roster, ≥ v0.4.0.)
+**ad-hoc** lens for a gap no roster agent covers. Each roster member runs at its own
+model and read-only tool allowlist on either transport (identical prompts):
+**preferred**, one `Workflow` call per review round running the plugin's
+`scripts/review-round.js` (Dynamic Workflows — background fan-out, schema-validated
+verdict JSON; a member's infra failure returns `synthetic: true` and is retried once
+via `Task`); **fallback** (tool unavailable or a call failed — sticky for the run),
+the parallel `Task(subagent_type="autopilot:<name>")` batch. Nothing to configure.
+(Requires the installed plugin ≥ v0.4.0; the workflow transport needs the version
+shipping `scripts/review-round.js`.)
 Doc upkeep is folded into S5: the core `doc-reviewer` flags stale/missing docs **repo-wide**
 (touched files and docs elsewhere the change contradicts) as BLOCKING (fixed in the S5 loop),
 so there is no separate docs phase.
