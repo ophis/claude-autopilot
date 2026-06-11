@@ -77,14 +77,29 @@ exists, start at E1.
 - **Freeze & log** the composed panel to the **plan doc** (progress section): which core (all), which
   optionals in/out + why, any ad-hoc added. Reuse the frozen panel every round of that
   phase.
-- **Dispatch the whole round's panel in one parallel batch** — issue every `Task` call together in a single message (`superpowers:dispatching-parallel-agents`), never one at a time. This applies to **every** review round in both S1 and S5 (including re-review rounds — whatever subset of lenses a round dispatches, send them together). Parallel dispatch is the intended efficiency; reviewers are independent and read-only.
-  - *Roster member* → `Task(subagent_type="autopilot:<name>", …)` (use the
-    `subagent_type` from the script). The agent's body is its system prompt; pass ONLY
-    run inputs: "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…, spec_doc=…,
-    plan_doc=…, requirement=…, focus=…. Return ONLY the verdict block."
-    (`spec_doc`/`plan_doc` = absolute paths of the run's spec doc and plan doc.)
-    It runs at its own model + read-only allowlist.
-  - *Ad-hoc member* → `general-purpose` with an inline persona, same verdict contract.
+- **Dispatch the whole round's panel together** — never one at a time; every review
+  round in S1 and S5, re-reviews included. Build each member's run-input prompt once —
+  "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…,
+  requirement=…, focus=…. Return ONLY the verdict block." (absolute paths) — the
+  identical prompt goes to whichever transport carries it:
+  - **Workflow transport (preferred; roster members only):** one call per round —
+    `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "<spec|work>", members: [{agent, subagent_type, prompt}, …]}})`.
+    Members keep their own model + read-only allowlist (`agentType` resolves like
+    `Task`). The call returns a task ID immediately; the round's verdicts arrive in
+    its completion notification as `{phase, verdicts: [{agent, verdict, blocking,
+    non_blocking, synthetic}, …]}` — wait for it (never poll, never judge early).
+    Never pass `resumeFromRunId`: every round is a fresh run. `synthetic: true` =
+    that member's infra failure, not a review FAIL: once all initial results are in
+    (incl. ad-hoc), re-dispatch just those lenses once via `Task`; still nothing →
+    FAIL. A return without a `verdicts` array = a failed call → fallback.
+  - **Ad-hoc members: always via `Task`** (`general-purpose` + inline persona, same
+    verdict contract), in the same turn — they have no read-only allowlist inside a
+    workflow.
+  - **Task fallback:** if the `Workflow` tool is unavailable or any call failed,
+    dispatch roster members as `Task(subagent_type="autopilot:<name>", …)` — the
+    agent's body is its system prompt; send ONLY the run-input prompt — all calls in
+    a single message (`superpowers:dispatching-parallel-agents`), for the rest of
+    the run. Record the transport (and any fallback) in the plan doc.
 - Each reviewer returns the verdict block; collect verdicts → the Ralph loop (unchanged).
 
 Requires the installed plugin to ship the roster (≥0.3.0).
@@ -151,7 +166,8 @@ per-phase cap (default 3 rounds). The orchestrator drives the loop natively.
 `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` is the per-phase round cap (default 3). (`ralphLoop.enabled`, the old `ralph-loop`-plugin driver toggle, is deprecated and ignored.)
 
 - **The native loop.** The orchestrator runs the rounds
-  itself; each round's members go out **in one parallel batch**, and the
+  itself; each round's members go out **together via the transport rule** (one
+  `Workflow` call, or one parallel `Task` batch on fallback), and the
   orchestrator records each lens's verdict (+ blocking items, terse) in the plan
   doc. **Round 0** = the full frozen panel; all-PASS short-circuits.
   **Re-review rounds (N>0)** dispatch only **`(FAILed ∪ touched) ∩ frozen panel`**:
@@ -260,7 +276,8 @@ per-phase cap (`maxIterations.spec-phase` / `.implementation-phase`, default 3),
 re-dispatch only the `(FAILed ∪ touched)` subset · bounded subagent prompts, no
 superpowers skills loaded into reviewers · producer primed by blockers + cited files
 only · expert councils bounded (2–4), convened only at genuine decision points, in one
-parallel batch.
+parallel batch · workflow transport returns a round's verdicts as one JSON payload
+(reviewer output stays off the main thread).
 
 ## State & resumption
 

@@ -55,8 +55,13 @@ command files plus `agents/` and `scripts/` together:
   agent whose frontmatter is **self-describing** (`lens` / `phase` / `tier` /
   `applies_to`) so the selector can route it with no code change. `reviewer-contract.md`
   is an authoring-time template (selector-inert: no `phase`) inlined into each reviewer.
-  Reviewers are dispatched **natively** as `Task(subagent_type="autopilot:<name>")`,
-  each running at its own `model` + read-only `tools` allowlist.
+  Reviewers are dispatched **natively** — preferably one `Workflow` call per review
+  round (`scripts/review-round.js`, a dumb-transport Dynamic Workflows script:
+  `agentType` = the same `autopilot:<name>` handles, schema-validated verdicts,
+  `synthetic: true` = per-member infra failure), falling back stickily to a parallel
+  `Task(subagent_type="autopilot:<name>")` batch — each reviewer at its own `model` +
+  read-only `tools` allowlist either way. `scriptPath` resolves from the *installed*
+  plugin, like agent dispatch.
 
 - **Selection stage (`scripts/select-panel.py`).** Deterministic, stdlib-only router:
   `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every
