@@ -9,7 +9,9 @@ with one explicit command.
 > implemented, the **named review roster** is complete for both phases in `agents/`,
 > and the **selection stage** (`scripts/select-panel.py`) wires the roster into the
 > S1/S5 review loops — the commands select the panel from the roster and dispatch each
-> reviewer natively as `autopilot:<name>` (see [Review roster](#review-roster-agents)).
+> reviewer natively as `autopilot:<name>`, preferring one `Workflow` call per review
+> round (`scripts/review-round.js`) with automatic `Task` fallback (see
+> [Review roster](#review-roster-agents)).
 
 ## Repository structure
 

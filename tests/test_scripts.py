@@ -23,6 +23,7 @@ SELECT_PANEL = os.path.join(SCRIPTS, "select-panel.py")
 CONFIG = os.path.join(SCRIPTS, "autopilot-config.py")
 LINT_ROSTER = os.path.join(SCRIPTS, "lint-roster.py")
 REVIEW_ROUND = os.path.join(SCRIPTS, "review-round.js")
+COMMANDS = os.path.join(REPO, "commands")
 
 AGENT_TEMPLATE = """\
 ---
@@ -528,6 +529,10 @@ class ReviewRoundScriptTests(unittest.TestCase):
             "synthetic",
             "verdicts",
             "return {",
+            # Pin the schema field names and the verdict values: renaming any
+            # of these would silently break the orchestrator's judging.
+            "required: ['verdict', 'blocking', 'non_blocking'],",
+            "enum: ['PASS', 'FAIL']",
         ):
             self.assertIn(marker, self.text, marker)
 
@@ -536,6 +541,7 @@ class ReviewRoundScriptTests(unittest.TestCase):
         for banned in (
             "require(",
             "import ",
+            "import(",  # dynamic import — "import " alone would miss it
             "process.",
             "fs.",
             "fetch(",
@@ -563,6 +569,37 @@ class ReviewRoundScriptTests(unittest.TestCase):
                 stderr=subprocess.PIPE,
             )
             self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+
+
+class CommandLockstepTests(unittest.TestCase):
+    """build.md and fix.md must carry a byte-identical workflow-transport block
+    (spec A2). Until now this was enforced only by review; prose drift between
+    the two commands now fails here instead.
+    """
+
+    @staticmethod
+    def _transport_block(filename):
+        path = os.path.join(COMMANDS, filename)
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+        start = next(
+            (i for i, l in enumerate(lines) if "Workflow transport (preferred" in l),
+            None,
+        )
+        end = next(
+            (i for i, l in enumerate(lines) if "Record the transport" in l),
+            None,
+        )
+        if start is None or end is None or end < start:
+            raise AssertionError("transport block not found in %s" % filename)
+        return "\n".join(lines[start : end + 1])
+
+    def test_transport_block_identical(self):
+        """The block from 'Workflow transport (preferred' through 'Record the
+        transport' is the shared dispatch contract — byte-identical or bust."""
+        self.assertEqual(
+            self._transport_block("build.md"), self._transport_block("fix.md")
+        )
 
 
 if __name__ == "__main__":
