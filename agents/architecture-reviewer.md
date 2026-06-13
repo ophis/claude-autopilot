@@ -12,8 +12,8 @@ effort: high
 maxTurns: 30
 lens: Structure, boundaries, coupling, extensibility (general)
 phase: both
-tier: core
-applies_to: ["**"]
+tier: {"spec": "core", "work": "optional"}
+applies_to: ["@structural"]
 ---
 
 # architecture-reviewer

@@ -1,44 +1,12 @@
 #!/usr/bin/env python3
-"""Lint the Claude Autopilot review roster (acceptance criterion A3).
-
-Validates every file in ``agents/`` so a malformed reviewer (a typo'd ``tier``,
-a missing ``phase``, a non-read-only ``tools`` list, a dropped or misplaced
-verdict block) fails LOUDLY here — at authoring/CI time — instead of being
-silently mis-routed by the §8.6 selector or mis-run at dispatch.
-
-A file is a **reviewer** iff its frontmatter declares a ``phase`` key; otherwise
-it is the selector-inert **contract template** (today: ``reviewer-contract.md``).
-Frontmatter *reading* is shared with select-panel.py via ``_frontmatter.py``
-(one fence/key-value reader, no drift). NOTE: the "reviewer iff frontmatter has
-``phase``" *classification* is still re-derived independently in both scripts —
-keep the two in lockstep if that definition ever changes.
-
-Checks per REVIEWER (file with ``phase``):
-  * frontmatter parses;
-  * all required keys present (name, description, tools, model, effort,
-    maxTurns, lens, phase, tier, applies_to);
-  * phase in {spec, work, both}; tier in {core, optional}; maxTurns is a
-    positive int; applies_to is a non-empty list; name == filename stem;
-  * tools (as a set) == {Read, Grep, Glob, Bash} (read-only, per contract §8.1);
-  * body inlines the contract (contains all marker substrings: ``Read-only``,
-    ``Inputs by reference``, ``Cite evidence``, ``Load no superpowers skills``);
-  * body ends with the strict verdict block (``VERDICT:``, ``BLOCKING:``,
-    ``NON-BLOCKING:``) AND that verdict-grammar ``## `` heading is the LAST
-    ``## `` heading in the file.
-
-Checks for the TEMPLATE (file without ``phase``): parses, and is selector-inert
-(declares none of phase / tier / lens / applies_to).
-
-CLI: ``python3 scripts/lint-roster.py [--agents-dir DIR]`` (default = the
-``agents/`` dir resolved relative to the script, same convention as
-select-panel.py). Prints ``OK <name>`` / ``FAIL <name>: <reasons>`` per file and
-a final summary. Exits 0 iff every file passes and at least one agent file was
-found; non-zero otherwise.
-
-Stdlib only (no PyYAML; matches select-panel.py / autopilot-config.py).
+"""Lint the Claude Autopilot review roster (A3): validate every ``agents/*.md``
+so a malformed reviewer fails loudly at authoring/CI time instead of mis-routing
+the §8.6 selector. CLI: ``python3 scripts/lint-roster.py [--agents-dir DIR]``,
+non-zero exit on any failure. Stdlib only.
 """
 import argparse
 import glob
+import json
 import os
 import re
 import sys
@@ -60,8 +28,8 @@ REQUIRED_KEYS = (
 VALID_PHASES = {"spec", "work", "both"}
 VALID_TIERS = {"core", "optional"}
 READONLY_TOOLS = {"Read", "Grep", "Glob", "Bash"}
-# Contract markers each real reviewer inlines (presence check, not byte-equality,
-# since reviewers trim the contract). See agents/reviewer-contract.md.
+# Contract markers each reviewer inlines; presence check, not byte-equality
+# (reviewers trim the contract). See agents/reviewer-contract.md.
 CONTRACT_MARKERS = (
     "Read-only",
     "Inputs by reference",
@@ -69,22 +37,18 @@ CONTRACT_MARKERS = (
     "Load no superpowers skills",
 )
 VERDICT_MARKERS = ("VERDICT:", "BLOCKING:", "NON-BLOCKING:")
-# Selector metadata a selector-inert template must NOT carry.
 SELECTOR_KEYS = ("phase", "tier", "lens", "applies_to")
 
 
 def parse_agent(path):
-    """Read an agent markdown file into (frontmatter dict, body str).
+    """Read an agent markdown file into (frontmatter dict, body str), or
+    ``(None, "")`` if it has no well-formed frontmatter block.
 
-    Fence-finding and ``key: value`` scanning live in the shared
-    ``_frontmatter`` module (one reader for this script and select-panel.py).
-    Returns ``(None, "")`` if the file has no well-formed frontmatter block.
-    Unlike the selector, the lint captures EVERY key, with its own typing:
-      * simple ``key: value``                       -> string;
-      * comma list ``tools: Read, Grep, Glob, Bash`` -> list (for ``tools``);
-      * flow list ``applies_to: ["**", "*.py"]``     -> list (for ``applies_to``);
-      * block scalar ``description: >-`` (empty inline value) -> "" (only its
-        presence matters for the lint).
+    Unlike the selector, the lint captures EVERY key with its own typing:
+      * simple ``key: value``                                   -> string;
+      * comma/flow list (``tools``, ``applies_to``)             -> list;
+      * flow map (polymorphic ``tier``; scalar ``tier`` stays a string) -> dict;
+      * block scalar (``description: >-``)                      -> "" (presence only).
     """
     try:
         with open(path, "r", encoding="utf-8") as fh:
@@ -100,9 +64,10 @@ def parse_agent(path):
     for key, value in iter_kv(fm_lines):
         if key in ("applies_to", "tools"):
             fm[key] = _parse_list(value)
+        elif key == "tier" and value.strip().startswith("{"):
+            fm[key] = _parse_map(value)
         else:
-            # Strip a leading block-scalar indicator (>- / > / |) so a folded
-            # value reads as present (empty) rather than as the literal ">-".
+            # Block-scalar indicator reads as present-but-empty, not literal ">-".
             if value in (">-", ">", "|", ">+", "|-", "|+"):
                 value = ""
             fm[key] = value
@@ -122,13 +87,25 @@ def _parse_list(value):
     if value.startswith("[") and value.endswith("]"):
         inner = value[1:-1]
         items = []
-        # Split on commas; tolerate optional surrounding quotes on each item.
         for part in inner.split(","):
             part = part.strip().strip('"').strip("'").strip()
             if part:
                 items.append(part)
         return items
     return [p.strip() for p in value.split(",") if p.strip()]
+
+
+def _parse_map(value):
+    """Parse a single-line JSON flow-map (the polymorphic ``tier``) into a dict.
+
+    Returns the raw string on parse failure / non-dict so the validator rejects
+    it loudly instead of treating it as a malformed scalar.
+    """
+    try:
+        parsed = json.loads(value.strip())
+    except (ValueError, TypeError):
+        return value.strip()
+    return parsed if isinstance(parsed, dict) else value.strip()
 
 
 def lint_reviewer(stem, fm, body):
@@ -147,7 +124,22 @@ def lint_reviewer(stem, fm, body):
 
     if "tier" in fm:
         tier = fm["tier"]
-        if tier not in VALID_TIERS:
+        if isinstance(tier, dict):
+            bad_phases = [p for p in tier if p not in VALID_PHASES]
+            bad_tiers = [t for t in tier.values() if t not in VALID_TIERS]
+            if not tier:
+                reasons.append("tier map must not be empty")
+            if bad_phases:
+                reasons.append(
+                    "tier map phase(s) %s not in {spec, work, both}"
+                    % ", ".join(map(str, bad_phases))
+                )
+            if bad_tiers:
+                reasons.append(
+                    "tier map value(s) %s not in {core, optional}"
+                    % ", ".join(map(str, bad_tiers))
+                )
+        elif tier not in VALID_TIERS:
             reasons.append("tier '%s' not in {core, optional}" % tier)
 
     if "maxTurns" in fm:
@@ -205,11 +197,8 @@ def lint_reviewer(stem, fm, body):
 
 
 def _verdict_is_last_section(body):
-    """True iff the verdict block sits under the LAST ``## `` heading.
-
-    The contract places the verdict grammar as the file's final section. We find
-    the last ``## `` heading and require all three verdict markers to appear in
-    the text from that heading to end-of-file.
+    """True iff all three verdict markers appear under the LAST ``## `` heading
+    (the contract places the verdict grammar as the file's final section).
     """
     headings = [m.start() for m in re.finditer(r"(?m)^## ", body)]
     if not headings:

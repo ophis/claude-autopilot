@@ -1,30 +1,22 @@
 #!/usr/bin/env python3
 """Read (and initialize) the Claude Autopilot plugin config.
 
-The build/fix commands run this once at startup. It:
-  1. locates the plugin's own data dir (``$CLAUDE_PLUGIN_DATA``; falls back to
-     ``~/.claude/plugins/data/autopilot-claude-autopilot`` if the env var is unset),
-  2. ensures ``<data-dir>/config.json`` exists, writing DEFAULTS if it is absent
-     or unparseable,
-  3. prints the *effective* config (DEFAULTS deep-merged with the user's file) as
-     JSON to stdout.
-
-Config lives in the plugin's own data dir — never in Claude's managed
-settings.json. Editing the file takes effect on the next command run.
+Run once at skill startup: locate the plugin's own data dir
+(``$CLAUDE_PLUGIN_DATA``, else ``~/.claude/plugins/data/autopilot-claude-autopilot``),
+ensure ``<data-dir>/config.json`` exists (write DEFAULTS if absent), and print
+the effective config (DEFAULTS deep-merged with the user's file) as JSON to
+stdout. Config lives in the plugin's data dir, never in Claude's settings.json.
 """
 import json
 import os
 import sys
 
 DEFAULTS = {
-    # Inner review-convergence (Ralph) loop settings for the two review phases.
-    # The old "enabled" driver toggle (native vs. ralph-loop plugin) is
-    # deprecated: the native loop is the only driver. A user config still
-    # carrying "enabled" merges through harmlessly; the commands ignore it.
+    # The deprecated "enabled" driver toggle is gone (native loop is the only
+    # driver); a user config still carrying it merges through harmlessly.
     "ralphLoop": {
-        # per-phase round cap:
-        #   spec-phase           = S1 spec review
-        #   implementation-phase = S5 work/implementation review
+        # Per-phase round cap: spec-phase = S1 spec review,
+        # implementation-phase = S5 work review.
         "maxIterations": {"spec-phase": 3, "implementation-phase": 3},
     }
 }
@@ -42,8 +34,7 @@ def deep_merge(base, override):
 
 
 def main():
-    # fallback {id} = "<plugin-name>-<marketplace-name>" = autopilot-claude-autopilot
-    # (Claude Code sanitizes non-[A-Za-z0-9_-] to '-')
+    # Fallback {id} = "<plugin>-<marketplace>" with non-[A-Za-z0-9_-] sanitized to '-'.
     data_dir = os.environ.get("CLAUDE_PLUGIN_DATA") or os.path.expanduser(
         "~/.claude/plugins/data/autopilot-claude-autopilot"
     )
@@ -56,8 +47,7 @@ def main():
             with open(path, encoding="utf-8") as fh:
                 effective = deep_merge(DEFAULTS, json.load(fh))
         except (json.JSONDecodeError, OSError):
-            # Leave the (bad) file in place for the user to fix; fall back to
-            # defaults for this run rather than overwriting their edits.
+            # Don't overwrite a bad file — leave it for the user to fix.
             effective = DEFAULTS
     else:
         try:

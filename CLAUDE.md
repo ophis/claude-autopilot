@@ -35,11 +35,13 @@ so they're not importable — the CLI is the contract).
 
 ## Architecture (the big picture)
 
-The two surfaces — `commands/build.md` and `commands/fix.md` — are **orchestrator
-prompts**, not code. When invoked, the *main-session Claude becomes a thin
-orchestrator*: it dispatches subagents and judges their structured output, and never
-edits the work product itself. Understanding the system means reading those two
-command files plus `agents/` and `scripts/` together:
+The two surfaces — `skills/build/SKILL.md` and `skills/fix/SKILL.md` — are
+**orchestrator prompts**, not code. They are **skills** (model-invocable, so composable
+as a step inside a larger skill/workflow); users still type `/autopilot:build` /
+`/autopilot:fix`. When invoked, the *main-session Claude becomes a thin orchestrator*:
+it dispatches subagents and judges their structured output, and never edits the work
+product itself. Understanding the system means reading those two skill files plus
+`agents/` and `scripts/` together:
 
 - **Shared spine.** Both commands run entry phases (`build`: E1 worktree, E2
   brainstorm; `fix`: E1′ locate branch, E2′ brainstorm feedback) then a common
@@ -66,9 +68,12 @@ command files plus `agents/` and `scripts/` together:
 - **Selection stage (`scripts/select-panel.py`).** Deterministic, stdlib-only router:
   `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every
   `core` agent is a mandatory floor; `optional` agents route in when their `applies_to`
-  matches the signals (spec keywords for S1; changed paths for S5). A file is a
-  "reviewer" iff its frontmatter has `phase` (`lint-roster.py` mirrors this rule —
-  keep the two in lockstep).
+  matches the signals (spec keywords for S1; changed paths for S5). `tier` is usually a
+  scalar but may be a per-phase JSON map (`tier: {"spec":"core","work":"optional"}` —
+  resolved to the effective scalar per phase, emitted as such); `applies_to` may carry
+  the reserved `@structural` work-phase token, which matches iff the diff changed file
+  topology (any A/D/R/C file in `git diff --name-status`). A file is a "reviewer" iff its
+  frontmatter has `phase` (`lint-roster.py` mirrors this rule — keep the two in lockstep).
 
 - **Config (`scripts/autopilot-config.py`).** Reads/initializes
   `${CLAUDE_PLUGIN_DATA}/config.json` (the plugin's own data dir, never Claude's
@@ -98,6 +103,9 @@ command files plus `agents/` and `scripts/` together:
   plugin.** After adding/renaming an agent, the new `subagent_type` resolves only once
   the plugin is reloaded/updated — a fresh agent can't be dispatched natively in the
   same run that creates it (dispatch it ad-hoc via `general-purpose` until shipped).
+  The same applies to the `skills/build` + `skills/fix` skills: edits to a `SKILL.md`
+  (and `/autopilot:build` / `/autopilot:fix` by-name invocability) go live only after
+  `/reload-plugins`.
 - **`SPEC.md` and `dev-docs/` are gitignored** (local design doc + per-build audit
   trail `dev-docs/<date>-<slug>-{spec,plan}.md`). `SPEC.md` is the design source of
   truth but isn't shipped; keep it synced locally but don't reference it from

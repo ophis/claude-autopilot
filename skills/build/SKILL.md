@@ -1,7 +1,7 @@
 ---
-description: "Autonomous pipeline: worktree → spec+review loop → plan → subagent implementation → verify → review loop → squash. Produces a review-ready branch; never merges. Explicit-only."
+name: build
+description: "Use to build a new work product from a requirement, end to end: create an isolated worktree, write and review a spec, plan, implement, verify, and review-loop to a single review-ready branch (never merges). Pass the requirement text, or a path to an existing spec file."
 argument-hint: "<requirements>"
-disable-model-invocation: true
 ---
 
 # Autopilot: build
@@ -253,11 +253,11 @@ reviewer uses it as the work⊨spec reference). Because S1 is skipped, no
 - **S7 — finish (step 9).** Use `superpowers:finishing-a-development-branch` →
   report: review history, decisions, deferred non-blockers (stop-reason first if the
   run stopped); offer integration options as an informational report menu, NOT a
-  question. NO merge.
+  question. NO merge. Then emit the **Result handoff** block (below) as the final output.
 
 ## Safety stops (handoffs, not questions)
 
-Stop and hand off (state + exact next step) only on:
+Stop and hand off (state + exact next step) only on: Every STOP handoff ends by emitting the **Result handoff** block (`status`=`stopped`, or `capped-without-pass` at a cap).
 1. **Destructive op — only when Auto Mode is OFF.** Before any force-push, write
    outside the worktree, history rewrite beyond this branch, or rm/reset of
    uncommitted work. **If the session is in Auto Mode** (auto-accept /
@@ -267,6 +267,23 @@ Stop and hand off (state + exact next step) only on:
 3. **Non-review phase failure** — one retry, then STOP.
 4. **Root-contradiction** — the core requirement is self-contradictory; cite the
    two clauses.
+
+## Result handoff (always emit last)
+
+On **every** terminal path — S7 finish AND any safety-stop handoff — emit, as the final
+output, exactly one fenced `autopilot-result` block (one JSON object) so a calling
+skill/workflow consumes the outcome without parsing prose:
+
+```autopilot-result
+{ "status": "converged", "branch": "autopilot/<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
+```
+
+- `status` — `converged` (reached S7) | `capped-without-pass` (a Ralph loop hit its cap) | `stopped` (any other safety stop).
+- `branch` / `base_ref` / `head` — branch name, its base SHA, its final commit SHA (`head` = `base_ref` if nothing was produced).
+- `blockers` — residual open BLOCKING items (strings) when `status != converged`, else `[]`.
+- `reason` — empty when converged; else classification + detail (cap → oscillation | unfixable | requirements-conflict; stop → root-contradiction | phase-failure | destructive-op).
+
+Additive only — it changes no phase's behavior.
 
 ## Token discipline
 

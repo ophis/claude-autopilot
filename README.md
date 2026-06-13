@@ -5,10 +5,12 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.7.0** — the `/autopilot:build` and `/autopilot:fix` commands are
-> implemented, the **named review roster** is complete for both phases in `agents/`,
-> and the **selection stage** (`scripts/select-panel.py`) wires the roster into the
-> S1/S5 review loops — the commands select the panel from the roster and dispatch each
+> Status: **v0.8.0** — the build/fix surfaces are now **skills** (`skills/build`,
+> `skills/fix`): model-invocable and composable as a step inside a larger
+> skill/workflow, while `/autopilot:build` and `/autopilot:fix` still work for users.
+> The **named review roster** is complete for both phases in `agents/`, and the
+> **selection stage** (`scripts/select-panel.py`) wires the roster into the S1/S5
+> review loops — the skills select the panel from the roster and dispatch each
 > reviewer natively as `autopilot:<name>`, preferring one `Workflow` call per review
 > round (`scripts/review-round.js`) with automatic `Task` fallback (see
 > [Review roster](#review-roster-agents)).
@@ -20,11 +22,11 @@ The git repo is **both the marketplace and the plugin**:
 ```
 claude-autopilot/                 # git repo = marketplace + plugin
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 0.7.0)
+│   ├── plugin.json               # name: autopilot (version 0.8.0)
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
-├── commands/
-│   ├── build.md                  # /autopilot:build (explicit-only)
-│   └── fix.md                    # /autopilot:fix   (explicit-only)
+├── skills/
+│   ├── build/SKILL.md            # skill; /autopilot:build still works
+│   └── fix/SKILL.md              # skill; /autopilot:fix   still works
 ├── scripts/
 │   ├── autopilot-config.py       # reads/initializes ${CLAUDE_PLUGIN_DATA}/config.json
 │   ├── lint-roster.py            # A3 roster lint: validates each reviewer's frontmatter + contract
@@ -33,7 +35,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 ├── agents/                       # named review roster (read-only)
 │   ├── reviewer-contract.md      # authoring template, inlined into each reviewer
 │   ├── spec-fitness-reviewer.md  # spec / core
-│   ├── architecture-reviewer.md  # both / core
+│   ├── architecture-reviewer.md  # spec core / work optional (@structural)
 │   ├── correctness-reviewer.md   # work / core — purely behavioral
 │   ├── requirement-fidelity-reviewer.md   # work / core — work ⊨ requirement & spec
 │   ├── doc-reviewer.md           # work / core — repo-wide docs vs the change + concise
@@ -79,7 +81,7 @@ This repo is its own single-repo marketplace, so add it and install:
 also browse and install via the interactive `/plugin` menu (Marketplaces → add →
 install).
 
-**Updating:** this plugin uses explicit semver (currently `0.7.0`). A release bumps
+**Updating:** this plugin uses explicit semver (currently `0.8.0`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```
@@ -89,8 +91,9 @@ install).
 
 ## `/autopilot:build <requirements>`
 
-Explicit-only (never model-invoked). Hand it a requirement and it drives, end to
-end and without asking you questions:
+A skill, so it is model-invocable now — call it directly, or compose it as a step in a
+larger skill/workflow; `/autopilot:build` is preserved for users. Hand it a requirement
+and it drives, end to end and without asking you questions:
 
 - **E1 — Worktree:** create `autopilot/<slug>` worktree+branch; create the plan doc (progress + RESUME).
 - **E2 — Brainstorm:** turn requirements into the spec (expert council at decision points).
@@ -110,6 +113,11 @@ safety condition (non-convergence after 3 review rounds; an unrecoverable phase
 failure; a self-contradictory requirement; or — **only when Auto Mode is off** — a
 destructive git op). Reviews converge via a structured `VERDICT/BLOCKING/
 NON-BLOCKING` contract decided from disk, not vibes.
+
+On every terminal path (S7 finish or any safety stop) the run emits, as its final
+output, one fenced `autopilot-result` JSON block (`status` / `branch` / `base_ref` /
+`head` / `blockers` / `reason`) so a calling workflow reads the outcome without parsing
+prose.
 
 State (the spec doc and the plan doc) is persisted so a run survives context compaction and
 can be resumed; where those files live follows your own project convention.
@@ -133,7 +141,9 @@ review feedback and it drives the **same pipeline on the existing autopilot bran
 it locates that branch (no new worktree), brainstorms your feedback into a
 change-spec, then plans → implements → verifies → reviews (docs currency included) →
 **re-squashes** to one clean commit. Still never merges. If there's no autopilot
-branch yet, it stops and tells you to run `/autopilot:build` first.
+branch yet, it stops and tells you to run `/autopilot:build` first. Like `build`, it
+is a skill — model-invocable / composable as a workflow step (`/autopilot:fix` still
+works for users) and it emits the same final `autopilot-result` block.
 
 - **E1′ — Locate:** find the existing autopilot branch (no new worktree); none → stop.
 - **E2′ — Brainstorm:** turn feedback into a change-spec appended to the spec doc.
@@ -154,6 +164,16 @@ shared spine S1–S7 both commands run.
 
 Together, `build` → review → `fix` → review → … is the human-in-the-loop cycle.
 
+### Invoking from a workflow
+
+Because they are skills, `build` and `fix` can be invoked **by name** from another
+skill or workflow, not just typed by a user. A nested run is self-contained: it
+creates its **own** `autopilot/<slug>` worktree + branch and persists its own
+spec/plan docs (RESUME state is per-run namespaced, so nested runs don't stomp each
+other). The pipeline **never merges**, so the calling workflow owns integration of the
+returned branch — it reads the outcome from the final `autopilot-result` block
+(`status` / `branch` / `base_ref` / `head` / `blockers` / `reason`).
+
 ## Review roster (`agents/`)
 
 The committed, accountable review roster. Each reviewer is a **read-only,
@@ -166,7 +186,7 @@ spec-review), `work` (S5 work-review), or `both`.
 | --- | --- | --- | --- |
 | `agents/reviewer-contract.md` | Authoring template inlined into each reviewer (not dispatched) | — | — |
 | `agents/spec-fitness-reviewer.md` | Spec fitness, gaps, ambiguity, scope, testability | spec | core |
-| `agents/architecture-reviewer.md` | Structure, boundaries, coupling, extensibility | both | core |
+| `agents/architecture-reviewer.md` | Structure, boundaries, coupling, extensibility | both | spec core / work optional (`@structural`) |
 | `agents/correctness-reviewer.md` | Intent/logic, edge & boundary cases, error paths | work | core |
 | `agents/requirement-fidelity-reviewer.md` | Work realizes the requirement & spec — right thing built, no missing items, no drift/scope creep | work | core |
 | `agents/doc-reviewer.md` | Docs **repo-wide** still accurate after the change (not just touched files); edits concise / not bloated | work | core |
@@ -181,12 +201,15 @@ missing items, no drift or scope creep), `correctness` (built bug-free);
 `doc-reviewer` keeps docs **repo-wide** current (not just touched files) and concise.
 
 The **floor** that always runs is the phase's `core` lenses — spec phase:
-spec-fitness + architecture; work phase: correctness + architecture +
+spec-fitness + architecture; work phase: correctness +
 requirement-fidelity + doc-reviewer — so every review is
 non-empty for any deliverable. `optional` lenses are **conditional**: they run only
 when the spec/diff matches their `applies_to`, auditably skipped otherwise. The
 `code-quality`/`test`/`performance` pack matches code files; `security` matches auth,
-input-handling, network, file/DB I/O, dependency, or crypto signals.
+input-handling, network, file/DB I/O, dependency, or crypto signals;
+`architecture` is core in the spec phase but a structural-signal-gated optional in
+the work phase — it runs in S5 only when the diff changes file topology
+(`@structural`: any added/deleted/renamed/copied file).
 
 Each reviewer's frontmatter is **self-describing** (`lens`/`phase`/`tier`/
 `applies_to`), so the selection stage discovers and routes the roster with no code

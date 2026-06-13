@@ -23,7 +23,7 @@ SELECT_PANEL = os.path.join(SCRIPTS, "select-panel.py")
 CONFIG = os.path.join(SCRIPTS, "autopilot-config.py")
 LINT_ROSTER = os.path.join(SCRIPTS, "lint-roster.py")
 REVIEW_ROUND = os.path.join(SCRIPTS, "review-round.js")
-COMMANDS = os.path.join(REPO, "commands")
+SKILLS = os.path.join(REPO, "skills")
 
 AGENT_TEMPLATE = """\
 ---
@@ -60,12 +60,16 @@ def run_select(*args):
     )
 
 
-def make_git_repo(changed_files):
-    """A temp git repo with an empty base commit, then `changed_files` committed.
+def _write_nested(repo, rel, content):
+    """Write a file under `repo`, creating parent dirs for nested paths."""
+    if os.path.dirname(rel):
+        os.makedirs(os.path.join(repo, os.path.dirname(rel)), exist_ok=True)
+    write_raw(repo, rel, content)
 
-    Returns (repo_dir, base_sha). `select-panel --phase work --base <base_sha>`
-    will see exactly `changed_files` in `base...HEAD`.
-    """
+
+def _git_repo(base_files=()):
+    """Temp git repo with a base commit (`BASE` plus optional `base_files`, each
+    a (relpath, content) pair). Returns (repo_dir, git_fn, base_sha)."""
     d = tempfile.mkdtemp()
     env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
                GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t")
@@ -76,17 +80,36 @@ def make_git_repo(changed_files):
 
     git("init", "-q")
     write_raw(d, "BASE", "base\n")
+    for rel, content in base_files:
+        _write_nested(d, rel, content)
     git("add", "-A")
     git("commit", "-q", "-m", "base")
     base = subprocess.run(["git", "-C", d, "rev-parse", "HEAD"],
                           stdout=subprocess.PIPE, text=True, check=True).stdout.strip()
+    return d, git, base
+
+
+def make_git_repo(changed_files):
+    """Temp git repo; `changed_files` added in HEAD (status A). select-panel
+    --phase work --base <base_sha> then sees exactly `changed_files` in
+    `base...HEAD`. Returns (repo_dir, base_sha)."""
+    d, git, base = _git_repo()
     for rel in changed_files:
-        full = os.path.join(d, rel)
-        os.makedirs(os.path.dirname(full), exist_ok=True) if os.path.dirname(rel) else None
-        write_raw(d, rel, "x\n")
+        _write_nested(d, rel, "x\n")
     if changed_files:
         git("add", "-A")
         git("commit", "-q", "-m", "change")
+    return d, base
+
+
+def make_git_repo_modify():
+    """Temp git repo whose `base...HEAD` diff is modify-only (status M) — no
+    A/D/R/C topology change, i.e. `@structural`'s negative case. Returns
+    (repo_dir, base_sha)."""
+    d, git, base = _git_repo(base_files=[("src/app.py", "v1\n")])
+    _write_nested(d, "src/app.py", "v2\n")           # edit in place -> status M
+    git("add", "-A")
+    git("commit", "-q", "-m", "modify")
     return d, base
 
 
@@ -100,6 +123,9 @@ class SelectPanelTests(unittest.TestCase):
         write_agent(a, "opt-code", "work", "optional", ["*.py", "*.js"])
         write_agent(a, "opt-kw", "both", "optional", ["auth", "token"])
         write_agent(a, "no-tier", "work", "", ["**"])          # unknown tier -> skipped
+        # Map tier (core in spec, @structural-gated optional in work).
+        write_agent(a, "arch", "both",
+                    '{"spec": "core", "work": "optional"}', ["@structural"])
         write_raw(a, "contract.md",                            # no phase -> skipped
                   "---\nname: contract\ndescription: template\n---\nbody\n")
 
@@ -109,9 +135,8 @@ class SelectPanelTests(unittest.TestCase):
 
     def test_spec_phase_core_only_without_specfile(self):
         names = self.names(run_select("--phase", "spec", "--agents-dir", self.agents))
-        # core spec + core both; not work-only, not optionals (no signal), not
-        # contract (no phase), not no-tier (unknown tier).
-        self.assertEqual(names, ["core-both", "core-spec"])
+        # arch's map tier resolves to core in spec; optionals/work-only/no-tier excluded.
+        self.assertEqual(names, ["arch", "core-both", "core-spec"])
 
     def test_spec_phase_keyword_selects_optional(self):
         spec = os.path.join(self.agents, "..", "spec.txt")
@@ -120,34 +145,26 @@ class SelectPanelTests(unittest.TestCase):
         proc = run_select("--phase", "spec", "--agents-dir", self.agents,
                           "--spec-file", spec)
         sel = {e["agent"]: e for e in json.loads(proc.stdout)["selected"]}
-        self.assertIn("opt-kw", sel)                      # keyword 'auth' matched
+        self.assertIn("opt-kw", sel)
         self.assertIn("auth", sel["opt-kw"]["matched"])
         self.assertEqual(sel["opt-kw"]["tier"], "optional")
-
-    def test_spec_phase_glob_optional_not_matched(self):
-        # opt-code is work-only anyway; confirm a glob optional never matches in
-        # spec phase even if its phase allowed it: opt-kw has only keywords, so
-        # without matching keywords it must be absent.
-        names = self.names(run_select("--phase", "spec", "--agents-dir", self.agents))
-        self.assertNotIn("opt-kw", names)
-        self.assertNotIn("opt-code", names)
 
     def test_work_phase_glob_match(self):
         repo, base = make_git_repo(["src/app.py"])
         names = self.names(run_select("--phase", "work", "--agents-dir", self.agents,
                                       "--worktree", repo, "--base", base))
-        self.assertIn("opt-code", names)                  # *.py matched
+        self.assertIn("opt-code", names)                  # *.py glob
         self.assertIn("core-both", names)
         self.assertIn("core-work", names)
         self.assertNotIn("opt-kw", names)                 # no auth/token in path
-        self.assertNotIn("core-spec", names)              # spec-only
+        self.assertNotIn("core-spec", names)              # spec-only phase
 
     def test_work_phase_keyword_in_path(self):
         repo, base = make_git_repo(["src/auth/login.py"])
         sel = {e["agent"]: e for e in
                json.loads(run_select("--phase", "work", "--agents-dir", self.agents,
                                      "--worktree", repo, "--base", base).stdout)["selected"]}
-        self.assertIn("opt-code", sel)                    # *.py
+        self.assertIn("opt-code", sel)                    # *.py glob
         self.assertIn("opt-kw", sel)                      # 'auth' substring in path
         self.assertIn("auth", sel["opt-kw"]["matched"])
 
@@ -155,7 +172,7 @@ class SelectPanelTests(unittest.TestCase):
         repo, base = make_git_repo([])                    # base == HEAD, empty diff
         names = self.names(run_select("--phase", "work", "--agents-dir", self.agents,
                                       "--worktree", repo, "--base", base))
-        self.assertEqual(names, ["core-both", "core-work"])  # only work-phase core
+        self.assertEqual(names, ["core-both", "core-work"])
 
     def test_output_shape_and_subagent_type(self):
         entries = json.loads(
@@ -170,8 +187,34 @@ class SelectPanelTests(unittest.TestCase):
         tiers = [e["tier"] for e in
                  json.loads(run_select("--phase", "work", "--agents-dir", self.agents,
                                        "--worktree", repo, "--base", base).stdout)["selected"]]
-        # every core must precede every optional
         self.assertEqual(tiers, sorted(tiers, key=lambda t: 0 if t == "core" else 1))
+
+    def test_per_phase_tier_core_in_spec(self):
+        sel = {e["agent"]: e for e in json.loads(
+            run_select("--phase", "spec", "--agents-dir", self.agents).stdout
+        )["selected"]}
+        self.assertIn("arch", sel)
+        self.assertEqual(sel["arch"]["tier"], "core")     # map resolved to scalar
+        self.assertEqual(sel["arch"]["matched"], "core")
+
+    def test_work_structural_resolves_map_and_scalar_tiers(self):
+        # File-added (status A) is a structural diff, so @structural-gated arch selects.
+        repo, base = make_git_repo(["src/new.py"])
+        sel = {e["agent"]: e for e in json.loads(
+            run_select("--phase", "work", "--agents-dir", self.agents,
+                       "--worktree", repo, "--base", base).stdout
+        )["selected"]}
+        self.assertEqual(sel["arch"]["tier"], "optional")   # map resolved to scalar
+        self.assertIn("@structural", sel["arch"]["matched"])
+        self.assertEqual(sel["core-work"]["tier"], "core")  # scalar back-compat
+        self.assertEqual(sel["core-work"]["matched"], "core")
+
+    def test_modify_only_diff_omits_arch(self):
+        # Modify-only (status M) is not structural, so @structural-gated arch is omitted.
+        repo, base = make_git_repo_modify()
+        names = self.names(run_select("--phase", "work", "--agents-dir", self.agents,
+                                      "--worktree", repo, "--base", base))
+        self.assertNotIn("arch", names)
 
     def test_work_phase_requires_worktree_and_base(self):
         proc = run_select("--phase", "work", "--agents-dir", self.agents)
@@ -198,20 +241,19 @@ class AutopilotConfigTests(unittest.TestCase):
         d = tempfile.mkdtemp()
         proc = self.run_config(d)
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertEqual(json.loads(proc.stdout), self.DEFAULTS)        # printed effective
+        self.assertEqual(json.loads(proc.stdout), self.DEFAULTS)
         cfg = os.path.join(d, "config.json")
-        self.assertTrue(os.path.exists(cfg))                            # file created
+        self.assertTrue(os.path.exists(cfg))
         with open(cfg) as fh:
             self.assertEqual(json.load(fh), self.DEFAULTS)
 
     def test_partial_override_is_deep_merged(self):
         d = tempfile.mkdtemp()
-        # "enabled" is the deprecated driver toggle: gone from DEFAULTS, but a
-        # user config still carrying it merges through harmlessly (ignored).
+        # Deprecated "enabled" toggle (gone from DEFAULTS) still merges through.
         write_raw(d, "config.json", json.dumps({"ralphLoop": {"enabled": True}}))
         eff = json.loads(self.run_config(d).stdout)
-        self.assertTrue(eff["ralphLoop"]["enabled"])                    # user key passes through
-        self.assertEqual(eff["ralphLoop"]["maxIterations"],            # defaults preserved
+        self.assertTrue(eff["ralphLoop"]["enabled"])
+        self.assertEqual(eff["ralphLoop"]["maxIterations"],
                          {"spec-phase": 3, "implementation-phase": 3})
 
     def test_nested_partial_override(self):
@@ -221,19 +263,18 @@ class AutopilotConfigTests(unittest.TestCase):
         eff = json.loads(self.run_config(d).stdout)
         self.assertEqual(eff["ralphLoop"]["maxIterations"]["spec-phase"], 5)
         self.assertEqual(eff["ralphLoop"]["maxIterations"]["implementation-phase"], 3)
-        self.assertNotIn("enabled", eff["ralphLoop"])    # deprecated key not in defaults
+        self.assertNotIn("enabled", eff["ralphLoop"])
 
     def test_unparseable_config_falls_back_without_overwrite(self):
         d = tempfile.mkdtemp()
         write_raw(d, "config.json", "{ not valid json")
         proc = self.run_config(d)
-        self.assertEqual(json.loads(proc.stdout), self.DEFAULTS)        # falls back
+        self.assertEqual(json.loads(proc.stdout), self.DEFAULTS)
         with open(os.path.join(d, "config.json")) as fh:
-            self.assertEqual(fh.read(), "{ not valid json")            # left intact
+            self.assertEqual(fh.read(), "{ not valid json")            # bad file left intact
 
     def test_fallback_dir_when_env_unset(self):
-        # When CLAUDE_PLUGIN_DATA is unset, the script must fall back to the real
-        # per-plugin {id} dir under HOME, not the old wrong ".../autopilot" path.
+        # Env unset must fall back to the real {id} dir, not the old ".../autopilot" path.
         home = tempfile.mkdtemp()
         env = dict(os.environ, HOME=home)
         env.pop("CLAUDE_PLUGIN_DATA", None)
@@ -242,7 +283,7 @@ class AutopilotConfigTests(unittest.TestCase):
             env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertEqual(json.loads(proc.stdout), self.DEFAULTS)        # printed effective
+        self.assertEqual(json.loads(proc.stdout), self.DEFAULTS)
         good = os.path.join(home, ".claude", "plugins", "data",
                             "autopilot-claude-autopilot", "config.json")
         bad = os.path.join(home, ".claude", "plugins", "data",
@@ -322,7 +363,7 @@ class LintRosterTests(unittest.TestCase):
         if reviewer is None:
             reviewer = GOOD_REVIEWER.format(name=name)
         if body is not None:
-            # Replace the body (everything after the closing frontmatter fence).
+            # Keep frontmatter, swap everything after the closing fence.
             head = reviewer.split("\n---\n", 1)[0] + "\n---\n"
             reviewer = head + body
         write_raw(self.agents, name + ".md", reviewer)
@@ -389,8 +430,8 @@ class LintRosterTests(unittest.TestCase):
         self.assertIn("Bash", proc.stdout)
 
     def test_broken_reviewer_has_tier_lens_no_phase(self):
-        # A file with tier+lens but NO phase is classified as a template (no
-        # phase) and must fail selector-inert — surfacing the dropped phase.
+        # tier+lens but no phase => classified as template, fails selector-inert
+        # (this is how a dropped phase surfaces).
         reviewer = GOOD_REVIEWER.format(name="r1").replace("phase: work\n", "")
         self._reviewer("r1", reviewer=reviewer)
         proc = run_lint(self.agents)
@@ -461,6 +502,33 @@ NON-BLOCKING: none
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("name", proc.stdout)
 
+    def test_map_form_tier_accepted(self):
+        reviewer = GOOD_REVIEWER.format(name="r1").replace(
+            "tier: core", 'tier: {"spec": "core", "work": "optional"}'
+        )
+        self._reviewer("r1", reviewer=reviewer)
+        proc = run_lint(self.agents)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("OK r1", proc.stdout)
+
+    def test_map_form_tier_bad_value_rejected(self):
+        reviewer = GOOD_REVIEWER.format(name="r1").replace(
+            "tier: core", 'tier: {"spec": "core", "work": "bogus"}'
+        )
+        self._reviewer("r1", reviewer=reviewer)
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("tier", proc.stdout)
+
+    def test_map_form_tier_bad_phase_rejected(self):
+        reviewer = GOOD_REVIEWER.format(name="r1").replace(
+            "tier: core", 'tier: {"bogus": "core", "work": "optional"}'
+        )
+        self._reviewer("r1", reviewer=reviewer)
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("tier", proc.stdout)
+
     def test_template_carrying_phase_tier_fails(self):
         text = """\
 ---
@@ -474,18 +542,15 @@ tier: core
 Body with Read-only, Inputs by reference, Cite evidence,
 Load no superpowers skills.
 """
-        # This declares phase -> classified as a reviewer; it will fail on the
-        # many missing reviewer keys. Verify it still fails loudly.
+        # Declares phase => classified as a reviewer, fails on missing keys.
         self._template(text=text)
-        self._reviewer("r1")  # keep a valid reviewer so the run isn't empty
+        self._reviewer("r1")  # a passing file so the run isn't the empty-roster case
         proc = run_lint(self.agents)
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("FAIL reviewer-contract", proc.stdout)
 
     def test_template_carrying_tier_lens_no_phase_fails(self):
-        # Selector metadata WITHOUT phase -> classified as template, must fail
-        # the selector-inert check (this is the spec's "template wrongly carrying
-        # tier" case, kept phase-less so it routes to the template branch).
+        # Selector metadata without phase => template branch, fails selector-inert.
         text = """\
 ---
 name: reviewer-contract
@@ -529,8 +594,7 @@ class ReviewRoundScriptTests(unittest.TestCase):
             "synthetic",
             "verdicts",
             "return {",
-            # Pin the schema field names and the verdict values: renaming any
-            # of these would silently break the orchestrator's judging.
+            # Schema field names + verdict values: renaming any silently breaks judging.
             "required: ['verdict', 'blocking', 'non_blocking'],",
             "enum: ['PASS', 'FAIL']",
         ):
@@ -571,15 +635,15 @@ class ReviewRoundScriptTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr.decode())
 
 
-class CommandLockstepTests(unittest.TestCase):
-    """build.md and fix.md must carry a byte-identical workflow-transport block
-    (spec A2). Until now this was enforced only by review; prose drift between
-    the two commands now fails here instead.
+class SkillLockstepTests(unittest.TestCase):
+    """skills/build/SKILL.md and skills/fix/SKILL.md must carry a byte-identical
+    workflow-transport block (spec A2). Until now this was enforced only by
+    review; prose drift between the two skills now fails here instead.
     """
 
     @staticmethod
-    def _transport_block(filename):
-        path = os.path.join(COMMANDS, filename)
+    def _transport_block(skill):
+        path = os.path.join(SKILLS, skill, "SKILL.md")
         with open(path, encoding="utf-8") as fh:
             lines = fh.read().splitlines()
         start = next(
@@ -591,14 +655,14 @@ class CommandLockstepTests(unittest.TestCase):
             None,
         )
         if start is None or end is None or end < start:
-            raise AssertionError("transport block not found in %s" % filename)
+            raise AssertionError("transport block not found in %s" % skill)
         return "\n".join(lines[start : end + 1])
 
     def test_transport_block_identical(self):
         """The block from 'Workflow transport (preferred' through 'Record the
         transport' is the shared dispatch contract — byte-identical or bust."""
         self.assertEqual(
-            self._transport_block("build.md"), self._transport_block("fix.md")
+            self._transport_block("build"), self._transport_block("fix")
         )
 
 

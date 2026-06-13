@@ -1,23 +1,15 @@
 """Shared frontmatter reader for select-panel.py and lint-roster.py.
 
-Both CLIs scan the same ``agents/*.md`` frontmatter; this module owns the one
-fence-finding + ``key: value`` scanning implementation so the two readers
-cannot drift (audit item Q1/D7). The CLIs keep their hyphenated, non-importable
-names — this plain-named sibling is importable by both because Python puts the
-invoked script's own directory on ``sys.path``.
-
-Each caller applies its own typed parsing on top of the raw (key, value)
-pairs: select-panel filters to its routing keys and JSON-parses ``applies_to``;
-lint-roster captures every key, list-parses ``tools``/``applies_to``, and
-strips block-scalar indicators.
+The two hyphenated (non-importable) CLIs scan the same ``agents/*.md``
+frontmatter; this one fence-finding + ``key: value`` reader keeps them from
+drifting. Importable by both because Python puts the invoked script's own
+directory on ``sys.path``. Each caller adds its own typed parsing on top.
 """
 
 
 def split_frontmatter(text):
-    """Split markdown text into (frontmatter lines, body str).
-
-    The frontmatter is the block between the first two ``---`` fence lines.
-    Returns ``(None, "")`` when there is no well-formed block.
+    """Split markdown into (frontmatter lines, body str) at the first two
+    ``---`` fence lines. Returns ``(None, "")`` when there is no such block.
     """
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
@@ -29,11 +21,9 @@ def split_frontmatter(text):
 
 
 def iter_kv(fm_lines):
-    """Yield (key, value) from top-level ``key: value`` frontmatter lines.
-
-    Skips blanks, comments-without-colon, and continuation/indented lines
-    (e.g. folded description bodies). Keys and values are stripped but
-    otherwise raw.
+    """Yield stripped (key, value) from top-level ``key: value`` frontmatter
+    lines. Skips blanks, colon-less lines, and indented continuations (e.g.
+    folded description bodies).
     """
     for raw in fm_lines:
         if not raw.strip() or raw.lstrip() != raw:

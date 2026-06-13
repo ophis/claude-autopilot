@@ -1,41 +1,9 @@
 #!/usr/bin/env python3
-"""Select the Claude Autopilot review panel for a given phase (SPEC §8.6).
-
-The build/fix commands run this once per review phase to compute *which* roster
-reviewers to dispatch. It is a (mostly) pure function of:
-
-  * the requested **phase** (``spec`` or ``work``),
-  * the **roster** (the ``agents/*.md`` files and their YAML frontmatter), and
-  * the **signals** for that phase:
-      - *spec phase:* keyword text gathered from ``--spec-file``,
-      - *work phase:* the changed paths from
-        ``git -C <worktree> diff --name-only <base>...HEAD``.
-
-Selection logic (per SPEC §8.6):
-  1. Glob ``agents/*.md`` and parse each file's YAML frontmatter (the block
-     between the first two ``---`` lines). Skip any file with no ``phase``
-     (e.g. ``reviewer-contract.md`` — it is selector-inert).
-  2. Keep agents whose ``phase`` is the requested phase or ``both``.
-  3. ``tier: core``     -> always select (matched = ``"core"``).
-  4. ``tier: optional`` -> select iff any ``applies_to`` entry matches a signal;
-     matched = the list of matching entries.
-  5. Matching: an ``applies_to`` entry is a GLOB if it contains any of
-     ``* ? [ /`` else a KEYWORD.
-       - *work phase:* glob -> ``fnmatch`` against each changed path AND its
-         basename; keyword -> case-insensitive substring in any changed path.
-       - *spec phase:* glob -> ignored (no paths); keyword -> case-insensitive
-         substring in the spec text.
-
-Output (stdout): JSON
-  {"phase": "...",
-   "selected": [{"agent","subagent_type","tier","matched"}, ...]}
-where ``subagent_type`` = ``"autopilot:" + name`` (the native dispatch handle).
-Order: core first then optional, then by name. There is intentionally no
-"skipped" list.
-
-Stdlib only (no deps; matches autopilot-config.py). Exits non-zero only on bad
-args or an unreadable agents dir; a normal run (even with an empty diff or no
-spec file) exits 0.
+"""Select the Claude Autopilot review panel for a phase (SPEC §8.6): read the
+``agents/`` frontmatter and print, as JSON, the reviewers to dispatch — ``core``
+always, ``optional`` when an ``applies_to`` entry matches the phase's signals.
+CLI: ``--phase spec|work`` with ``--spec-file`` (spec) or ``--worktree``/
+``--base`` (work). Stdlib only.
 """
 import argparse
 import fnmatch
@@ -47,27 +15,25 @@ import sys
 
 from _frontmatter import iter_kv, split_frontmatter
 
-# Characters that make an applies_to entry a glob pattern rather than a keyword.
 _GLOB_CHARS = set("*?[/")
+
+# Reserved applies_to token: matches (work phase only) on a file-topology change.
+_STRUCTURAL_TOKEN = "@structural"
 
 
 def _is_glob(entry):
-    """An applies_to entry is a glob if it contains any glob metacharacter."""
+    """An applies_to entry is a glob iff it contains a glob metacharacter."""
     return any(ch in _GLOB_CHARS for ch in entry)
 
 
 def parse_frontmatter(path):
-    """Parse the YAML frontmatter block of an agent markdown file.
+    """Parse an agent's frontmatter to the selector's keys (``name``, ``phase``,
+    ``tier``, ``applies_to``); a file without a frontmatter block yields ``{}``.
 
-    Fence-finding and ``key: value`` scanning live in the shared
-    ``_frontmatter`` module (one reader for this script and lint-roster.py).
-    This wrapper keeps only the selector's typing: the keys we care about
-    (``name``, ``phase``, ``tier``, ``applies_to``), with ``applies_to`` as a
-    JSON-style array on a single line. Missing keys are simply absent; a file
-    without a proper frontmatter block yields ``{}``.
-
-    Tolerant by design: unknown keys are ignored, an unparseable ``applies_to``
-    falls back to an empty list, and malformed files never raise.
+    ``applies_to`` is a single-line JSON array; ``tier`` is a scalar string or,
+    in JSON-object form (``{"spec": "core", "work": "optional"}``), a dict.
+    Tolerant by design: unknown keys ignored, unparseable values fall back to
+    empty/raw, malformed files never raise.
     """
     try:
         with open(path, "r", encoding="utf-8") as fh:
@@ -89,17 +55,22 @@ def parse_frontmatter(path):
                 fm[key] = parsed if isinstance(parsed, list) else []
             except (ValueError, TypeError):
                 fm[key] = []
+        elif key == "tier" and value.startswith("{"):
+            try:
+                parsed = json.loads(value)
+                fm[key] = parsed if isinstance(parsed, dict) else value
+            except (ValueError, TypeError):
+                fm[key] = value
         else:
             fm[key] = value
     return fm
 
 
 def changed_paths(worktree, base):
-    """Return the list of changed paths from a git diff, or [] on failure.
+    """Changed paths from ``git -C <worktree> diff --name-only <base>...HEAD``.
 
-    Uses ``git -C <worktree> diff --name-only <base>...HEAD``. A git error
-    (e.g. unknown ref) yields an empty list rather than raising — an empty diff
-    is a normal, non-error outcome.
+    A git error (e.g. unknown ref) yields ``[]`` rather than raising — an empty
+    diff is a normal, non-error outcome.
     """
     try:
         out = subprocess.run(
@@ -116,19 +87,47 @@ def changed_paths(worktree, base):
     return [line for line in text.splitlines() if line.strip()]
 
 
-def match_optional(applies_to, phase, paths, spec_text):
-    """Return the list of applies_to entries that match the phase's signals.
+def structural_change(worktree, base):
+    """True iff the diff changed file topology, via
+    ``git -C <wt> diff --name-status <base>...HEAD``.
 
-    work phase: glob entries fnmatch against each changed path and its
-    basename; keyword entries match as a case-insensitive substring of any
-    changed path.
+    Status ``A D R C`` counts; pure ``M`` (in-place edit) does not. A git error
+    yields False rather than raising (same posture as ``changed_paths``).
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", worktree, "diff", "--name-status", "%s...HEAD" % base],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except OSError:
+        return False
+    if out.returncode != 0:
+        return False
+    text = out.stdout.decode("utf-8", "replace")
+    for line in text.splitlines():
+        line = line.strip()
+        if line and line[0] in ("A", "D", "R", "C"):
+            return True
+    return False
 
-    spec phase: glob entries are ignored (no paths); keyword entries match as a
-    case-insensitive substring of the (already-lowercased) spec text.
+
+def match_optional(applies_to, phase, paths, spec_text, structural):
+    """Return the applies_to entries that match the phase's signals.
+
+    ``@structural`` matches iff ``structural`` (a work-phase-only signal). work
+    phase: globs fnmatch each changed path and its basename, keywords match as a
+    case-insensitive substring of any path. spec phase: globs are ignored (no
+    paths), keywords match as a substring of the already-lowercased spec text.
     """
     matched = []
     for entry in applies_to:
         if not isinstance(entry, str) or not entry:
+            continue
+        if entry == _STRUCTURAL_TOKEN:
+            if structural:
+                matched.append(entry)
             continue
         is_glob = _is_glob(entry)
         if phase == "work":
@@ -141,7 +140,7 @@ def match_optional(applies_to, phase, paths, spec_text):
             else:
                 needle = entry.lower()
                 hit = any(needle in p.lower() for p in paths)
-        else:  # spec phase
+        else:
             if is_glob:
                 hit = False  # no paths in spec phase -> globs cannot match
             else:
@@ -151,7 +150,7 @@ def match_optional(applies_to, phase, paths, spec_text):
     return matched
 
 
-def select(agents_dir, phase, paths, spec_text):
+def select(agents_dir, phase, paths, spec_text, structural):
     """Compute the selected panel for the phase. Returns a list of entry dicts.
 
     Sorted core-first then optional, each group name-sorted.
@@ -162,33 +161,34 @@ def select(agents_dir, phase, paths, spec_text):
         fm = parse_frontmatter(path)
         agent_phase = fm.get("phase")
         if not agent_phase:
-            continue  # selector-inert (e.g. reviewer-contract.md)
+            continue  # no phase => selector-inert (e.g. reviewer-contract.md)
         if agent_phase not in (phase, "both"):
             continue
         name = fm.get("name") or os.path.splitext(os.path.basename(path))[0]
         tier = fm.get("tier")
         applies_to = fm.get("applies_to") or []
 
-        if tier == "core":
+        # A map tier yields tier[phase]; the resolved scalar is branched on and emitted.
+        eff_tier = tier.get(phase) if isinstance(tier, dict) else tier
+
+        if eff_tier == "core":
             matched = "core"
-        elif tier == "optional":
-            matched = match_optional(applies_to, phase, paths, spec_text)
+        elif eff_tier == "optional":
+            matched = match_optional(applies_to, phase, paths, spec_text, structural)
             if not matched:
-                continue  # no signal matched -> not selected (no skipped list)
+                continue
         else:
-            # Unknown/absent tier: not a recognized selectable reviewer.
-            continue
+            continue  # unknown/absent tier: not a selectable reviewer
 
         selected.append(
             {
                 "agent": name,
                 "subagent_type": "autopilot:" + name,
-                "tier": tier,
+                "tier": eff_tier,
                 "matched": matched,
             }
         )
 
-    # Deterministic order: core before optional, then by agent name.
     selected.sort(key=lambda e: (0 if e["tier"] == "core" else 1, e["agent"]))
     return selected
 
@@ -228,16 +228,16 @@ def main(argv=None):
 
     paths = []
     spec_text = ""
+    structural = False  # spec phase never has a structural signal
 
     if args.phase == "work":
-        # Work phase needs the diff inputs; without them there is no signal to
-        # select optionals against, so fail clearly rather than silently.
+        # The diff inputs are the only optional-selection signal, so require them.
         if not args.worktree or not args.base:
             parser.error("--phase work requires both --worktree and --base")
         paths = changed_paths(args.worktree, args.base)
-    else:  # spec phase
-        # Spec-file is optional: without it the keyword text is empty (core
-        # agents are still returned; keyword-only optionals simply won't match).
+        structural = structural_change(args.worktree, args.base)
+    else:
+        # Spec-file optional: without it core still selects, keyword optionals don't.
         if args.spec_file:
             try:
                 with open(args.spec_file, "r", encoding="utf-8") as fh:
@@ -245,7 +245,7 @@ def main(argv=None):
             except OSError as exc:
                 parser.error("could not read --spec-file: %s" % exc)
 
-    selected = select(agents_dir, args.phase, paths, spec_text)
+    selected = select(agents_dir, args.phase, paths, spec_text, structural)
     json.dump({"phase": args.phase, "selected": selected}, sys.stdout, indent=2)
     sys.stdout.write("\n")
     return 0
