@@ -234,10 +234,11 @@ reviewer uses it as the work⊨spec reference). Because S1 is skipped, no
   convene the expert council (see "Deciding at decision points (expert council)") to
   decide.
 - **S3 — produce (step 5).** Produce the work product. Code →
-  `superpowers:subagent-driven-development` (it may commit per task and run its own
-  task-level review — that is fine; S5 is the authoritative gate and the S6 squash
-  folds its commits). Non-code → producer subagents via the same dispatch pattern.
-  The orchestrator never edits the work product itself.
+  `superpowers:subagent-driven-development`: keep its per-task reviews (early-catch),
+  SKIP its final whole-implementation review — S5 is the authoritative whole-diff gate
+  that re-reviews the same diff. It may commit per task; the S6 squash folds its
+  commits. Non-code → producer subagents via the same dispatch pattern. The
+  orchestrator never edits the work product itself.
 - **S4 — verify (step 6).** Use `superpowers:verification-before-completion`: run
   the discovered checks. For THIS plugin = `claude plugin validate` +
   `python3 tests/test_scripts.py` + the documented manual smoke. Cap fixes at 3.
