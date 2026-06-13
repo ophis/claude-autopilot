@@ -54,6 +54,44 @@ location. If found: reconcile worktree/branch/base_ref existence on disk, then
 continue from `phase` (an interrupted review round re-runs whole). **If none, that
 is the normal first run → go to E1′ (locate); never create a branch.**
 
+## Deciding at decision points (expert council)
+
+At a **decision point**, the orchestrator **convenes an expert council**: a small team
+(2–4) of **ad-hoc expert sub-agents** (personas derived from the decision's domain),
+dispatched in **one parallel batch** via `superpowers:dispatching-parallel-agents`. Each
+returns a **concise position** (recommendation + rationale + key trade-offs + any
+dissent). The **orchestrator then synthesizes, decides, and records** the decision + the
+council's key points (incl. dissent) in the spec doc / plan doc (progress section). The orchestrator is
+the decider; the council informs it. Never ask the user.
+
+**Council members are advisors, not reviewers** — they give recommendations, NOT the
+`VERDICT/BLOCKING/NON-BLOCKING` grammar (that's the review panel). Bounded: 2–4,
+parallel, by-reference, no superpowers skills, concise positions.
+
+**Convene when ANY of:**
+- two or more **viable approaches with materially different trade-offs** exist;
+- the choice **shapes architecture / data model / public interface / scope**;
+- the choice is **costly to reverse** once baked in;
+- it is a genuine fork a later review loop **might not catch**.
+
+**Decide solo + record when:**
+- there is a **single obvious default**, or project convention dictates the answer;
+- the choice is **cosmetic / local / easily reversible**;
+- a wrong guess would simply be **caught by S1/S5**.
+
+**Examples.** Council: "which storage model / API shape / module boundaries?",
+"reconcile two conflicting requirements", "pick between two non-trivial strategies".
+Solo: "name a variable", "pick a file path under convention", "fill an obvious default
+for a low-stakes detail".
+
+**Single-persona fallback:** if a decision admits fewer than two distinct lenses, use a
+smaller council or decide solo with recorded rationale — don't fabricate personas to hit
+a count.
+
+**Dissent / split handling:** the orchestrator rules and records *why*; a minority
+position is logged as "considered, not adopted"; the orchestrator breaks ties (it is the
+decider).
+
 ## Selecting & dispatching the review panel
 
 The S1/S5 panels are **selected by script** from the installed roster, then composed
@@ -94,44 +132,6 @@ and dispatched natively. Requires the installed plugin **≥0.3.0** (ships `agen
     the run. Record the transport (and any fallback) in the plan doc.
 - **Collect verdicts → the Ralph loop** (round-0 short-circuit, re-review rounds
   dispatch the `(FAILed ∪ touched)` subset, cap, convergence from on-disk verdicts).
-
-## Deciding at decision points (expert council)
-
-At a **decision point**, the orchestrator **convenes an expert council**: a small team
-(2–4) of **ad-hoc expert sub-agents** (personas derived from the decision's domain),
-dispatched in **one parallel batch** via `superpowers:dispatching-parallel-agents`. Each
-returns a **concise position** (recommendation + rationale + key trade-offs + any
-dissent). The **orchestrator then synthesizes, decides, and records** the decision + the
-council's key points (incl. dissent) in the spec doc / plan doc (progress section). The orchestrator is
-the decider; the council informs it. Never ask the user.
-
-**Council members are advisors, not reviewers** — they give recommendations, NOT the
-`VERDICT/BLOCKING/NON-BLOCKING` grammar (that's the review panel). Bounded: 2–4,
-parallel, by-reference, no superpowers skills, concise positions.
-
-**Convene when ANY of:**
-- two or more **viable approaches with materially different trade-offs** exist;
-- the choice **shapes architecture / data model / public interface / scope**;
-- the choice is **costly to reverse** once baked in;
-- it is a genuine fork a later review loop **might not catch**.
-
-**Decide solo + record when:**
-- there is a **single obvious default**, or project convention dictates the answer;
-- the choice is **cosmetic / local / easily reversible**;
-- a wrong guess would simply be **caught by S1/S5**.
-
-**Examples.** Council: "which storage model / API shape / module boundaries?",
-"reconcile two conflicting requirements", "pick between two non-trivial strategies".
-Solo: "name a variable", "pick a file path under convention", "fill an obvious default
-for a low-stakes detail".
-
-**Single-persona fallback:** if a decision admits fewer than two distinct lenses, use a
-smaller council or decide solo with recorded rationale — don't fabricate personas to hit
-a count.
-
-**Dissent / split handling:** the orchestrator rules and records *why*; a minority
-position is logged as "considered, not adopted"; the orchestrator breaks ties (it is the
-decider).
 
 ## Verdict grammar (paste into ad-hoc summon prompts only — roster agents already embed it)
 
