@@ -10,7 +10,7 @@ with one explicit command.
 > skill/workflow, while `/autopilot:build` and `/autopilot:fix` still work for users.
 > A third surface, **`skills/medium-build`** (`/autopilot:medium-build`), is the trimmed
 > path for small, reversible changes (no S1 roster panel, no writing-plans; a one-shot
-> expert-council spec review and a capped work review).
+> single-expert spec review and a capped work review).
 > The **named review roster** is complete for both phases in `agents/`, and the
 > **selection stage** (`scripts/select-panel.py`) wires the roster into the S1/S5
 > review loops — the skills select the panel from the roster and dispatch each
@@ -143,14 +143,14 @@ each reach `VERDICT: PASS`; the test actually runs and passes; the run ends at a
 The **trimmed** path for **small, reversible changes** — roughly ≤1–2 files, with no new
 public interface, dependency, data migration, or security surface. Same autonomous,
 thin-orchestrator, disk-backed, never-merge disciplines as `build`, but a shorter spine
-for speed: it drops the S1 roster panel and writing-plans, uses a **one-shot expert
-council** as the spec review, slices a terse task list inline, and runs a **minimal,
+for speed: it drops the S1 roster panel and writing-plans, uses a **one-shot single expert
+reviewer** as the spec review, slices a terse task list inline, and runs a **minimal,
 cap-1** work review. It is a skill (model-invocable / composable) and emits the same final
 `autopilot-result` block; `/autopilot:medium-build` is preserved for users.
 
 - **E1 — Worktree:** create `autopilot/<slug>` worktree+branch; create the plan doc.
 - **E2 — Brainstorm:** turn requirements into the spec, then apply the **scope gate**.
-- **C — Council spec review:** one parallel batch of 2–4 ad-hoc experts review the spec (advice, not the VERDICT grammar); the orchestrator revises the spec **once** and proceeds — no loop, no marker.
+- **E3 — Expert spec review:** one `general-purpose` expert reviews the spec (advice, not the VERDICT grammar); the orchestrator revises the spec **once** and proceeds — no loop, no marker.
 - **Task list:** a terse ordered 1-line-per-task list written straight into the plan doc (no writing-plans).
 - **S3 — Produce:** subagent-driven from the plan-doc task list.
 - **S4 — Verify:** run the discovered checks.

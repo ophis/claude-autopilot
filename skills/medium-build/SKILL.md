@@ -1,6 +1,6 @@
 ---
 name: medium-build
-description: "Use to build a SMALL, REVERSIBLE change end to end on the trimmed path: create an isolated worktree, write a spec, one-shot expert-council spec review, slice a terse task list, implement, verify, and a trimmed work-review loop to a single review-ready branch (never merges). For bigger or higher-blast-radius work, use /autopilot:build. Pass the requirement text."
+description: "Use to build a SMALL, REVERSIBLE change end to end on the trimmed path: create an isolated worktree, write a spec, one-shot expert spec review, slice a terse task list, implement, verify, and a trimmed work-review loop to a single review-ready branch (never merges). For bigger or higher-blast-radius work, use /autopilot:build. Pass the requirement text."
 argument-hint: "<requirements>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, Skill, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite, ScheduleWakeup
 ---
@@ -9,8 +9,8 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, Skill, Workflow, ToolS
 
 You are the orchestrator for an autonomous **medium-build** run — the trimmed path for
 **small, reversible changes**. Drive the pipeline below end to end: dispatch and judge.
-It is `build` with a shorter spine: no S1 roster panel, no writing-plans; the expert
-council serves as a one-shot spec review, and S5 is a minimal capped loop.
+It is `build` with a shorter spine: no S1 roster panel, no writing-plans; a single expert
+reviewer serves as a one-shot spec review (E3), and S5 is a minimal capped loop.
 
 ## Your input ($ARGUMENTS)
 
@@ -32,7 +32,7 @@ Two gate points:
   with the out-of-scope handoff — no worktree wasted. Ambiguous-but-plausible → proceed;
   the post-E2 gate is authoritative.
 - **Authoritative post-E2 gate.** Judge the **written spec** against the scope rule above.
-  In scope → proceed to C. Out of scope → STOP and hand off to `/autopilot:build` (emit
+  In scope → proceed to E3. Out of scope → STOP and hand off to `/autopilot:build` (emit
   the **Result handoff** block, `status`=`stopped`, `reason`=`out-of-scope`, with the
   one-line reason a human/resumed run needs).
 
@@ -64,7 +64,7 @@ handoff: it is required, install via
 
 Before anything else, look for an existing **plan doc** with a RESUME block in the
 project's convention location. If found: reconcile worktree/branch/base_ref existence on
-disk, then continue from `phase`. An interrupted **C** (expert-council spec review)
+disk, then continue from `phase`. An interrupted **E3** (expert spec review)
 re-runs **whole** (idempotent, cheap — there is no marker to resume mid-pass); an
 interrupted S5 review round is **re-run from scratch** (re-dispatch the whole frozen
 panel — bounded, idempotent), so only `review_round` need be persisted to locate the
@@ -103,24 +103,26 @@ a count.
 **Dissent / split:** the orchestrator rules and records *why*; a minority position is
 logged "considered, not adopted"; the orchestrator breaks ties (it is the decider).
 
-## C — expert-council spec review (one-shot; not a Ralph loop)
+## E3 — expert spec review (one-shot; not a Ralph loop)
 
-C is the trimmed path's spec check — it **replaces both S1 and the human-review gate** with
-a single council pass. It is **ONE-SHOT: not a Ralph loop, with no convergence marker.**
+E3 is the trimmed path's spec check — it **replaces both S1 and the human-review gate** with
+a single reviewer pass. It is **ONE-SHOT: not a Ralph loop, with no convergence marker.**
 
-- After E2 writes the spec, **convene one expert council** — 2–4 ad-hoc personas from the
-  change's domain, in **one parallel batch** (same dispatch as "Deciding at decision
-  points"). Reviewing the spec for soundness / completeness / approach, they return
-  **concise positions (advice)** — **NOT** the `VERDICT/BLOCKING/NON-BLOCKING` grammar
-  (that grammar belongs to the S5 review panel only).
-- The orchestrator **synthesizes** the positions, **revises the spec once** (edit the spec
+- After E2 writes the spec, **dispatch ONE `general-purpose` expert sub-agent** (by
+  reference, read-only — "Read-only. Modify nothing.") to review the spec for soundness /
+  completeness / approach. It returns a **concise position (advice)** — **NOT** the
+  `VERDICT/BLOCKING/NON-BLOCKING` grammar (that grammar belongs to the S5 review panel
+  only). One reviewer is the light-path default; this is the spec check, not a deliberation.
+  (Only if the spec presents a genuine fork with materially different trade-offs — itself a
+  scope smell on this path — escalate to a small council per "Deciding at decision points".)
+- The orchestrator **synthesizes** the position, **revises the spec once** (edit the spec
   doc directly), and **records the one-line decision** (see **Progress log format**). Then
   it **proceeds** — there is **no `AUTOPILOT: SPEC READY` marker**, no second pass.
-- This is the autonomous, independent spec check (council personas ≠ the author) standing
-  in for the dropped human gate — cheaper than `build`'s S1 roster panel.
-- **Resume:** an interrupted C re-runs **whole** (idempotent, cheap) — there is no marker
+- This is the autonomous, independent spec check (the reviewer ≠ the author) standing in
+  for the dropped human gate — cheaper than `build`'s S1 roster panel.
+- **Resume:** an interrupted E3 re-runs **whole** (idempotent, cheap) — there is no marker
   to resume mid-pass.
-- **Root-contradiction STOP still applies:** if the council finds the core requirement
+- **Root-contradiction STOP still applies:** if the reviewer finds the core requirement
   asks for two things that cannot both be true, STOP and hand off — quote the two
   conflicting clauses (a handoff, never a question; mere vagueness is decided, not stopped).
 
@@ -201,7 +203,7 @@ Convergence is decided from these on-disk verdicts, never from vibes.
 medium-build has **no S1** — the only review-convergence phase is **S5** (work review). It
 runs a Ralph loop natively: review → fix → re-review until the panel passes, capped.
 **Cap = 1** on the trimmed path (round 0 + at most one fix round) — NOT the config default 3.
-(The C spec-review pass is one-shot and is explicitly **not** governed by this loop.)
+(The E3 spec-review pass is one-shot and is explicitly **not** governed by this loop.)
 
 - **The native loop.** The orchestrator runs the rounds itself; each round's members go
   out **together via the transport rule** (one `Workflow` call, or one parallel `Task`
@@ -249,10 +251,10 @@ Persist only these three shapes plus the final residual NON-BLOCKING items (S7 d
 them). Drop everything else.
 <!-- progress-log-format:end -->
 
-## Pipeline (E1, E2, C, S3–S7)
+## Pipeline (E1, E2, E3, S3–S7)
 
-Legend: **E#** = entry phase; **C** = the one-shot expert-council spec review; **S#** =
-the shared spine (trimmed path skips S1 and S2). Pipeline: **E1 → E2 → C → S3 → S4 → S5 →
+Legend: **E#** = entry phase; **E3** = the one-shot expert spec review; **S#** =
+the shared spine (trimmed path skips S1 and S2). Pipeline: **E1 → E2 → E3 → S3 → S4 → S5 →
 S6 → S7**.
 
 - **E1 — worktree (step 1).** Use `superpowers:using-git-worktrees` → branch
@@ -267,9 +269,9 @@ S6 → S7**.
   **Progress log format**; trivial defaults: decide + record). **Then apply the
   authoritative scope gate** to the written spec — out of scope → STOP, hand off to
   `/autopilot:build`.
-- **C — expert-council spec review (step 3).** Run the **one-shot council spec review**
-  (see "C — expert-council spec review" above): convene once, synthesize, revise the spec
-  once, record the one-line decision, proceed. **Not a Ralph loop, no marker.**
+- **E3 — expert spec review (step 3).** Run the **one-shot spec review** (see "E3 — expert
+  spec review" above): dispatch ONE `general-purpose` expert reviewer, synthesize, revise
+  the spec once, record the one-line decision, proceed. **Not a Ralph loop, no marker.**
 - **Task-list slice.** Write the terse ordered 1-line-per-task list into the plan doc's
   implementation-plan section (see "Task-list slice"). This is the entry action of S3.
 - **S3 — produce (step 4).** Produce the work product. Code →
@@ -336,26 +338,26 @@ Thin orchestrator · by-reference dispatch (never pipe diffs into N prompts) · 
 fewer phases (no S1/S2) + a **minimal S5 panel** (pin correctness + requirement-fidelity;
 `doc` only on doc changes; drop marginal optionals) + **cap = 1** · round-0 short-circuit ·
 re-dispatch only the `(FAILed ∪ touched)` subset · bounded subagent prompts, no superpowers
-skills loaded into reviewers · producer primed by blockers + cited files only · the C
-council is one-shot, bounded (2–4), one parallel batch · workflow transport returns a
+skills loaded into reviewers · producer primed by blockers + cited files only · E3 is one
+`general-purpose` spec reviewer (one-shot) · workflow transport returns a
 round's verdicts as one JSON payload (reviewer output stays off the main thread) · progress
 log is one-line-per-event (see **Progress log format**).
 
 ## State & resumption
 
 Persist two things so the run survives compaction: the **spec** (E2's output, revised once
-in C — E1 writes only the plan doc's progress section, the task-list slice fills the
+in E3 — E1 writes only the plan doc's progress section, the task-list slice fills the
 implementation-plan section) and the **plan doc** (implementation plan + progress section,
 carrying the RESUME block):
 
 ```
-RESUME: phase=<E1|E2|C|S3|S4|S5|S6|S7> worktree=<path> branch=<name> base_ref=<sha> review_round=<n>
+RESUME: phase=<E1|E2|E3|S3|S4|S5|S6|S7> worktree=<path> branch=<name> base_ref=<sha> review_round=<n>
 ```
 
 **Keep RESUME current:** rewrite it at every phase transition — `phase=` as you advance
-(E1→E2→C→S3→S4→S5→S6→S7) and `review_round=` each S5 loop iteration. The resume contract
+(E1→E2→E3→S3→S4→S5→S6→S7) and `review_round=` each S5 loop iteration. The resume contract
 (**Resume first**) depends on `phase=` reflecting the true current phase; a stale one breaks
-resumption. An interrupted **C** re-runs whole (no marker to resume mid-pass); an
+resumption. An interrupted **E3** re-runs whole (no marker to resume mid-pass); an
 interrupted S5 round re-runs whole (only `review_round` locates the loop).
 
 **Where these live follows the user's / project's existing convention** — honor CLAUDE.md

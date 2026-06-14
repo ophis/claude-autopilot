@@ -40,7 +40,7 @@ The three surfaces — `skills/build/SKILL.md`, `skills/fix/SKILL.md`, and
 **skills** (model-invocable, so composable as a step inside a larger skill/workflow);
 users still type `/autopilot:build` / `/autopilot:fix` / `/autopilot:medium-build`.
 `medium-build` is a sibling orchestrator for small reversible changes: same S-spine
-concept on a trimmed path — no S1 roster panel (an expert council does a one-shot
+concept on a trimmed path — no S1 roster panel (a single expert reviewer does a one-shot
 spec review instead), no `writing-plans`, and a trimmed S5. When invoked, the
 *main-session Claude becomes a thin orchestrator*: it dispatches subagents and judges
 their structured output, and never edits the work product itself. Understanding the
