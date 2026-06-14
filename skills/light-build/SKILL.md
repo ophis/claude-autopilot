@@ -1,6 +1,6 @@
 ---
 name: light-build
-description: "Self-contained, autonomous, low-ceremony build harness: create an isolated worktree, produce the work, verify, and run a capped correctness + requirement-fidelity review to a single review-ready branch (never merges). Has no plugin dependency — runs with nothing else installed. For simple tasks, or as a lighter-than-build option when you want autonomy + expert-council-at-forks without the spec/review rigor — for that rigor use medium-build or build. No scope gate. Pass the requirement text."
+description: "Self-contained, autonomous, low-ceremony build harness: create an isolated worktree, produce the work, verify, and run a capped correctness + requirement-fidelity review to a single review-ready branch (never merges). Has no plugin dependency — runs with nothing else installed. For simple tasks, or as a lighter-than-build option when you want autonomy + expert-council-at-forks without the spec/review rigor — for that rigor use medium-build or build. Pass the requirement text."
 argument-hint: "<requirements>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite
 ---
@@ -26,14 +26,6 @@ or invoke one.)
 `$ARGUMENTS` is the single source of intent: free-text requirements. **The requirement IS
 the spec** — there is no spec doc, no brainstorm, no spec review. Empty input → STOP with a
 handoff asking for requirements.
-
-## No scope gate
-
-light-build is a **harness, not a gatekeeper**: invoking it *is* the decision that it fits.
-It has **no scope gate** and never escalates or hands off on scope — it runs whatever it is
-given, end to end, subject only to the safety stops below. **Choosing the right surface is
-the caller's responsibility** (the docs describe when each fits; the skill does not police
-it). Only the safety stops interrupt the run.
 
 ## Operating disciplines
 
@@ -250,7 +242,7 @@ writing-plans.
 
 Stop and hand off (state + exact next step) only on the four cases below. Every STOP handoff
 ends by emitting the **Result handoff** block (`status`=`stopped`, or `capped-without-pass`
-at the cap). **There is no out-of-scope stop** — light-build does not gate scope.
+at the cap).
 1. **Destructive op — only when Auto Mode is OFF.** Before any force-push, write outside
    the worktree, history rewrite beyond this branch, or rm/reset of uncommitted work.
    **In Auto Mode** (auto-accept / bypass-permissions), skip this stop — destructive-op
