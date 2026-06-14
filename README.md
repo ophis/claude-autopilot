@@ -227,7 +227,9 @@ model and read-only tool allowlist on either transport (identical prompts):
 `scripts/review-round.js` (Dynamic Workflows — background fan-out, schema-validated
 verdict JSON; a member's infra failure returns `synthetic: true` and is retried once
 via `Task`); **fallback** (tool unavailable or a call failed — sticky for the run),
-the parallel `Task(subagent_type="autopilot:<name>")` batch. Nothing to configure.
+the parallel `Task(subagent_type="autopilot:<name>")` batch. An ad-hoc review lens
+rides the same `Workflow` transport (dispatched as `general-purpose`, schema-validated
+like the roster). Nothing to configure.
 (Requires the installed plugin ≥ v0.4.0; the workflow transport needs the version
 shipping `scripts/review-round.js`.)
 Doc upkeep is folded into S5: the core `doc-reviewer` flags stale/missing docs **repo-wide**

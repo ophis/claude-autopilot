@@ -10,7 +10,8 @@
 // Runtime contract: plain JS with no module dependencies — agent(), parallel(),
 // phase(), log(), and the input value `args` are globals provided by the
 // workflow runtime. No filesystem, environment, network, or clock/randomness
-// APIs are available or used; `args` is the script's only input:
+// APIs are available or used; `args` is the script's only input — this object OR its
+// JSON string form (a tool boundary may stringify it; the tail parses it back):
 //   { phase: "spec"|"work", members: [{ agent, subagent_type, prompt }, ...] }
 // Return value (always — the script never throws):
 //   { phase, verdicts: [{ agent, verdict, blocking, non_blocking, synthetic }, ...] }
@@ -55,10 +56,16 @@ function normalize(member, v) {
   return { agent: member.agent, verdict, blocking, non_blocking: nonBlocking, synthetic: false }
 }
 
-const members = args && Array.isArray(args.members) ? args.members : []
+// Defensive: a tool boundary may hand `args` over as a JSON string instead of an
+// object. Parse it back so the round still dispatches; malformed/empty stays a no-op.
+let input = args
+if (typeof input === 'string') {
+  try { input = JSON.parse(input) } catch (_e) { input = null }
+}
+const members = input && Array.isArray(input.members) ? input.members : []
 phase('Review')
 log(`dispatching ${members.length} reviewer(s)`)
 const results = await parallel(members.map(m => () =>
   agent(m.prompt, { agentType: m.subagent_type, schema: VERDICT_SCHEMA, label: m.agent, phase: 'Review' })
 ))
-return { phase: args ? args.phase : undefined, verdicts: members.map((m, i) => normalize(m, results[i])) }
+return { phase: input ? input.phase : undefined, verdicts: members.map((m, i) => normalize(m, results[i])) }

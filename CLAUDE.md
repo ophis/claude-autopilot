@@ -60,10 +60,14 @@ product itself. Understanding the system means reading those two skill files plu
   Reviewers are dispatched **natively** — preferably one `Workflow` call per review
   round (`scripts/review-round.js`, a dumb-transport Dynamic Workflows script:
   `agentType` = the same `autopilot:<name>` handles, schema-validated verdicts,
-  `synthetic: true` = per-member infra failure), falling back stickily to a parallel
+  `synthetic: true` = per-member infra failure; it tolerates `args` arriving as a
+  stringified JSON object), falling back stickily to a parallel
   `Task(subagent_type="autopilot:<name>")` batch — each reviewer at its own `model` +
-  read-only `tools` allowlist either way. `scriptPath` resolves from the *installed*
-  plugin, like agent dispatch.
+  read-only `tools` allowlist either way. **Ad-hoc lenses** (a gap no roster agent
+  covers) ride the **same `Workflow` transport** as `general-purpose` members —
+  schema-validated like the roster, read-only by prompt (not by a tool allowlist) —
+  and share the roster's fallbacks. `scriptPath` resolves from the *installed* plugin,
+  like agent dispatch.
 
 - **Selection stage (`scripts/select-panel.py`).** Deterministic, stdlib-only router:
   `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every

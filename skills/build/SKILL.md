@@ -115,8 +115,9 @@ decider).
   "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…,
   requirement=…, focus=…. Return ONLY the verdict block." (absolute paths) — the
   identical prompt goes to whichever transport carries it:
-  - **Workflow transport (preferred; roster members only):** one call per round —
+  - **Workflow transport (preferred; roster and ad-hoc members):** one call per round —
     `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "<spec|work>", members: [{agent, subagent_type, prompt}, …]}})`.
+    Pass `args` as a real JSON object (the transport tolerates a stringified one, but don't rely on it).
     Members keep their own model + read-only allowlist (`agentType` resolves like
     `Task`). The call returns a task ID immediately; the round's verdicts arrive in
     its completion notification as `{phase, verdicts: [{agent, verdict, blocking,
@@ -124,10 +125,18 @@ decider).
     Never pass `resumeFromRunId`: every round is a fresh run. `synthetic: true` =
     that member's infra failure, not a review FAIL: once all initial results are in
     (incl. ad-hoc), re-dispatch just those lenses once via `Task`; still nothing →
-    FAIL. A return without a `verdicts` array = a failed call → fallback.
-  - **Ad-hoc members: always via `Task`** (`general-purpose` + inline persona, same
-    verdict contract), in the same turn — they have no read-only allowlist inside a
-    workflow.
+    FAIL. A return without a `verdicts` array — or a `verdicts` array shorter than the
+    panel you sent (including `[]` for a non-empty panel) — is a failed/partial call →
+    Task fallback for the missing members.
+  - **Ad-hoc members ride the SAME Workflow `members` list** as `subagent_type:
+    "general-purpose"`, with the persona + the verdict contract — including "Read-only.
+    Modify nothing." and "return ONLY the verdict block." — in the `prompt`. Their
+    read-only is **prompt-enforced only** (roster members carry a real read-only tool
+    allowlist; ad-hoc do not), so the summon prompt MUST carry the read-only
+    instruction. Ad-hoc follow the SAME fallback as roster — both (a) the whole-round
+    Task fallback if the Workflow call is unavailable/fails, and (b) the per-member
+    `synthetic: true` single Task re-dispatch. Dispatch ad-hoc directly via `Task` only
+    when the whole round is already on the Task fallback.
   - **Task fallback:** if the `Workflow` tool is unavailable or any call failed,
     dispatch roster members as `Task(subagent_type="autopilot:<name>", …)` — the
     agent's body is its system prompt; send ONLY the run-input prompt — all calls in
