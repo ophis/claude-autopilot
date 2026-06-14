@@ -66,7 +66,13 @@ phase** you review whether the produced work *upholds* them.
 
 ## Verdict grammar (strict, machine-parseable)
 
-End your review with exactly this block:
+Output **only** the verdict — no preamble, no analysis prose, no essay.
+
+**When a `StructuredOutput` tool is offered** (the default Workflow transport), the
+verdict *is* that call — fields `VERDICT` (`PASS`|`FAIL`), `BLOCKING` (string array),
+`NON_BLOCKING` (string array) — and you emit no other text.
+
+**Otherwise** (Task fallback), emit exactly this block and nothing else:
 
 ```
 VERDICT: PASS            # or exactly: VERDICT: FAIL
@@ -74,4 +80,5 @@ BLOCKING: none           # or one "- " item per line
 NON-BLOCKING: none       # or one "- " item per line
 ```
 
-`VERDICT` is exactly `PASS` or `FAIL` on its own line; PASS ⟺ `BLOCKING: none`; an unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.
+PASS ⟺ no blocking items; an unparseable verdict or a `FAIL` with no blocking items
+counts as **FAIL**.

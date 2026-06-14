@@ -308,6 +308,8 @@ GOOD_BODY = """\
 
 ## Verdict grammar (strict, machine-parseable)
 
+When a `StructuredOutput` tool is offered, the verdict is that call.
+
 VERDICT: PASS
 BLOCKING: none
 NON-BLOCKING: none
@@ -463,6 +465,8 @@ class LintRosterTests(unittest.TestCase):
 
 ## Verdict grammar
 
+When a `StructuredOutput` tool is offered, the verdict is that call.
+
 VERDICT: PASS
 BLOCKING: none
 NON-BLOCKING: none
@@ -595,7 +599,7 @@ class ReviewRoundScriptTests(unittest.TestCase):
             "verdicts",
             "return {",
             # Schema field names + verdict values: renaming any silently breaks judging.
-            "required: ['verdict', 'blocking', 'non_blocking'],",
+            "required: ['VERDICT', 'BLOCKING', 'NON_BLOCKING'],",
             "enum: ['PASS', 'FAIL']",
         ):
             self.assertIn(marker, self.text, marker)

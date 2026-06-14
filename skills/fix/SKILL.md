@@ -105,15 +105,15 @@ and dispatched natively.
 - **Dispatch the whole round's panel together** — never one at a time; every review
   round in S1 and S5, re-reviews included. Build each member's run-input prompt once —
   "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…,
-  requirement=…, focus=…. Return ONLY the verdict block." (absolute paths) — the
+  requirement=…, focus=…. Output ONLY the verdict, no prose." (absolute paths) — the
   identical prompt goes to whichever transport carries it:
   - **Workflow transport (preferred; roster and ad-hoc members):** one call per round —
     `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "<spec|work>", members: [{agent, subagent_type, prompt}, …]}})`.
     Pass `args` as a real JSON object (the transport tolerates a stringified one, but don't rely on it).
     Members keep their own model + read-only allowlist (`agentType` resolves like
     `Task`). The call returns a task ID immediately; the round's verdicts arrive in
-    its completion notification as `{phase, verdicts: [{agent, verdict, blocking,
-    non_blocking, synthetic}, …]}` — wait for it (never poll, never judge early).
+    its completion notification as `{phase, verdicts: [{agent, VERDICT, BLOCKING,
+    NON_BLOCKING, synthetic}, …]}` — wait for it (never poll, never judge early).
     Never pass `resumeFromRunId`: every round is a fresh run. `synthetic: true` =
     that member's infra failure, not a review FAIL: once all initial results are in
     (incl. ad-hoc), re-dispatch just those lenses once via `Task`; still nothing →
@@ -122,7 +122,8 @@ and dispatched natively.
     Task fallback for the missing members.
   - **Ad-hoc members ride the SAME Workflow `members` list** as `subagent_type:
     "general-purpose"`, with the persona + the verdict contract — including "Read-only.
-    Modify nothing." and "return ONLY the verdict block." — in the `prompt`. Their
+    Modify nothing." and the "Verdict grammar" block below (call `StructuredOutput` when
+    offered; no prose) — in the `prompt`. Their
     read-only is **prompt-enforced only** (roster members carry a real read-only tool
     allowlist; ad-hoc do not), so the summon prompt MUST carry the read-only
     instruction. Ad-hoc follow the SAME fallback as roster — both (a) the whole-round
@@ -139,16 +140,19 @@ and dispatched natively.
 
 ## Verdict grammar (paste into ad-hoc summon prompts only — roster agents already embed it)
 
+Output ONLY the verdict — no prose/preamble. When a `StructuredOutput` tool is offered
+(Workflow transport), the verdict IS that call: `{VERDICT: PASS|FAIL, BLOCKING: [...],
+NON_BLOCKING: [...]}`, nothing else. Else (Task fallback) emit exactly:
+
 ```
 VERDICT: PASS            # or exactly: VERDICT: FAIL
 BLOCKING: none           # or one "- " item per line
 NON-BLOCKING: none       # or one "- " item per line
 ```
 
-PASS ⟺ `BLOCKING: none`. Cite evidence (file:line / spec
-clause); flag blockers, not preferences. A missing, unparseable, or empty-on-FAIL
-verdict counts as **FAIL**. Convergence is decided from these on-disk verdicts,
-never from vibes.
+PASS ⟺ no blocking items. Cite evidence (file:line / spec clause); flag blockers, not
+preferences. A missing, unparseable, or empty-on-FAIL verdict counts as **FAIL**.
+Convergence is decided from these on-disk verdicts, never from vibes.
 
 ## Ralph loop (S1 and S5)
 

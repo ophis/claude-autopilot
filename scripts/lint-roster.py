@@ -36,7 +36,7 @@ CONTRACT_MARKERS = (
     "Cite evidence",
     "Load no superpowers skills",
 )
-VERDICT_MARKERS = ("VERDICT:", "BLOCKING:", "NON-BLOCKING:")
+VERDICT_MARKERS = ("StructuredOutput", "VERDICT:", "BLOCKING:", "NON-BLOCKING:")
 SELECTOR_KEYS = ("phase", "tier", "lens", "applies_to")
 
 

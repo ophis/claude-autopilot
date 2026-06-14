@@ -14,7 +14,7 @@
 // JSON string form (a tool boundary may stringify it; the tail parses it back):
 //   { phase: "spec"|"work", members: [{ agent, subagent_type, prompt }, ...] }
 // Return value (always — the script never throws):
-//   { phase, verdicts: [{ agent, verdict, blocking, non_blocking, synthetic }, ...] }
+//   { phase, verdicts: [{ agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic }, ...] }
 // with exactly one entry per member, in member order.
 export const meta = {
   name: 'autopilot-review-round',
@@ -28,11 +28,11 @@ const VERDICT_SCHEMA = {
   type: 'object',
   properties: {
     agent: { type: 'string' },
-    verdict: { type: 'string', enum: ['PASS', 'FAIL'] },
-    blocking: { type: 'array', items: { type: 'string' } },
-    non_blocking: { type: 'array', items: { type: 'string' } },
+    VERDICT: { type: 'string', enum: ['PASS', 'FAIL'] },
+    BLOCKING: { type: 'array', items: { type: 'string' } },
+    NON_BLOCKING: { type: 'array', items: { type: 'string' } },
   },
-  required: ['verdict', 'blocking', 'non_blocking'],
+  required: ['VERDICT', 'BLOCKING', 'NON_BLOCKING'],
   additionalProperties: false,
 }
 
@@ -43,17 +43,17 @@ function normalize(member, v) {
     // lens once via Task before judging the round.
     return {
       agent: member.agent,
-      verdict: 'FAIL',
-      blocking: ['no verdict returned (skip/terminal error)'],
-      non_blocking: [],
+      VERDICT: 'FAIL',
+      BLOCKING: ['no verdict returned (skip/terminal error)'],
+      NON_BLOCKING: [],
       synthetic: true,
     }
   }
-  const blocking = Array.isArray(v.blocking) ? v.blocking.filter(x => typeof x === 'string') : []
-  const nonBlocking = Array.isArray(v.non_blocking) ? v.non_blocking.filter(x => typeof x === 'string') : []
+  const blocking = Array.isArray(v.BLOCKING) ? v.BLOCKING.filter(x => typeof x === 'string') : []
+  const nonBlocking = Array.isArray(v.NON_BLOCKING) ? v.NON_BLOCKING.filter(x => typeof x === 'string') : []
   // Semantic invariant the schema cannot express: PASS ⟺ blocking empty.
-  const verdict = v.verdict === 'PASS' && blocking.length === 0 ? 'PASS' : 'FAIL'
-  return { agent: member.agent, verdict, blocking, non_blocking: nonBlocking, synthetic: false }
+  const verdict = v.VERDICT === 'PASS' && blocking.length === 0 ? 'PASS' : 'FAIL'
+  return { agent: member.agent, VERDICT: verdict, BLOCKING: blocking, NON_BLOCKING: nonBlocking, synthetic: false }
 }
 
 // Defensive: a tool boundary may hand `args` over as a JSON string instead of an
