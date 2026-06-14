@@ -1,13 +1,13 @@
 ---
-name: light-build
-description: "Use to build a SMALL, REVERSIBLE change end to end on the light path: create an isolated worktree, write a spec, one-shot expert-council spec review, slice a terse task list, implement, verify, and a trimmed work-review loop to a single review-ready branch (never merges). For bigger or higher-blast-radius work, use /autopilot:build. Pass the requirement text."
+name: medium-build
+description: "Use to build a SMALL, REVERSIBLE change end to end on the trimmed path: create an isolated worktree, write a spec, one-shot expert-council spec review, slice a terse task list, implement, verify, and a trimmed work-review loop to a single review-ready branch (never merges). For bigger or higher-blast-radius work, use /autopilot:build. Pass the requirement text."
 argument-hint: "<requirements>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, Skill, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite, ScheduleWakeup
 ---
 
-# Autopilot: light-build
+# Autopilot: medium-build
 
-You are the orchestrator for an autonomous **light-build** run — the trimmed path for
+You are the orchestrator for an autonomous **medium-build** run — the trimmed path for
 **small, reversible changes**. Drive the pipeline below end to end: dispatch and judge.
 It is `build` with a shorter spine: no S1 roster panel, no writing-plans; the expert
 council serves as a one-shot spec review, and S5 is a minimal capped loop.
@@ -17,9 +17,9 @@ council serves as a one-shot spec review, and S5 is a minimal capped loop.
 `$ARGUMENTS` is the single source of intent: free-text requirements for a small change.
 Empty input → STOP with a handoff asking for requirements.
 
-## Scope gate (light-build applies only to small, reversible changes)
+## Scope gate (medium-build applies only to small, reversible changes)
 
-light-build is for changes that are **small and reversible**: roughly **≤1–2 files**, and
+medium-build is for changes that are **small and reversible**: roughly **≤1–2 files**, and
 **no new public interface, dependency, data migration, or security surface**. If the
 change is bigger, or its blast radius is uncertain, **STOP with a handoff: use
 `/autopilot:build` instead** (a handoff, never a question — when in doubt, escalate).
@@ -38,12 +38,12 @@ Two gate points:
 
 ## Preflight (dependencies)
 
-**Load config (run first, every run):** `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`. light-build ignores those defaults for S5 (it pins cap = 1 — see **Ralph loop**); the load still confirms config health. User edits take effect next run.
+**Load config (run first, every run):** `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`. medium-build ignores those defaults for S5 (it pins cap = 1 — see **Ralph loop**); the load still confirms config health. User edits take effect next run.
 
 Before E1, confirm the **superpowers** plugin is available — its skills must appear in your
 skill list (the whole pipeline is built on them). If **not** available, STOP with a
 handoff: it is required, install via
-`/plugin install superpowers@claude-plugins-official`, then re-run `/autopilot:light-build`.
+`/plugin install superpowers@claude-plugins-official`, then re-run `/autopilot:medium-build`.
 
 ## Operating disciplines
 
@@ -87,8 +87,8 @@ parallel, by-reference, no superpowers skills, concise positions.
 **Convene when ANY of:** two or more **viable approaches with materially different
 trade-offs**; the choice **shapes architecture / data model / public interface / scope**;
 **costly to reverse**; a genuine fork a later review loop **might not catch**. (For a
-light-build, such a fork is itself a scope smell — weigh whether the change still belongs
-on the light path.) Examples: "which storage model / API shape / module boundaries?",
+medium-build, such a fork is itself a scope smell — weigh whether the change still belongs
+on the trimmed path.) Examples: "which storage model / API shape / module boundaries?",
 "reconcile two conflicting requirements", "pick between two non-trivial strategies".
 
 **Decide solo + record when:** a **single obvious default** or project convention
@@ -105,7 +105,7 @@ logged "considered, not adopted"; the orchestrator breaks ties (it is the decide
 
 ## C — expert-council spec review (one-shot; not a Ralph loop)
 
-C is the light path's spec check — it **replaces both S1 and the human-review gate** with
+C is the trimmed path's spec check — it **replaces both S1 and the human-review gate** with
 a single council pass. It is **ONE-SHOT: not a Ralph loop, with no convergence marker.**
 
 - After E2 writes the spec, **convene one expert council** — 2–4 ad-hoc personas from the
@@ -126,7 +126,7 @@ a single council pass. It is **ONE-SHOT: not a Ralph loop, with no convergence m
 
 ## Task-list slice (replaces S2 / writing-plans) — the entry action of S3
 
-light-build has **no S2 / writing-plans**. After C, the orchestrator writes a **terse task
+medium-build has **no S2 / writing-plans**. After C, the orchestrator writes a **terse task
 list** — **one line per task, ordered, no code, no TDD scaffold** — into the **plan doc's
 implementation-plan section** (the same location `build`'s writing-plans uses, just
 authored inline). **S3's subagent-driven-development then discovers the task list from the
@@ -138,7 +138,7 @@ argument. This slice is the **entry action of S3**, not its own resumable phase.
 - **Select from the script.** Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py"
   --phase work --worktree <worktree> --base <base_ref>`. It returns JSON with a `selected`
   list of `{agent, subagent_type, tier, matched}`.
-- **Compose the MINIMAL panel (light path).** Keep it small:
+- **Compose the MINIMAL panel (trimmed path).** Keep it small:
   - **Pin `correctness` and `requirement-fidelity`** (the floor — the spec-coverage
     backstop matters more here because the S1 panel was skipped). Both are `core` in the
     roster today; **keep them pinned even if a future roster change re-tiered either lens.**
@@ -198,9 +198,9 @@ Convergence is decided from these on-disk verdicts, never from vibes.
 
 ## Ralph loop (S5 only)
 
-light-build has **no S1** — the only review-convergence phase is **S5** (work review). It
+medium-build has **no S1** — the only review-convergence phase is **S5** (work review). It
 runs a Ralph loop natively: review → fix → re-review until the panel passes, capped.
-**Cap = 1** on the light path (round 0 + at most one fix round) — NOT the config default 3.
+**Cap = 1** on the trimmed path (round 0 + at most one fix round) — NOT the config default 3.
 (The C spec-review pass is one-shot and is explicitly **not** governed by this loop.)
 
 - **The native loop.** The orchestrator runs the rounds itself; each round's members go
@@ -252,7 +252,7 @@ them). Drop everything else.
 ## Pipeline (E1, E2, C, S3–S7)
 
 Legend: **E#** = entry phase; **C** = the one-shot expert-council spec review; **S#** =
-the shared spine (light path skips S1 and S2). Pipeline: **E1 → E2 → C → S3 → S4 → S5 →
+the shared spine (trimmed path skips S1 and S2). Pipeline: **E1 → E2 → C → S3 → S4 → S5 →
 S6 → S7**.
 
 - **E1 — worktree (step 1).** Use `superpowers:using-git-worktrees` → branch
@@ -332,7 +332,7 @@ Additive only — it changes no phase's behavior.
 
 ## Token discipline
 
-Thin orchestrator · by-reference dispatch (never pipe diffs into N prompts) · light path =
+Thin orchestrator · by-reference dispatch (never pipe diffs into N prompts) · trimmed path =
 fewer phases (no S1/S2) + a **minimal S5 panel** (pin correctness + requirement-fidelity;
 `doc` only on doc changes; drop marginal optionals) + **cap = 1** · round-0 short-circuit ·
 re-dispatch only the `(FAILed ∪ touched)` subset · bounded subagent prompts, no superpowers

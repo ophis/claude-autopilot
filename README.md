@@ -8,7 +8,7 @@ with one explicit command.
 > Status: **v0.8.6** — the build/fix surfaces are now **skills** (`skills/build`,
 > `skills/fix`): model-invocable and composable as a step inside a larger
 > skill/workflow, while `/autopilot:build` and `/autopilot:fix` still work for users.
-> A third surface, **`skills/light-build`** (`/autopilot:light-build`), is the trimmed
+> A third surface, **`skills/medium-build`** (`/autopilot:medium-build`), is the trimmed
 > path for small, reversible changes (no S1 roster panel, no writing-plans; a one-shot
 > expert-council spec review and a capped work review).
 > The **named review roster** is complete for both phases in `agents/`, and the
@@ -30,7 +30,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 ├── skills/
 │   ├── build/SKILL.md            # skill; /autopilot:build       still works
 │   ├── fix/SKILL.md              # skill; /autopilot:fix         still works
-│   └── light-build/SKILL.md      # skill; /autopilot:light-build — trimmed path, small changes
+│   └── medium-build/SKILL.md     # skill; /autopilot:medium-build — trimmed path, small changes
 ├── scripts/
 │   ├── autopilot-config.py       # reads/initializes ${CLAUDE_PLUGIN_DATA}/config.json
 │   ├── lint-roster.py            # A3 roster lint: validates each reviewer's frontmatter + contract
@@ -138,7 +138,7 @@ Expect: a new `autopilot/<slug>` worktree+branch; the spec and work review loops
 each reach `VERDICT: PASS`; the test actually runs and passes; the run ends at a
 **single squashed commit with no merge** and a final report.
 
-## `/autopilot:light-build <requirements>`
+## `/autopilot:medium-build <requirements>`
 
 The **trimmed** path for **small, reversible changes** — roughly ≤1–2 files, with no new
 public interface, dependency, data migration, or security surface. Same autonomous,
@@ -146,7 +146,7 @@ thin-orchestrator, disk-backed, never-merge disciplines as `build`, but a shorte
 for speed: it drops the S1 roster panel and writing-plans, uses a **one-shot expert
 council** as the spec review, slices a terse task list inline, and runs a **minimal,
 cap-1** work review. It is a skill (model-invocable / composable) and emits the same final
-`autopilot-result` block; `/autopilot:light-build` is preserved for users.
+`autopilot-result` block; `/autopilot:medium-build` is preserved for users.
 
 - **E1 — Worktree:** create `autopilot/<slug>` worktree+branch; create the plan doc.
 - **E2 — Brainstorm:** turn requirements into the spec, then apply the **scope gate**.
@@ -159,11 +159,11 @@ cap-1** work review. It is a skill (model-invocable / composable) and emits the 
 
 **Scope gate.** A cheap pre-E1 check can short-circuit an obviously oversized request
 before any worktree exists; the authoritative gate judges the **written spec** after E2.
-If the change is too big or its blast radius is uncertain, light-build **stops and hands
+If the change is too big or its blast radius is uncertain, medium-build **stops and hands
 off — "use `/autopilot:build`"** (a handoff, never a question; when in doubt, escalate).
 
 ```
-/autopilot:light-build fix the off-by-one in the pagination helper
+/autopilot:medium-build fix the off-by-one in the pagination helper
 ```
 
 ## `/autopilot:fix <feedback>`
