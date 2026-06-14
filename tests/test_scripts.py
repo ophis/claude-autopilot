@@ -655,18 +655,44 @@ class SkillLockstepTests(unittest.TestCase):
             None,
         )
         end = next(
-            (i for i, l in enumerate(lines) if "Record the transport" in l),
+            (i for i, l in enumerate(lines) if "not a separate log line" in l),
             None,
         )
         if start is None or end is None or end < start:
             raise AssertionError("transport block not found in %s" % skill)
         return "\n".join(lines[start : end + 1])
 
+    @staticmethod
+    def _progress_log_format_block(skill):
+        path = os.path.join(SKILLS, skill, "SKILL.md")
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+        start = next(
+            (i for i, l in enumerate(lines) if "progress-log-format:start" in l),
+            None,
+        )
+        end = next(
+            (i for i, l in enumerate(lines) if "progress-log-format:end" in l),
+            None,
+        )
+        if start is None or end is None or end < start:
+            raise AssertionError("progress-log-format block not found in %s" % skill)
+        return "\n".join(lines[start : end + 1])
+
     def test_transport_block_identical(self):
-        """The block from 'Workflow transport (preferred' through 'Record the
-        transport' is the shared dispatch contract — byte-identical or bust."""
+        """The block from 'Workflow transport (preferred' through the
+        transport-record sentence is the shared dispatch contract — byte-identical
+        or bust."""
         self.assertEqual(
             self._transport_block("build"), self._transport_block("fix")
+        )
+
+    def test_progress_log_format_block_identical(self):
+        """The progress-log-format block (between the HTML markers) is mirrored
+        byte-for-byte across both skills — byte-identical or bust."""
+        self.assertEqual(
+            self._progress_log_format_block("build"),
+            self._progress_log_format_block("fix"),
         )
 
 

@@ -55,9 +55,9 @@ At a **decision point**, the orchestrator **convenes an expert council**: a smal
 (2–4) of **ad-hoc expert sub-agents** (personas derived from the decision's domain),
 dispatched in **one parallel batch** via `superpowers:dispatching-parallel-agents`. Each
 returns a **concise position** (recommendation + rationale + key trade-offs + any
-dissent). The **orchestrator then synthesizes, decides, and records** the decision + the
-council's key points (incl. dissent) in the spec doc / plan doc (progress section). The orchestrator is
-the decider; the council informs it. Never ask the user.
+dissent). The **orchestrator then synthesizes, decides, and records** the decision as the
+one-line decision shape (see **Progress log format**) in the spec doc / plan doc (progress
+section). The orchestrator is the decider; the council informs it. Never ask the user.
 
 **Council members are advisors, not reviewers** — they give recommendations, NOT the
 `VERDICT/BLOCKING/NON-BLOCKING` grammar (that's the review panel). Bounded: 2–4,
@@ -99,9 +99,9 @@ and dispatched natively.
 - **Compose the panel:** ALL returned `core` agents (mandatory) + the
   `optional` agents the orchestrator judges relevant (it may drop a marginal
   optional) + any **ad-hoc** inline lens for a genuine gap no roster agent covers.
-- **Freeze & log** the composed panel to the **plan doc** (progress section): which core (all), which
-  optionals included/excluded + why, any ad-hoc added. Reuse the frozen panel every
-  round of that phase.
+- **Freeze & log** the composed panel to the **plan doc** (progress section) as the
+  one-line freeze shape (see **Progress log format**). Reuse the frozen panel every round
+  of that phase.
 - **Dispatch the whole round's panel together** — never one at a time; every review
   round in S1 and S5, re-reviews included. Build each member's run-input prompt once —
   "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…,
@@ -134,7 +134,8 @@ and dispatched natively.
     dispatch roster members as `Task(subagent_type="autopilot:<name>", …)` — the
     agent's body is its system prompt; send ONLY the run-input prompt — all calls in
     a single message (`superpowers:dispatching-parallel-agents`), for the rest of
-    the run. Record the transport (and any fallback) in the plan doc.
+    the run. The transport (and any fallback that fired) rides the freeze line's
+    `transport=` field (see **Progress log format**) — not a separate log line.
 - **Collect verdicts → the Ralph loop** (round-0 short-circuit, re-review rounds
   dispatch the `(FAILed ∪ touched)` subset, cap, convergence from on-disk verdicts).
 
@@ -167,8 +168,9 @@ per-phase cap (default 3 rounds). The orchestrator drives the loop natively.
 - **The native loop.** The orchestrator runs the rounds
   itself; each round's members go out **together via the transport rule** (one
   `Workflow` call, or one parallel `Task` batch on fallback), and the
-  orchestrator records each lens's verdict (+ blocking items, terse) in the plan
-  doc. **Round 0** = the full frozen panel; all-PASS short-circuits.
+  orchestrator records the round as one line — the lens=VERDICT roll-up + blocker
+  count (see **Progress log format**); the open blocker text is held transiently to
+  prime the fix, never logged. **Round 0** = the full frozen panel; all-PASS short-circuits.
   **Re-review rounds (N>0)** dispatch only **`(FAILed ∪ touched) ∩ frozen panel`**:
   *FAILed* = last verdict FAIL (or missing/unparseable). *touched* (S5) = every
   lens whose `applies_to` matches the fix's changed files — record the **pre-fix
@@ -192,6 +194,29 @@ proceeds (S1→S2, S5→S6); if the per-phase cap (`maxIterations.spec-phase` /
 with the 3-way classification (oscillation | unfixable | requirements-conflict) and
 a handoff — do not proceed.
 
+<!-- progress-log-format:start -->
+## Progress log format
+
+The plan doc's progress section is an **audit trail, not a transcript** — one line per
+event, never a re-logged block. Only `review_round` (RESUME block) is load-bearing for
+resume; an interrupted round re-runs the whole frozen panel and regenerates any blocker
+text, so blocker text is transient working state — hold it to prime the fix, never persist
+it to disk to make resume cheaper.
+
+The five recording sites collapse into three line shapes:
+
+- **Panel freeze** (one line/phase; absorbs the transport record):
+  `S5 panel: core=[correctness,doc,requirement-fidelity] opt+=[code-quality,test] opt-=[security:no-IO] transport=Workflow`
+  (ad-hoc lenses go in `opt+`; note a fallback only if it fired: `transport=Workflow->Task`.)
+- **Each review round** (one line; lens=VERDICT roll-up + blocker COUNT, never blocker text):
+  `S5 r0: correctness=FAIL doc=PASS test=PASS code-quality=PASS -> 2 blockers, fix dispatched`
+- **Each decision** (council or solo; one line):
+  `decision(<topic>): chose X over Y - <reason <=12 words>; dissent: <<=8 words | none>`
+
+Persist only these three shapes plus the final residual NON-BLOCKING items (S7 defers
+them). Drop everything else.
+<!-- progress-log-format:end -->
+
 ## Pipeline (E1′, E2′, S1–S7)
 
 Legend: **E#** = entry phase (command-specific; `′` = fix variant); **S#** = shared
@@ -214,7 +239,8 @@ spine (common to build & fix).
   (the feedback) → write a **change-spec** appended to the existing spec doc (the
   original spec stays as context). At decision points, convene the expert council (see
   "Deciding at decision points (expert council)") to discuss and decide; record the
-  decision + rationale. (Trivial defaults: decide + record.)
+  decision as the one-line decision shape (see **Progress log format**). (Trivial
+  defaults: decide + record.)
 - **S1 — change-spec review (Ralph loop).** Review the **change-spec** (with the
   original as context), not the original. Panel derived from the change-spec's
   keywords; reviewers read the change-spec doc (as in build's S1). Run the **S1
@@ -296,7 +322,8 @@ re-dispatch only the `(FAILed ∪ touched)` subset · bounded subagent prompts, 
 superpowers skills loaded into reviewers · producer primed by blockers + cited files
 only · expert councils bounded (2–4), convened only at genuine decision points, in one
 parallel batch · workflow transport returns a round's verdicts as one JSON payload
-(reviewer output stays off the main thread).
+(reviewer output stays off the main thread) · progress log is one-line-per-event (see
+**Progress log format**).
 
 ## State & resumption
 
