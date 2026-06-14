@@ -53,35 +53,19 @@ loop. No plan doc → start at E1.
 
 ## Deciding at decision points (expert council)
 
-At a **decision point** the orchestrator **convenes an expert council**: 2–4 **ad-hoc
-expert sub-agents** (personas from the decision's domain), dispatched in **one parallel
-batch** via `superpowers:dispatching-parallel-agents`. Each returns a **concise position**
-(recommendation + rationale + key trade-offs + any dissent). The orchestrator then
-**synthesizes, decides, and records** it as the one-line decision shape (see **Progress
-log format**) in the plan doc's progress section. The orchestrator is the decider; the
-council only informs it.
+When a choice is genuinely in doubt, **convene an expert council** — 2–4 ad-hoc expert
+sub-agents (personas from the decision's domain), in **one parallel batch** via
+`superpowers:dispatching-parallel-agents`, each returning a concise position (recommendation
++ rationale + trade-offs + any dissent). The orchestrator **synthesizes, decides, and
+records** a one-line decision (see **Progress log format**); it is the decider and breaks
+ties.
 
-**Council members are advisors, not reviewers** — recommendations, NOT the
-`VERDICT/BLOCKING/NON-BLOCKING` grammar (that's the review panel). Bounded: 2–4,
-parallel, by-reference, no superpowers skills, concise positions.
-
-**Convene when ANY of:** two or more **viable approaches with materially different
-trade-offs**; the choice **shapes architecture / data model / public interface / scope**;
-**costly to reverse**; a genuine fork a later review loop **might not catch**. Examples:
-"which storage model / API shape / module boundaries?", "reconcile two conflicting
-requirements", "pick between two non-trivial strategies".
-
-**Decide solo + record when:** a **single obvious default** or project convention
-dictates; the choice is **cosmetic / local / easily reversible**; a wrong guess would
-just be **caught by S5**. Examples: "name a variable", "pick a file path under
-convention", "fill an obvious low-stakes default".
-
-**Single-persona fallback:** if a decision admits fewer than two distinct lenses, use a
-smaller council or decide solo with recorded rationale — don't fabricate personas to hit
-a count.
-
-**Dissent / split:** the orchestrator rules and records *why*; a minority position is
-logged "considered, not adopted"; the orchestrator breaks ties (it is the decider).
+**Convene** when the choice has two-plus viable approaches with materially different
+trade-offs, shapes architecture / data model / interface / scope, is costly to reverse, or is
+a fork a later review might miss. **Decide solo** (and record) when an obvious default or
+convention dictates, or it is cosmetic / local / easily reversible (a wrong guess is caught
+by S5). Pay-per-use: fires zero-plus times per run. Fewer than two distinct lenses → smaller
+council or solo; never fabricate personas to hit a count.
 
 ## E3 — expert spec review (one-shot; not a Ralph loop)
 
@@ -118,14 +102,11 @@ argument. This slice is the **entry action of S3**, not its own resumable phase.
 ## Selecting & dispatching the review panel (S5)
 
 - **Select from the script.** Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py"
-  --phase work --worktree <worktree> --base <base_ref>`. It returns JSON with a `selected`
-  list of `{agent, subagent_type, tier, matched}`.
-- **Compose the MINIMAL panel (trimmed path).** Keep it small:
-  - **Pin `correctness` and `requirement-fidelity`** (the floor — the spec-coverage
-    backstop matters more here because the S1 panel was skipped). Both are `core` in the
-    roster today; **keep them pinned even if a future roster change re-tiered either lens.**
-  - Include `doc` **only if docs changed**.
-  - **Drop marginal optionals** unless there is a clear signal — do not pad the panel.
+  --phase work --worktree <worktree> --base <base_ref>` → a `selected` list of
+  `{agent, subagent_type, tier, matched}`. Its `core` lenses (correctness,
+  requirement-fidelity, doc) are the mandatory floor — take them as-is.
+- **Trim, don't pad (the trimmed-path policy).** Drop the `optional` lenses the script
+  returns unless a changed-path signal clearly warrants one; never add beyond what it returns.
 - **Freeze & log** the composed panel to the **plan doc** (progress section) as the
   one-line freeze shape (see **Progress log format**). Reuse it every round of S5.
 - **Dispatch the whole round's panel together** — never one at a time; every S5 round,
@@ -211,24 +192,11 @@ do not proceed.
 <!-- progress-log-format:start -->
 ## Progress log format
 
-The plan doc's progress section is an **audit trail, not a transcript** — one line per
-event, never a re-logged block. Only `review_round` (RESUME block) is load-bearing for
-resume; an interrupted round re-runs the whole frozen panel and regenerates any blocker
-text, so blocker text is transient working state — hold it to prime the fix, never persist
-it to disk.
-
-The five recording sites collapse into three line shapes:
-
-- **Panel freeze** (one line/phase; absorbs the transport record):
-  `S5 panel: core=[correctness,doc,requirement-fidelity] opt+=[code-quality,test] opt-=[security:no-IO] transport=Workflow`
-  (ad-hoc lenses go in `opt+`; note a fallback only if it fired: `transport=Workflow->Task`.)
-- **Each review round** (one line; lens=VERDICT roll-up + blocker COUNT, never blocker text):
-  `S5 r0: correctness=FAIL doc=PASS test=PASS code-quality=PASS -> 2 blockers, fix dispatched`
-- **Each decision** (council or solo; one line):
-  `decision(<topic>): chose X over Y - <reason <=12 words>; dissent: <<=8 words | none>`
-
-Persist only these three shapes plus the final residual NON-BLOCKING items (S7 defers
-them). Drop everything else.
+The plan doc's progress section is a simple one-line-per-event log (audit trail, not a
+transcript): one line each for the panel freeze, every review round (lens=VERDICT roll-up +
+blocker count), and every decision. Only `review_round` (RESUME block) is load-bearing for
+resume; blocker text is transient — hold it to prime the fix, never persist it to disk. Keep
+these plus the final residual NON-BLOCKING items; drop everything else.
 <!-- progress-log-format:end -->
 
 ## Pipeline (E1, E2, E3, S3–S7)
@@ -264,7 +232,7 @@ S6 → S7**.
   or delete a check; a drop in the check count → STOP.
 - **S5 — work review (step 6).** Run the **S5 Ralph loop** (above; **cap = 1**) over the
   work. **Fixes:** ONE fresh producer subagent primed with the deduped open blockers +
-  cited files only. Docs are part of S5 when included: the `doc-reviewer` gates repo-wide
+  cited files only. Docs are always part of S5: the pinned `doc-reviewer` gates repo-wide
   doc currency/concision (stale/missing/contradictory docs = BLOCKING → fixed by the S5
   producer; bloat = NON-BLOCKING). On convergence it records `AUTOPILOT: WORK READY`.
 - **S6 — squash (step 7).** Idempotent squash to one commit (skip if already exactly 1
@@ -310,8 +278,8 @@ Additive only — it changes no phase's behavior.
 ## Token discipline
 
 Thin orchestrator · by-reference dispatch (never pipe diffs into N prompts) · trimmed path =
-fewer phases (no S1/S2) + a **minimal S5 panel** (pin correctness + requirement-fidelity;
-`doc` only on doc changes; drop marginal optionals) + **cap = 1** · round-0 short-circuit ·
+fewer phases (no S1/S2) + a **minimal S5 panel** (pin correctness + requirement-fidelity +
+doc; drop marginal optionals) + **cap = 1** · round-0 short-circuit ·
 re-dispatch only the `(FAILed ∪ touched)` subset · bounded subagent prompts, no superpowers
 skills loaded into reviewers · producer primed by blockers + cited files only · E3 is one
 `general-purpose` spec reviewer (one-shot) · workflow transport returns a

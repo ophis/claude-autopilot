@@ -160,7 +160,7 @@ cap-1** work review. It is a skill (model-invocable / composable) and emits the 
 - **Task list:** a terse ordered 1-line-per-task list written straight into the plan doc (no writing-plans).
 - **S3 — Produce:** subagent-driven from the plan-doc task list.
 - **S4 — Verify:** run the discovered checks.
-- **S5 — Work review:** a minimal panel (pin `correctness` + `requirement-fidelity`; `doc` only if docs changed), **capped at 1** review+fix round.
+- **S5 — Work review:** a minimal panel (pin `correctness` + `requirement-fidelity` + `doc`), **capped at 1** review+fix round.
 - **S6 — Squash → S7 — Finish:** one clean commit + report. **Never merges.**
 
 **No scope gate.** medium-build is a harness, not a gatekeeper — it runs whatever it is
@@ -187,10 +187,10 @@ Its defining trait is **self-containment**: every phase uses a native tool, the 
 own script, or inline logic — it invokes **no `superpowers:*` skill** and runs even if
 superpowers is not installed.
 
-- **E1 — Worktree:** create `autopilot/<slug>` worktree+branch (native `EnterWorktree`); create the plan doc (the requirement recorded verbatim — there is no spec doc).
+- **E1 — Worktree:** create `autopilot/<slug>` worktree+branch (native `EnterWorktree`). **Lazy state:** no spec doc, and no file by default — a minimal state file (the requirement recorded verbatim + a one-line RESUME block) is materialized only at the first compaction-risk boundary; a simple single-shot run writes nothing.
 - **S3 — Produce:** dispatch a producer subagent via plain `Task`. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
 - **S4 — Verify:** run the discovered checks inline.
-- **S5 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` (+ `doc` only if docs changed), `requirement-fidelity` checking the work against the requirement text — **capped at 1** review+fix round. This is the sole correctness gate.
+- **S5 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc`, `requirement-fidelity` checking the work against the requirement text — **capped at 1** review+fix round. This is the sole correctness gate.
 - **S6 — Squash → S7 — Finish:** one clean commit + report. **Never merges.**
 
 **No scope gate.** light-build is a harness, not a gatekeeper — it runs whatever it is

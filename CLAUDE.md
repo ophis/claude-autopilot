@@ -45,7 +45,7 @@ larger skill/workflow); users still type `/autopilot:build` / `/autopilot:fix` /
 roster panel (a single expert reviewer does a one-shot spec review instead), no
 `writing-plans`, and a trimmed S5. `light-build` is the **superpowers-free** surface: a
 self-contained, low-ceremony harness (E1 → S3 → S4 → S5 → S6 → S7) with no spec doc, no
-spec review, no `writing-plans`, and a pinned cap-1 S5 (correctness + requirement-fidelity);
+spec review, no `writing-plans`, a lazy by-exception state model (no mandatory plan doc), and a pinned cap-1 S5 (correctness + requirement-fidelity + doc);
 every phase uses a native tool, the plugin's own script, or inline logic, so it invokes no
 `superpowers:*` skill and has no superpowers preflight. Neither medium-build nor light-build
 gates scope — surface choice is the user's responsibility. When invoked, the
