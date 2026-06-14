@@ -2,6 +2,7 @@
 name: fix
 description: "Use to apply review feedback to the existing autopilot branch: turn the feedback into a change-spec, then plan, implement, verify, review-loop, and re-squash to one review-ready branch (never merges). Pass the feedback text; requires an existing autopilot branch."
 argument-hint: "<feedback>"
+allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, Skill, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite, ScheduleWakeup
 ---
 
 # Autopilot: fix
