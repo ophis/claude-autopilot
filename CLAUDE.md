@@ -83,7 +83,7 @@ product itself. Understanding the system means reading those two skill files plu
 
 - **Disk-backed state.** A run persists a **spec doc** and a **plan doc** (implementation
   plan + a progress section + a `RESUME:` block). The RESUME block
-  (`phase=… worktree=… branch=… base_ref=… ralph_round=…`) lets a run survive
+  (`phase=… worktree=… branch=… base_ref=… review_round=…`) lets a run survive
   compaction and resume from the current phase; an interrupted review round re-runs whole.
 
 - **Built on `superpowers`.** The pipeline orchestrates superpowers skills

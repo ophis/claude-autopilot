@@ -7,8 +7,7 @@ argument-hint: "<feedback>"
 # Autopilot: fix
 
 You are the orchestrator for an autonomous feedback round on an existing autopilot
-branch. Drive the pipeline below end to end. Dispatch and judge; do not do the work
-yourself.
+branch. Drive the pipeline below end to end. Dispatch and judge.
 
 ## Your input ($ARGUMENTS)
 
@@ -21,15 +20,11 @@ handoff asking for feedback.
 **Load config (run first, every run):** run `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config. Note the per-phase caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` for the S1/S5 Ralph loop. User edits to that file take effect on the next run.
 
 Before E1′, confirm the **superpowers** plugin is available — its skills must appear
-in your skill list (brainstorming, writing-plans, subagent-driven-development,
-verification-before-completion, finishing-a-development-branch,
-dispatching-parallel-agents). This whole pipeline is built on them, and Claude Code
-has no plugin auto-dependency mechanism, so this preflight is the safety net.
+in your skill list. This whole pipeline is built on them, so this preflight is the safety net.
 
-If superpowers is **not** available, STOP with a handoff (not a question): tell the
+If it is **not** available, STOP with a handoff: tell the
 user it is required and how to install it —
 `/plugin install superpowers@claude-plugins-official` — and to re-run `/autopilot:fix` after.
-(`planning-with-files` is optional.)
 
 ## Operating disciplines
 
@@ -95,13 +90,13 @@ decider).
 ## Selecting & dispatching the review panel
 
 The S1/S5 panels are **selected by script** from the installed roster, then composed
-and dispatched natively. Requires the installed plugin **≥0.3.0** (ships `agents/`).
+and dispatched natively.
 
 - **Select.** Run the selector for the phase:
   - S1 → `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py" --phase spec --spec-file <change-spec doc>`
   - S5 → `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py" --phase work --worktree <worktree> --base <base_ref>`
   It returns JSON with a `selected` list of `{agent, subagent_type, tier, matched}`.
-- **Compose the panel:** ALL returned `core` agents (mandatory floor) + the
+- **Compose the panel:** ALL returned `core` agents (mandatory) + the
   `optional` agents the orchestrator judges relevant (it may drop a marginal
   optional) + any **ad-hoc** inline lens for a genuine gap no roster agent covers.
 - **Freeze & log** the composed panel to the **plan doc** (progress section): which core (all), which
@@ -154,7 +149,7 @@ per-phase cap (default 3 rounds). The orchestrator drives the loop natively.
 
 **Config (loaded in Preflight):** from `${CLAUDE_PLUGIN_DATA}/config.json` →
 `{ "ralphLoop": { "maxIterations": { "spec-phase": 3, "implementation-phase": 3 } } }`.
-`ralphLoop.maxIterations.spec-phase` / `.implementation-phase` is the per-phase round cap (default 3). (`ralphLoop.enabled`, the old `ralph-loop`-plugin driver toggle, is deprecated and ignored.)
+`ralphLoop.maxIterations.spec-phase` / `.implementation-phase` is the per-phase round cap (default 3).
 
 - **The native loop.** The orchestrator runs the rounds
   itself; each round's members go out **together via the transport rule** (one
@@ -296,13 +291,13 @@ Persist two things so the run survives compaction: the brainstormed
 **change-spec** and the **plan doc** (implementation plan + progress section, carrying a small RESUME block):
 
 ```
-RESUME: phase=<E1'|E2'|S1..S7> worktree=<path> branch=<name> base_ref=<sha> ralph_round=<n> pre_squash_head=<sha>
+RESUME: phase=<E1'|E2'|S1..S7> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> pre_squash_head=<sha>
 ```
 
 (`pre_squash_head` is recorded once **S6** runs, so an interrupted re-squash is detected
 on resume.)
 
-**Keep RESUME current:** rewrite the RESUME block at every phase transition — update `phase=` as you advance (E1′→E2′→S1…→S7), `ralph_round=` each loop iteration, and `pre_squash_head=` once the squash runs; the resume contract depends on RESUME reflecting the true current phase, and a stale `phase=` breaks resumption.
+**Keep RESUME current:** rewrite the RESUME block at every phase transition — update `phase=` as you advance (E1′→E2′→S1…→S7), `review_round=` each loop iteration, and `pre_squash_head=` once the squash runs; the resume contract depends on RESUME reflecting the true current phase, and a stale `phase=` breaks resumption.
 
 **Where these live follows the user's / project's existing convention** —
 honor CLAUDE.md preferences and existing repo patterns. The command imposes no fixed
@@ -310,5 +305,5 @@ path (do not assume `dev-docs/`) and no gitignore-vs-commit policy.
 
 **Resume contract:** on resume, reconcile worktree/branch/base_ref existence first,
 then continue from `phase`; an interrupted review round is re-run from scratch
-(re-dispatch the whole frozen panel — bounded, idempotent), so only `ralph_round`
+(re-dispatch the whole frozen panel — bounded, idempotent), so only `review_round`
 need be persisted to locate the loop.

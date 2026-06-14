@@ -7,18 +7,17 @@ argument-hint: "<requirements>"
 # Autopilot: build
 
 You are the orchestrator for an autonomous build run. Drive the pipeline below end
-to end. Dispatch and judge; do not do the work yourself.
+to end. Dispatch and judge.
 
 ## Your input ($ARGUMENTS)
 
 `$ARGUMENTS` is the single source of intent and has two modes:
 
-- **Requirements mode (default):** free-text requirements → full pipeline (E1 → E2
-  brainstorm → S1 spec-review → S2 → …).
-- **Spec-file mode:** if `$ARGUMENTS` (trimmed) is a path to an **existing readable
-  file** (a spec the user already wrote), adopt it as the run's spec and **skip E2 and
+- **Requirements mode (default):** free-text requirements → full pipeline (E1 → E2 → S1 → S2 → …).
+- **Spec-file mode:** if `$ARGUMENTS` (trimmed) is a path to an **existing readable spec
+  file**, adopt it as the run's spec and **skip E2 and
   S1** (run E1 → S2 → …). If it is NOT an existing file, treat it as requirements text
-  (normal mode), so a typo'd path safely falls back. The provided spec must be
+  (normal mode). The provided spec must be
   **self-contained** — clear enough to plan, implement, and verify without further
   clarification (ideally states acceptance/verification criteria).
 
@@ -29,15 +28,11 @@ If it is empty, STOP with a handoff asking for requirements.
 **Load config (run first, every run):** run `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config. Note the per-phase caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` for the S1/S5 Ralph loop. User edits to that file take effect on the next run.
 
 Before E1, confirm the **superpowers** plugin is available — its skills must appear
-in your skill list (brainstorming, writing-plans, subagent-driven-development,
-using-git-worktrees, verification-before-completion, finishing-a-development-branch,
-dispatching-parallel-agents). This whole pipeline is built on them, and Claude Code
-has no plugin auto-dependency mechanism, so this preflight is the safety net.
+in your skill list. This whole pipeline is built on them, so this preflight is the safety net.
 
-If superpowers is **not** available, STOP with a handoff (not a question): tell the
+If it is **not** available, STOP with a handoff: tell the
 user it is required and how to install it —
 `/plugin install superpowers@claude-plugins-official` — and to re-run `/autopilot:build` after.
-(`planning-with-files` is optional.)
 
 ## Operating disciplines
 
@@ -61,7 +56,7 @@ Before anything else, look for an existing **plan doc** with a RESUME block in t
 project's convention location. If found: reconcile worktree/branch/base_ref
 existence on disk, then continue from `phase`. An interrupted review round is
 **re-run from scratch** (re-dispatch the whole frozen panel — bounded and
-idempotent), so trust only `ralph_round` for loop position. If no plan doc
+idempotent), so trust only `review_round` for loop position. If no plan doc
 exists, start at E1.
 
 ## Deciding at decision points (expert council)
@@ -108,7 +103,7 @@ decider).
   --phase spec --spec-file <spec doc>` for S1, and `... --phase work --worktree <worktree>
   --base <base_ref>` for S5. It returns JSON: a `selected` list, each entry
   `{agent, subagent_type, tier, matched}`.
-- **Compose the panel:** run ALL returned `core` agents (mandatory floor — never skip
+- **Compose the panel:** run ALL returned `core` agents (mandatory — never skip
   a core); include the `optional` agents the orchestrator judges relevant (may drop a
   marginal optional); and you MAY add ad-hoc inline lenses for a genuine gap no roster
   agent covers.
@@ -140,8 +135,6 @@ decider).
     the run. Record the transport (and any fallback) in the plan doc.
 - Each reviewer returns the verdict block; collect verdicts → the Ralph loop (unchanged).
 
-Requires the installed plugin to ship the roster (≥0.3.0).
-
 ## Verdict grammar (paste into ad-hoc summon prompts only — roster agents already embed it)
 
 ```
@@ -163,7 +156,7 @@ per-phase cap (default 3 rounds). The orchestrator drives the loop natively.
 
 **Config (loaded in Preflight):** from `${CLAUDE_PLUGIN_DATA}/config.json` →
 `{ "ralphLoop": { "maxIterations": { "spec-phase": 3, "implementation-phase": 3 } } }`.
-`ralphLoop.maxIterations.spec-phase` / `.implementation-phase` is the per-phase round cap (default 3). (`ralphLoop.enabled`, the old `ralph-loop`-plugin driver toggle, is deprecated and ignored.)
+`ralphLoop.maxIterations.spec-phase` / `.implementation-phase` is the per-phase round cap (default 3).
 
 - **The native loop.** The orchestrator runs the rounds
   itself; each round's members go out **together via the transport rule** (one
@@ -305,12 +298,12 @@ plan doc (its progress section); S2 fills the implementation-plan section), and 
 **plan doc** (implementation plan + progress section, carrying the RESUME block):
 
 ```
-RESUME: phase=<E1|E2|S1..S7> worktree=<path> branch=<name> base_ref=<sha> ralph_round=<n> spec_file=<path>
+RESUME: phase=<E1|E2|S1..S7> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> spec_file=<path>
 ```
 
 (`spec_file` is present only in spec-file mode.)
 
-**Keep RESUME current:** rewrite the RESUME block at every phase transition — update `phase=` as you advance (E1→E2→S1…→S7; spec-file mode advances E1→S2) and `ralph_round=` each loop iteration; the resume contract depends on RESUME reflecting the true current phase, and a stale `phase=` breaks resumption.
+**Keep RESUME current:** rewrite the RESUME block at every phase transition — update `phase=` as you advance (E1→E2→S1…→S7; spec-file mode advances E1→S2) and `review_round=` each loop iteration; the resume contract depends on RESUME reflecting the true current phase, and a stale `phase=` breaks resumption.
 
 **Where these live follows the user's / project's existing convention** — honor
 CLAUDE.md preferences and existing repo patterns. The command imposes no fixed path
@@ -318,5 +311,5 @@ CLAUDE.md preferences and existing repo patterns. The command imposes no fixed p
 
 **Resume contract:** on resume, reconcile worktree/branch existence first, then
 continue from `phase`; an interrupted review round is re-run from scratch
-(re-dispatch the whole frozen panel — bounded, idempotent), so only `ralph_round`
+(re-dispatch the whole frozen panel — bounded, idempotent), so only `review_round`
 need be persisted to locate the loop.
