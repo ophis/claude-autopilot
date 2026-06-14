@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 Claude Autopilot is a **Claude Code plugin** that packages an autonomous
-build / fix / medium-build pipeline driven by a committed roster of named review agents. The git repo **is both
+build / fix / medium-build / light-build pipeline driven by a committed roster of named
+review agents. The git repo **is both
 the marketplace and the plugin** (`.claude-plugin/marketplace.json` points its single
 plugin entry at `source: "./"`). The "product" is the plugin's prompts/agents/scripts,
 not an application — there is nothing to compile or run as a server.
@@ -35,16 +36,22 @@ so they're not importable — the CLI is the contract).
 
 ## Architecture (the big picture)
 
-The three surfaces — `skills/build/SKILL.md`, `skills/fix/SKILL.md`, and
-`skills/medium-build/SKILL.md` — are **orchestrator prompts**, not code. They are
-**skills** (model-invocable, so composable as a step inside a larger skill/workflow);
-users still type `/autopilot:build` / `/autopilot:fix` / `/autopilot:medium-build`.
-`medium-build` is a sibling orchestrator for small reversible changes: same S-spine
-concept on a trimmed path — no S1 roster panel (a single expert reviewer does a one-shot
-spec review instead), no `writing-plans`, and a trimmed S5. When invoked, the
+The four surfaces — `skills/build/SKILL.md`, `skills/fix/SKILL.md`,
+`skills/medium-build/SKILL.md`, and `skills/light-build/SKILL.md` — are **orchestrator
+prompts**, not code. They are **skills** (model-invocable, so composable as a step inside a
+larger skill/workflow); users still type `/autopilot:build` / `/autopilot:fix` /
+`/autopilot:medium-build` / `/autopilot:light-build`.
+`medium-build` is a sibling orchestrator on a trimmed path — same S-spine concept but no S1
+roster panel (a single expert reviewer does a one-shot spec review instead), no
+`writing-plans`, and a trimmed S5. `light-build` is the **superpowers-free** surface: a
+self-contained, low-ceremony harness (E1 → S3 → S4 → S5 → S6 → S7) with no spec doc, no
+spec review, no `writing-plans`, and a pinned cap-1 S5 (correctness + requirement-fidelity);
+every phase uses a native tool, the plugin's own script, or inline logic, so it invokes no
+`superpowers:*` skill and has no superpowers preflight. Neither medium-build nor light-build
+gates scope — surface choice is the user's responsibility. When invoked, the
 *main-session Claude becomes a thin orchestrator*: it dispatches subagents and judges
 their structured output, and never edits the work product itself. Understanding the
-system means reading those three skill files plus `agents/` and `scripts/` together:
+system means reading those four skill files plus `agents/` and `scripts/` together:
 
 - **Shared spine.** Both commands run entry phases (`build`: E1 worktree, E2
   brainstorm; `fix`: E1′ locate branch, E2′ brainstorm feedback) then a common
@@ -93,12 +100,14 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
   (`phase=… worktree=… branch=… base_ref=… review_round=…`) lets a run survive
   compaction and resume from the current phase; an interrupted review round re-runs whole.
 
-- **Built on `superpowers`.** The pipeline orchestrates superpowers skills
-  (brainstorming, writing-plans, subagent-driven-development, using-git-worktrees,
+- **Built on `superpowers`.** `build` / `fix` / `medium-build` orchestrate superpowers
+  skills (brainstorming, writing-plans, subagent-driven-development, using-git-worktrees,
   verification-before-completion, finishing-a-development-branch,
-  dispatching-parallel-agents). It is a **hard dependency** — the commands preflight for
-  it and hand off install instructions if missing. There is no plugin auto-dependency
-  mechanism, so dependencies are documented in `README.md`, not declared.
+  dispatching-parallel-agents). For those three surfaces it is a **hard dependency** —
+  they preflight for it and hand off install instructions if missing. `light-build` is
+  the exception: it is self-contained, invokes no `superpowers:*` skill, and has no
+  superpowers preflight. There is no plugin auto-dependency mechanism, so dependencies
+  are documented in `README.md`, not declared.
 
 ## Conventions & gotchas (non-obvious, learned the hard way)
 
@@ -110,9 +119,10 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
   plugin.** After adding/renaming an agent, the new `subagent_type` resolves only once
   the plugin is reloaded/updated — a fresh agent can't be dispatched natively in the
   same run that creates it (dispatch it ad-hoc via `general-purpose` until shipped).
-  The same applies to the `skills/build` + `skills/fix` + `skills/medium-build` skills:
-  edits to a `SKILL.md` (and `/autopilot:build` / `/autopilot:fix` /
-  `/autopilot:medium-build` by-name invocability) go live only after `/reload-plugins`.
+  The same applies to the `skills/build` + `skills/fix` + `skills/medium-build` +
+  `skills/light-build` skills: edits to a `SKILL.md` (and `/autopilot:build` /
+  `/autopilot:fix` / `/autopilot:medium-build` / `/autopilot:light-build` by-name
+  invocability) go live only after `/reload-plugins`.
 - **`SPEC.md` and `dev-docs/` are gitignored** (local design doc + per-build audit
   trail `dev-docs/<date>-<slug>-{spec,plan}.md`). `SPEC.md` is the design source of
   truth but isn't shipped; keep it synced locally but don't reference it from

@@ -1,40 +1,21 @@
 ---
 name: medium-build
-description: "Use to build a SMALL, REVERSIBLE change end to end on the trimmed path: create an isolated worktree, write a spec, one-shot expert spec review, slice a terse task list, implement, verify, and a trimmed work-review loop to a single review-ready branch (never merges). For bigger or higher-blast-radius work, use /autopilot:build. Pass the requirement text."
+description: "Use to build a change end to end on the trimmed path: create an isolated worktree, write a spec, one-shot expert spec review, slice a terse task list, implement, verify, and a trimmed work-review loop to a single review-ready branch (never merges). Pass the requirement text."
 argument-hint: "<requirements>"
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, Skill, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite, ScheduleWakeup
+allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, Skill, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite
 ---
 
 # Autopilot: medium-build
 
-You are the orchestrator for an autonomous **medium-build** run — the trimmed path for
-**small, reversible changes**. Drive the pipeline below end to end: dispatch and judge.
-It is `build` with a shorter spine: no S1 roster panel, no writing-plans; a single expert
-reviewer serves as a one-shot spec review (E3), and S5 is a minimal capped loop.
+You are the orchestrator for an autonomous **medium-build** run — the **trimmed path**.
+Drive the pipeline below end to end: dispatch and judge. It is `build` with a shorter spine:
+no S1 roster panel, no writing-plans; a single expert reviewer serves as a one-shot spec
+review (E3), and S5 is a minimal capped loop.
 
 ## Your input ($ARGUMENTS)
 
 `$ARGUMENTS` is the single source of intent: free-text requirements for a small change.
 Empty input → STOP with a handoff asking for requirements.
-
-## Scope gate (medium-build applies only to small, reversible changes)
-
-medium-build is for changes that are **small and reversible**: roughly **≤1–2 files**, and
-**no new public interface, dependency, data migration, or security surface**. If the
-change is bigger, or its blast radius is uncertain, **STOP with a handoff: use
-`/autopilot:build` instead** (a handoff, never a question — when in doubt, escalate).
-
-Two gate points:
-
-- **Cheap pre-E1 check (advisory).** Before creating any worktree, eyeball `$ARGUMENTS`.
-  If it is *obviously* out of scope (asks for a new service, a schema migration, a new
-  dependency, a security/auth surface, or sprawls across many files), short-circuit now
-  with the out-of-scope handoff — no worktree wasted. Ambiguous-but-plausible → proceed;
-  the post-E2 gate is authoritative.
-- **Authoritative post-E2 gate.** Judge the **written spec** against the scope rule above.
-  In scope → proceed to E3. Out of scope → STOP and hand off to `/autopilot:build` (emit
-  the **Result handoff** block, `status`=`stopped`, `reason`=`out-of-scope`, with the
-  one-line reason a human/resumed run needs).
 
 ## Preflight (dependencies)
 
@@ -86,10 +67,9 @@ parallel, by-reference, no superpowers skills, concise positions.
 
 **Convene when ANY of:** two or more **viable approaches with materially different
 trade-offs**; the choice **shapes architecture / data model / public interface / scope**;
-**costly to reverse**; a genuine fork a later review loop **might not catch**. (For a
-medium-build, such a fork is itself a scope smell — weigh whether the change still belongs
-on the trimmed path.) Examples: "which storage model / API shape / module boundaries?",
-"reconcile two conflicting requirements", "pick between two non-trivial strategies".
+**costly to reverse**; a genuine fork a later review loop **might not catch**. Examples:
+"which storage model / API shape / module boundaries?", "reconcile two conflicting
+requirements", "pick between two non-trivial strategies".
 
 **Decide solo + record when:** a **single obvious default** or project convention
 dictates; the choice is **cosmetic / local / easily reversible**; a wrong guess would
@@ -113,8 +93,8 @@ a single reviewer pass. It is **ONE-SHOT: not a Ralph loop, with no convergence 
   completeness / approach. It returns a **concise position (advice)** — **NOT** the
   `VERDICT/BLOCKING/NON-BLOCKING` grammar (that grammar belongs to the S5 review panel
   only). One reviewer is the light-path default; this is the spec check, not a deliberation.
-  (Only if the spec presents a genuine fork with materially different trade-offs — itself a
-  scope smell on this path — escalate to a small council per "Deciding at decision points".)
+  (Only if the spec presents a genuine fork with materially different trade-offs, escalate
+  to a small council per "Deciding at decision points".)
 - The orchestrator **synthesizes** the position, **revises the spec once** (edit the spec
   doc directly), and **records the one-line decision** (see **Progress log format**). Then
   it **proceeds** — there is **no `AUTOPILOT: SPEC READY` marker**, no second pass.
@@ -262,13 +242,11 @@ S6 → S7**.
   collapsed/trimmed, truncated to ~40 chars. Record worktree/branch/base_ref (HEAD) in the
   RESUME block; create the **plan doc** (RESUME + progress section) per the project's
   convention. On worktree/branch collision: one retry with a uniquified slug (`-2`, …),
-  else STOP. (Run the cheap pre-E1 scope check on `$ARGUMENTS` before this step.)
+  else STOP.
 - **E2 — brainstorm (step 2).** Use `superpowers:brainstorming` on `$ARGUMENTS` → write the
   spec into the spec doc (spec + inline self-review: placeholder / consistency / scope /
   ambiguity). At decision points, convene the expert council; record the decision (see
-  **Progress log format**; trivial defaults: decide + record). **Then apply the
-  authoritative scope gate** to the written spec — out of scope → STOP, hand off to
-  `/autopilot:build`.
+  **Progress log format**; trivial defaults: decide + record).
 - **E3 — expert spec review (step 3).** Run the **one-shot spec review** (see "E3 — expert
   spec review" above): dispatch ONE `general-purpose` expert reviewer, synthesize, revise
   the spec once, record the one-line decision, proceed. **Not a Ralph loop, no marker.**
@@ -312,23 +290,20 @@ ends by emitting the **Result handoff** block (`status`=`stopped`, or
 4. **Root-contradiction** — the core requirement is self-contradictory; cite the two
    clauses.
 
-(The scope-gate handoff to `/autopilot:build` is an ordinary STOP handoff, not a fifth
-safety case — `status`=`stopped`, `reason`=`out-of-scope`.)
-
 ## Result handoff (always emit last)
 
-On **every** terminal path — S7 finish AND any safety-stop / scope-gate handoff — emit as
-the final output exactly one fenced `autopilot-result` block (one JSON object) so a calling
+On **every** terminal path — S7 finish AND any safety-stop handoff — emit as the final
+output exactly one fenced `autopilot-result` block (one JSON object) so a calling
 skill/workflow consumes the outcome without parsing prose:
 
 ```autopilot-result
 { "status": "converged", "branch": "autopilot/<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
 ```
 
-- `status` — `converged` (reached S7) | `capped-without-pass` (the S5 loop hit its cap) | `stopped` (any other safety stop, incl. out-of-scope).
+- `status` — `converged` (reached S7) | `capped-without-pass` (the S5 loop hit its cap) | `stopped` (any other safety stop).
 - `branch` / `base_ref` / `head` — branch name, its base SHA, its final commit SHA (`head` = `base_ref` if nothing was produced).
 - `blockers` — residual open BLOCKING items (strings) when `status != converged`, else `[]`.
-- `reason` — empty when converged; else classification + detail (cap → oscillation | unfixable | requirements-conflict; stop → root-contradiction | phase-failure | destructive-op | out-of-scope).
+- `reason` — empty when converged; else classification + detail (cap → oscillation | unfixable | requirements-conflict; stop → root-contradiction | phase-failure | destructive-op).
 
 Additive only — it changes no phase's behavior.
 
