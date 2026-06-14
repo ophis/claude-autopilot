@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Claude Autopilot is a **Claude Code plugin** that packages an autonomous build/fix
-pipeline driven by a committed roster of named review agents. The git repo **is both
+Claude Autopilot is a **Claude Code plugin** that packages an autonomous
+build / fix / light-build pipeline driven by a committed roster of named review agents. The git repo **is both
 the marketplace and the plugin** (`.claude-plugin/marketplace.json` points its single
 plugin entry at `source: "./"`). The "product" is the plugin's prompts/agents/scripts,
 not an application — there is nothing to compile or run as a server.
@@ -35,13 +35,16 @@ so they're not importable — the CLI is the contract).
 
 ## Architecture (the big picture)
 
-The two surfaces — `skills/build/SKILL.md` and `skills/fix/SKILL.md` — are
-**orchestrator prompts**, not code. They are **skills** (model-invocable, so composable
-as a step inside a larger skill/workflow); users still type `/autopilot:build` /
-`/autopilot:fix`. When invoked, the *main-session Claude becomes a thin orchestrator*:
-it dispatches subagents and judges their structured output, and never edits the work
-product itself. Understanding the system means reading those two skill files plus
-`agents/` and `scripts/` together:
+The three surfaces — `skills/build/SKILL.md`, `skills/fix/SKILL.md`, and
+`skills/light-build/SKILL.md` — are **orchestrator prompts**, not code. They are
+**skills** (model-invocable, so composable as a step inside a larger skill/workflow);
+users still type `/autopilot:build` / `/autopilot:fix` / `/autopilot:light-build`.
+`light-build` is a sibling orchestrator for small reversible changes: same S-spine
+concept on a trimmed light path — no S1 roster panel (an expert council does a one-shot
+spec review instead), no `writing-plans`, and a trimmed S5. When invoked, the
+*main-session Claude becomes a thin orchestrator*: it dispatches subagents and judges
+their structured output, and never edits the work product itself. Understanding the
+system means reading those three skill files plus `agents/` and `scripts/` together:
 
 - **Shared spine.** Both commands run entry phases (`build`: E1 worktree, E2
   brainstorm; `fix`: E1′ locate branch, E2′ brainstorm feedback) then a common
@@ -107,9 +110,9 @@ product itself. Understanding the system means reading those two skill files plu
   plugin.** After adding/renaming an agent, the new `subagent_type` resolves only once
   the plugin is reloaded/updated — a fresh agent can't be dispatched natively in the
   same run that creates it (dispatch it ad-hoc via `general-purpose` until shipped).
-  The same applies to the `skills/build` + `skills/fix` skills: edits to a `SKILL.md`
-  (and `/autopilot:build` / `/autopilot:fix` by-name invocability) go live only after
-  `/reload-plugins`.
+  The same applies to the `skills/build` + `skills/fix` + `skills/light-build` skills:
+  edits to a `SKILL.md` (and `/autopilot:build` / `/autopilot:fix` /
+  `/autopilot:light-build` by-name invocability) go live only after `/reload-plugins`.
 - **`SPEC.md` and `dev-docs/` are gitignored** (local design doc + per-build audit
   trail `dev-docs/<date>-<slug>-{spec,plan}.md`). `SPEC.md` is the design source of
   truth but isn't shipped; keep it synced locally but don't reference it from
