@@ -49,7 +49,7 @@ handoff asking for requirements.
 **On start, resume first.** Look for an existing **state file** with a RESUME block in the
 project's convention location. If found: reconcile worktree/branch/base_ref existence on
 disk, then continue from `phase`. An interrupted S5 review round is **re-run from scratch**
-(re-dispatch the whole frozen panel — bounded, idempotent), so only `review_round` need be
+(re-dispatch the whole frozen panel — bounded), only `review_round` need be
 persisted to locate the loop. **No state file → start at E1** — a straight-through run may
 never have materialized one, so an interrupted simple run re-runs from scratch (bounded,
 idempotent; E1 reuses the existing worktree).
@@ -67,7 +67,7 @@ RESUME: phase=<E1|S3|S4|S5|S6|S7> worktree=<path> branch=<name> base_ref=<sha> r
 ```
 
 **Location follows the user's / project's convention** — honor CLAUDE.md and existing repo
-patterns; no fixed path, no gitignore-vs-commit policy.
+patterns.
 
 ## Deciding at decision points (expert council)
 
@@ -128,12 +128,11 @@ loop itself, dispatching each round through the one-round transport `review-roun
   shapes**); reuse it every round.
 - **Dispatch each round together** — never one at a time, the re-review included. Build each
   member's run-input prompt once — "PHASE=work. Inputs: worktree=…, base_ref=…, requirement=…,
-  focus=…. Output ONLY the verdict, no prose." (absolute paths; reviewers read the worktree,
+  focus=…. Output ONLY the verdict, no extra prose." (absolute paths; reviewers read the worktree,
   never main) — the identical prompt rides whichever transport carries it:
   - **Workflow transport (preferred):** one call per round —
     `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`,
-    `args` a real JSON object. Members keep their own model + read-only allowlist (`agentType`
-    resolves like `Task`). The call returns a task ID; the round's verdicts arrive in its
+    `args` is a real JSON object. The call returns a task ID; the round's verdicts arrive in its
     completion notification as `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING,
     synthetic}, …]}` — wait for it (never poll/judge early). `synthetic: true` = that member's
     infra failure, not a FAIL: re-dispatch just those lenses once via `Task`; still nothing →
@@ -193,10 +192,8 @@ writing-plans.
   multi-step work, **materialize the state file** with a terse 1-line-per-task list. A
   producer may commit its work; the S6 squash folds its commits. The orchestrator never edits
   the work product itself.
-- **S4 — verify (step 3).** Run the discovered checks **inline via `Bash`** (no skill;
-  for THIS plugin = `claude plugin validate` + `python3 tests/test_scripts.py` + the
-  documented manual smoke). Cap fixes at **3**. **Never weaken, skip, or delete a check; a
-  drop in the check count → STOP** (non-review phase failure). Idempotent — re-running is safe.
+- **S4 — verify (step 3).** Run the discovered checks **inline via `Bash`** (no skill).
+  **Never weaken, skip, or delete a check.** Idempotent — re-running is safe.
 - **S5 — work review (step 4).** Run the **S5 review** above (**cap = 1**) over the work: pin
   `correctness` + `requirement-fidelity` + `doc`, then run the in-session loop — each round
   dispatched via `review-round.js` (Workflow; parallel-`Task` fallback). The orchestrator owns

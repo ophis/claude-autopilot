@@ -1,21 +1,3 @@
-// Claude Autopilot review-round transport (a Dynamic Workflows script).
-//
-// Dumb transport for ONE review round: the orchestrator computes the panel and
-// builds each member's exact run-input prompt; this script only fans the members
-// out in parallel and returns schema-validated verdicts. It owns no review
-// logic: the PASS demotion below is defense-in-depth at the transport edge —
-// the orchestrator's verdict judgment (advance only when every lens is PASS
-// with no open BLOCKING) remains authoritative.
-//
-// Runtime contract: plain JS with no module dependencies — agent(), parallel(),
-// phase(), log(), and the input value `args` are globals provided by the
-// workflow runtime. No filesystem, environment, network, or clock/randomness
-// APIs are available or used; `args` is the script's only input — this object OR its
-// JSON string form (a tool boundary may stringify it; the tail parses it back):
-//   { phase: "spec"|"work", members: [{ agent, subagent_type, prompt }, ...] }
-// Return value (always — the script never throws):
-//   { phase, verdicts: [{ agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic }, ...] }
-// with exactly one entry per member, in member order.
 export const meta = {
   name: 'autopilot-review-round',
   description: 'Dispatch one autopilot review round and return schema-validated verdicts',

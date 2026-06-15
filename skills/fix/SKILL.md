@@ -18,11 +18,10 @@ feedback.
 
 ## Preflight (dependencies)
 
-**Load config:** `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`.
-
-Before E1′, confirm **superpowers** plugin is available. If **not** available, STOP with a
-handoff: it's required, install via
-`/plugin install superpowers@claude-plugins-official`, then re-run `/autopilot:fix`.
+- **Load config:** `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`.
+- Before E1′, confirm **superpowers** plugin is available. If **not** available, STOP with a
+  handoff: superpowers required, install via `/plugin install superpowers@claude-plugins-official`,
+  then re-run `/autopilot:fix`.
 
 ## Operating disciplines
 
@@ -48,7 +47,7 @@ handoff: it's required, install via
 **On start, resume first.** Look for an existing **plan doc** with a RESUME block in the
 project's convention location. If found: reconcile worktree/branch/base_ref existence on
 disk, then continue from `phase`. An interrupted review round is **re-run from scratch**
-(re-dispatch the whole frozen panel — bounded, idempotent), so only `review_round` need be
+(re-dispatch the whole frozen panel — bounded), only `review_round` need be
 persisted to locate the loop. **If none, that is the normal first run → go to E1′ (locate);
 never create a branch.**
 
@@ -63,8 +62,7 @@ RESUME: phase=<E1'|E2'|S1..S7> worktree=<path> branch=<name> base_ref=<sha> revi
 resume.) **Keep RESUME current:** rewrite it at every phase transition — `phase=` as you
 advance (E1′→E2′→S1…→S7), `review_round=` each loop iteration, and `pre_squash_head=` once the
 squash runs; a stale `phase=` breaks resumption. **Location follows the user's / project's
-convention** — honor CLAUDE.md and existing repo patterns; no fixed path (don't assume
-`dev-docs/`), no gitignore-vs-commit policy.
+convention** — honor CLAUDE.md and existing repo patterns.
 
 ## Deciding at decision points (expert council)
 
@@ -88,13 +86,12 @@ convention** — honor CLAUDE.md and existing repo patterns; no fixed path (don'
   freeze shape (see **Progress log format**); reuse it every round of that phase.
 - **Dispatch the whole round together** — never one at a time, re-reviews included. Build
   each member's run-input prompt once — "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…,
-  spec_doc=…, plan_doc=…, requirement=…, focus=…. Output ONLY the verdict, no prose."
+  spec_doc=…, plan_doc=…, requirement=…, focus=…. Output ONLY the verdict, no extra prose."
   (absolute paths; reviewers read the worktree, never main) — the identical prompt rides
   whichever transport carries it:
-  - **Workflow transport (preferred; roster and ad-hoc members):** one call per round —
+  - **Workflow transport (preferred):** one call per round —
     `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "<spec|work>", members: [{agent, subagent_type, prompt}, …]}})`,
-    `args` a real JSON object (it tolerates a stringified one; don't rely on it). Members keep
-    their own model + read-only allowlist (`agentType` resolves like `Task`). The call returns
+    `args` is a real JSON object (it tolerates a stringified one; don't rely on it). The call returns
     a task ID; the round's verdicts arrive in its completion notification as `{phase, verdicts:
     [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` — wait for it (never poll/judge
     early). Never pass `resumeFromRunId` — every round is a fresh run. `synthetic: true` = that
@@ -124,13 +121,15 @@ converged.
 - **The loop.** The orchestrator runs the rounds itself, logging each as one line (see
   **Progress log format**).
 - **Round 0** = full frozen panel; all-PASS short-circuits.
-- **Re-review (N>0)** dispatches only **`(FAILed ∪ touched) ∩ frozen panel`** — *FAILed* =
-  last verdict FAIL/missing; *touched* (S5) = lenses whose `applies_to` matches the fix's
-  changed files (record the **pre-fix HEAD**, re-run `select-panel.py --phase work
-  --worktree <worktree> --base <pre-fix HEAD>`; cores always match). Ad-hoc lenses re-run iff FAILed; S1 stays full-panel
-  (its fixes edit the spec). Skipped lenses carry their PASS; `∪ touched` re-checks what a
-  fix might regress.
-- **Advance** when every frozen-panel lens is PASS with no open BLOCKING → marker → proceed
+- **Re-review (N>0):**
+  - S1 stays full-panel.
+  - S5 dispatches only **`(FAILed ∪ touched) ∩ frozen panel`** — *FAILed* = last verdict
+    FAIL/missing; *touched* = lenses whose `applies_to` matches the fix's changed files
+    (record the **pre-fix HEAD**, re-run `select-panel.py --phase work --worktree <worktree>
+    --base <pre-fix HEAD>`; cores always match). Skipped lenses carry their PASS; `∪ touched`
+    re-checks what a fix might regress.
+  - Ad-hoc lenses re-run iff FAILed.
+- **Advance** when every lens in the round is PASS with no open BLOCKING → marker → proceed
   (S1→S2, S5→S6). Cap hit without the marker → non-convergence STOP (oscillation | unfixable
   | requirements-conflict) + handoff.
 
@@ -154,16 +153,15 @@ Convergence is decided from these on-disk verdicts, never from vibes.
 ## Progress log format
 
 The plan doc's progress section is a simple one-line-per-event log (audit trail, not a
-transcript): one line each for the panel freeze, every review round (lens=VERDICT roll-up +
-blocker count), and every decision. Only `review_round` (RESUME block) is load-bearing for
-resume; blocker text is transient — hold it to prime the fix, never persist it to disk. Keep
-these plus the final residual NON-BLOCKING items; drop everything else.
+transcript): one line each for the panel freeze, every review round (VERDICT roll-up +
+blocker), and every decision. Only `review_round` (RESUME block) is load-bearing for
+resume. Keep these plus the final residual NON-BLOCKING items.
 <!-- progress-log-format:end -->
 
 ## Pipeline (E1′, E2′, S1–S7)
 
 Legend: **E#** = entry phase (command-specific; `′` = fix variant); **S#** = shared
-spine (common to build & fix).
+spine.
 
 - **E1′ — locate the existing branch (no new worktree).** Find the target autopilot
   branch: read the project's **plan doc** (RESUME block) if present; else the most recent
@@ -199,9 +197,7 @@ spine (common to build & fix).
   commits. Non-code → producer subagents via the same dispatch pattern. The orchestrator
   never edits the work product itself. (worktree-pinned — see Operating disciplines)
 - **S4 — verify.** Use `superpowers:verification-before-completion`: run the discovered
-  checks. For THIS plugin = `claude plugin validate` + `python3 tests/test_scripts.py` +
-  the documented manual smoke. Cap fixes at 3; never weaken, skip, or delete a check; a
-  drop in the check count → STOP.
+  checks. Never weaken, skip, or delete a check.
 - **S5 — work review.** Panel derived from the **delta diff** (`git diff --name-only
   base_ref...HEAD`); reviewers run a path-scoped diff. Run the S5 review loop (see **Review
   rounds**) over the work. The core `doc-reviewer` is always in the panel and gates docs
