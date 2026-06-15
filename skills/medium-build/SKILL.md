@@ -127,7 +127,7 @@ one-round transport `review-round.js`.
     `args` is a real JSON object (it tolerates a stringified one; don't rely on it). The call returns
     a task ID; the round's verdicts arrive in its completion notification as `{phase, verdicts:
     [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` — wait for it (never poll/judge
-    early). `synthetic: true` = that member's infra failure, not a FAIL: re-dispatch just those
+    early). Never pass `resumeFromRunId` — every round is a fresh run. `synthetic: true` = that member's infra failure, not a FAIL: re-dispatch just those
     lenses once via `Task`; still nothing → FAIL. No `verdicts` array, or one shorter than sent
     → Task fallback for the missing members. Ad-hoc lenses ride the same `members` list as
     `subagent_type:"general-purpose"`, their `prompt` carrying the persona + "Read-only. Modify

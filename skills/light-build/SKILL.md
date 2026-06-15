@@ -134,7 +134,7 @@ loop itself, dispatching each round through the one-round transport `review-roun
     `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`,
     `args` is a real JSON object. The call returns a task ID; the round's verdicts arrive in its
     completion notification as `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING,
-    synthetic}, …]}` — wait for it (never poll/judge early). `synthetic: true` = that member's
+    synthetic}, …]}` — wait for it (never poll/judge early). Never pass `resumeFromRunId` — every round is a fresh run. `synthetic: true` = that member's
     infra failure, not a FAIL: re-dispatch just those lenses once via `Task`; still nothing →
     FAIL. No `verdicts` array, or one shorter than sent → Task fallback for the missing members.
   - **Task fallback:** if `Workflow` is unavailable or a call failed, dispatch the members as
@@ -192,7 +192,7 @@ writing-plans.
   multi-step work, **materialize the state file** with a terse 1-line-per-task list. A
   producer may commit its work; the S6 squash folds its commits. The orchestrator never edits
   the work product itself.
-- **S4 — verify (step 3).** Run the discovered checks **inline via `Bash`** (no skill).
+- **S4 — verify (step 3).** Run the discovered checks **inline via `Bash`** (no skill; for THIS plugin = `claude plugin validate` + `python3 tests/test_scripts.py` + the documented manual smoke).
   **Never weaken, skip, or delete a check.** Idempotent — re-running is safe.
 - **S5 — work review (step 4).** Run the **S5 review** above (**cap = 1**) over the work: pin
   `correctness` + `requirement-fidelity` + `doc`, then run the in-session loop — each round
@@ -219,7 +219,7 @@ at the cap).
    judgment is deferred to Auto Mode. The other three stops apply regardless of Auto Mode.
 2. **Non-convergence at cap** — the S5 review hits `cap` (= 1) without the marker (with the
    classification).
-3. **Non-review phase failure** — one retry, then STOP (incl. an S4 check-count drop).
+3. **Non-review phase failure** — one retry, then STOP.
 4. **Root-contradiction** — the core requirement is self-contradictory; cite the two
    clauses (a handoff, never a question; mere vagueness is decided, not stopped).
 
