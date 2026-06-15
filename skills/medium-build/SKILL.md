@@ -19,7 +19,7 @@ Empty input → STOP with a handoff asking for requirements.
 
 ## Preflight (dependencies)
 
-**Load config (run first, every run):** `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`. medium-build ignores those defaults for S5 (it pins cap = 1 — see **Ralph loop**); the load still confirms config health. User edits take effect next run.
+**Load config (run first, every run):** `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`. medium-build ignores those defaults for S5 (it pins cap = 1 — see **Review rounds**); the load still confirms config health. User edits take effect next run.
 
 Before E1, confirm the **superpowers** plugin is available — its skills must appear in your
 skill list (the whole pipeline is built on them). If **not** available, STOP with a
@@ -99,7 +99,7 @@ authored inline). **S3's subagent-driven-development then discovers the task lis
 plan doc** exactly as in `build` (plan doc → SDD); the list is NOT passed as a separate
 argument. This slice is the **entry action of S3**, not its own resumable phase.
 
-## Selecting & dispatching the review panel (S5)
+## Review rounds (S5)
 
 - **Select from the script.** Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py"
   --phase work --worktree <worktree> --base <base_ref>` → a `selected` list of
@@ -143,6 +143,24 @@ argument. This slice is the **entry action of S3**, not its own resumable phase.
     format**) — not a separate log line.
 - Each reviewer returns the verdict block; collect verdicts → the Ralph loop.
 
+medium-build has no S1, so **S5** (work review) is the only convergence loop: review → fix →
+re-review, **cap = 1** (round 0 + at most one fix round — NOT the config default; E3 is
+one-shot, not governed here). Blocker text primes the fix transiently, never logged. Every
+reviewer is a fresh instance; convergence is read from the verdicts, and the marker is
+printed only when genuinely converged.
+
+- **The loop.** The orchestrator runs the rounds itself and logs each round as one line
+  (see **Progress log format**).
+- **Round 0** = full frozen panel; all-PASS short-circuits.
+- **The one re-review (N=1)** dispatches only **`(FAILed ∪ touched) ∩ frozen panel`** —
+  *FAILed* = last verdict FAIL/missing; *touched* = lenses whose `applies_to` matches the
+  fix's changed files (record the **pre-fix HEAD**, re-run `select-panel.py --phase work
+  --worktree <worktree> --base <pre-fix HEAD>`; cores always match). Ad-hoc lenses re-run iff FAILed. Skipped
+  lenses carry their PASS; `∪ touched` re-checks what a fix might regress.
+- **Advance** when every frozen-panel lens is PASS with no open BLOCKING → `AUTOPILOT: WORK
+  READY` → S6. Cap (= 1) hit without the marker → non-convergence STOP (oscillation |
+  unfixable | requirements-conflict) + handoff.
+
 ## Verdict grammar (paste into ad-hoc summon prompts only — roster agents already embed it)
 
 Output ONLY the verdict — no prose/preamble. When a `StructuredOutput` tool is offered
@@ -158,36 +176,6 @@ NON-BLOCKING: none       # or one "- " item per line
 PASS ⟺ no blocking items. Cite evidence (file:line / spec clause); flag blockers, not
 preferences. A missing, unparseable, or empty-on-FAIL verdict counts as **FAIL**.
 Convergence is decided from these on-disk verdicts, never from vibes.
-
-## Ralph loop (S5 only)
-
-medium-build has **no S1** — the only review-convergence phase is **S5** (work review). It
-runs a Ralph loop natively: review → fix → re-review until the panel passes, capped.
-**Cap = 1** on the trimmed path (round 0 + at most one fix round) — NOT the config default 3.
-(The E3 spec-review pass is one-shot and is explicitly **not** governed by this loop.)
-
-- **The native loop.** The orchestrator runs the rounds itself; each round's members go
-  out **together via the transport rule** (one `Workflow` call, or one parallel `Task`
-  batch on fallback), and it logs the round as one line — the lens=VERDICT roll-up +
-  blocker count (see **Progress log format**); open blocker text primes the fix
-  transiently, never logged. **Round 0** = the full frozen panel; all-PASS short-circuits.
-  **Re-review round (the one allowed by cap = 1, N=1)** dispatches only
-  **`(FAILed ∪ touched) ∩ frozen panel`**: *FAILed* = last verdict FAIL (or
-  missing/unparseable). *touched* = every lens whose `applies_to` matches the fix's changed
-  files — record the **pre-fix HEAD** (in the plan doc) before dispatching the producer,
-  then re-run `select-panel.py --phase work --worktree <worktree> --base <pre-fix HEAD>`;
-  its `selected` list is the touched set (cores match any path and always re-run — skips
-  come from unmatched optionals). Ad-hoc lenses re-run iff FAILed. A skipped lens keeps its
-  PASS as its current verdict; the `∪ touched` half is the correctness guard — a fix can
-  regress a lens that passed. Advance when every frozen-panel lens's current verdict (fresh
-  or carried) is PASS with no open BLOCKING; else (still failing at the cap) → STOP.
-
-Loop rules: every dispatched reviewer is a fresh instance; convergence is decided from the
-on-disk verdicts (the marker is printed ONLY when convergence is genuinely true — never to
-escape the loop); on the marker (`AUTOPILOT: WORK READY`) the phase is done and the command
-proceeds (S5→S6); if the cap (= 1) is hit WITHOUT the marker → non-convergence STOP with
-the 3-way classification (oscillation | unfixable | requirements-conflict) and a handoff —
-do not proceed.
 
 <!-- progress-log-format:start -->
 ## Progress log format
@@ -230,8 +218,8 @@ S6 → S7**.
   discovered checks. For THIS plugin = `claude plugin validate` + `python3
   tests/test_scripts.py` + the documented manual smoke. Cap fixes at 3. Never weaken, skip,
   or delete a check; a drop in the check count → STOP.
-- **S5 — work review (step 6).** Run the **S5 Ralph loop** (above; **cap = 1**) over the
-  work. **Fixes:** ONE fresh producer subagent primed with the deduped open blockers +
+- **S5 — work review (step 6).** Run the S5 review loop (see **Review rounds**; **cap = 1**)
+  over the work. **Fixes:** ONE fresh producer subagent primed with the deduped open blockers +
   cited files only. Docs are always part of S5: the pinned `doc-reviewer` gates repo-wide
   doc currency/concision (stale/missing/contradictory docs = BLOCKING → fixed by the S5
   producer; bloat = NON-BLOCKING). On convergence it records `AUTOPILOT: WORK READY`.

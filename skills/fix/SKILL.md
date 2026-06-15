@@ -64,7 +64,7 @@ convention dictates, or it is cosmetic / local / easily reversible (a wrong gues
 by S1/S5). Pay-per-use: fires zero-plus times per run. Fewer than two distinct lenses →
 smaller council or solo; never fabricate personas to hit a count.
 
-## Selecting & dispatching the review panel
+## Review rounds (S1 & S5)
 
 The S1/S5 panels are **selected by script** from the installed roster, then composed and
 dispatched natively:
@@ -113,6 +113,25 @@ dispatched natively:
 - **Collect verdicts → the Ralph loop** (round-0 short-circuit, re-review rounds
   dispatch the `(FAILed ∪ touched)` subset, cap, convergence from on-disk verdicts).
 
+**S1** (spec review) and **S5** (work review) run a native loop: review → fix → re-review
+until the frozen panel PASSes, capped per phase by `ralphLoop.maxIterations.spec-phase` /
+`.implementation-phase` (default 3, from config). Blocker text primes the fix transiently,
+never logged. Every reviewer is a fresh instance; convergence is read from the verdicts,
+and the marker is printed only when genuinely converged.
+
+- **The loop.** The orchestrator runs the rounds itself and logs each round as one line
+  (see **Progress log format**).
+- **Round 0** = full frozen panel; all-PASS short-circuits.
+- **Re-review (N>0)** dispatches only **`(FAILed ∪ touched) ∩ frozen panel`** — *FAILed* =
+  last verdict FAIL/missing; *touched* (S5) = lenses whose `applies_to` matches the fix's
+  changed files (record the **pre-fix HEAD**, re-run `select-panel.py --phase work
+  --worktree <worktree> --base <pre-fix HEAD>`; cores always match). Ad-hoc lenses re-run iff FAILed; S1 stays full-panel
+  (its fixes edit the spec). Skipped lenses carry their PASS; `∪ touched` re-checks what a
+  fix might regress.
+- **Advance** when every frozen-panel lens is PASS with no open BLOCKING → marker → proceed
+  (S1→S2, S5→S6). Cap hit without the marker → non-convergence STOP (oscillation | unfixable
+  | requirements-conflict) + handoff.
+
 ## Verdict grammar (paste into ad-hoc summon prompts only — roster agents already embed it)
 
 Output ONLY the verdict — no prose/preamble. When a `StructuredOutput` tool is offered
@@ -128,38 +147,6 @@ NON-BLOCKING: none       # or one "- " item per line
 PASS ⟺ no blocking items. Cite evidence (file:line / spec clause); flag blockers, not
 preferences. A missing, unparseable, or empty-on-FAIL verdict counts as **FAIL**.
 Convergence is decided from these on-disk verdicts, never from vibes.
-
-## Ralph loop (S1 and S5)
-
-The two review-convergence phases — **S1** (spec review) and **S5** (work review) — run a
-Ralph loop natively: review → fix → re-review until the panel passes, capped per phase.
-The cap is `ralphLoop.maxIterations.spec-phase` (S1) /
-`ralphLoop.maxIterations.implementation-phase` (S5), default 3, from
-`${CLAUDE_PLUGIN_DATA}/config.json` (loaded in Preflight).
-
-- **The native loop.** The orchestrator runs the rounds itself; each round's members go
-  out **together via the transport rule** (one `Workflow` call, or one parallel `Task`
-  batch on fallback), and it logs the round as one line — the lens=VERDICT roll-up +
-  blocker count (see **Progress log format**); open blocker text primes the fix
-  transiently, never logged. **Round 0** = the full frozen panel; all-PASS short-circuits.
-  **Re-review rounds (N>0)** dispatch only **`(FAILed ∪ touched) ∩ frozen panel`**:
-  *FAILed* = last verdict FAIL (or missing/unparseable). *touched* (S5) = every lens whose
-  `applies_to` matches the fix's changed files — record the **pre-fix HEAD** (in the plan
-  doc) before dispatching the producer, then re-run `select-panel.py --phase work
-  --worktree <worktree> --base <pre-fix HEAD>`; its `selected` list is the touched set
-  (cores match any path and always re-run — skips come from unmatched optionals). Ad-hoc
-  lenses re-run iff FAILed; S1 re-reviews stay full-panel (S1 fixes edit the spec itself).
-  A skipped lens keeps its PASS as its current verdict; the `∪ touched` half is the
-  correctness guard — a fix can regress a lens that passed. Advance when every frozen-panel
-  lens's current verdict (fresh or carried) is PASS with no open BLOCKING; else fix and
-  re-dispatch.
-
-Loop rules: every dispatched reviewer is a fresh instance; convergence is decided from the
-on-disk verdicts (the marker is printed ONLY when convergence is genuinely true — never to
-escape the loop); on the marker the phase is done and the command proceeds (S1→S2, S5→S6);
-if the per-phase cap is hit WITHOUT the marker → non-convergence STOP with the 3-way
-classification (oscillation | unfixable | requirements-conflict) and a handoff — do not
-proceed.
 
 <!-- progress-log-format:start -->
 ## Progress log format
@@ -193,10 +180,10 @@ spine (common to build & fix).
   feedback) → write a **change-spec** appended to the existing spec doc (the original spec
   stays as context). At decision points, convene the expert council; record the decision
   (see **Progress log format**; trivial defaults: decide + record).
-- **S1 — change-spec review (Ralph loop).** Review the **change-spec** (with the original
+- **S1 — change-spec review.** Review the **change-spec** (with the original
   as context), not the original. Panel derived from the change-spec's keywords; reviewers
-  read the change-spec doc (as in build's S1). Run the **S1 Ralph loop** (above) over the
-  (change-)spec. **Fixes:** the orchestrator edits the spec doc directly (the spec is a
+  read the change-spec doc (as in build's S1). Run the S1 review loop (see **Review rounds**)
+  over the (change-)spec. **Fixes:** the orchestrator edits the spec doc directly (the spec is a
   small artifact it holds; only S5 delegates fixes to a producer). On convergence it
   records `AUTOPILOT: SPEC READY`. **Root-contradiction STOP:** if the reviewers find the
   core requirement asks for two things that cannot both be true, STOP and hand off — quote
@@ -215,9 +202,9 @@ spine (common to build & fix).
   checks. For THIS plugin = `claude plugin validate` + `python3 tests/test_scripts.py` +
   the documented manual smoke. Cap fixes at 3; never weaken, skip, or delete a check; a
   drop in the check count → STOP.
-- **S5 — work review (Ralph loop).** Panel derived from the **delta diff** (`git diff
-  --name-only base_ref...HEAD`); reviewers run a path-scoped diff. Run the **S5 Ralph
-  loop** (above) over the work. The core `doc-reviewer` is always in the S5 panel and
+- **S5 — work review.** Panel derived from the **delta diff** (`git diff
+  --name-only base_ref...HEAD`); reviewers run a path-scoped diff. Run the S5 review loop
+  (see **Review rounds**) over the work. The core `doc-reviewer` is always in the S5 panel and
   gates docs repo-wide: stale / missing / contradictory docs = BLOCKING (the S5 producer
   fix updates them); bloat = NON-BLOCKING. **Fixes:** ONE fresh producer subagent primed
   with the deduped open blockers + cited files only. On convergence it records
