@@ -40,44 +40,51 @@ handoff: it is required, install via
 - **Thin orchestrator.** Dispatch by reference and judge structured output. Never hoard
   whole files, diffs, or logs in the main thread; read only bounded slices when you must
   inspect something yourself.
-- **Worktree-pinned dispatch.** Every subagent you dispatch — producer, fix-producer,
-  reviewer, council advisor — operates **only** inside the run's worktree on its branch,
-  **never** main/master. Build each prompt with the absolute worktree path + branch and
-  require the subagent to: act by absolute paths under the worktree (or `git -C <worktree>`),
-  never rely on inherited cwd, and **before any write assert**
-  `git -C <worktree> branch --show-current` equals the run branch — else STOP without editing. Producers dispatched via
-  subagent-driven-development inherit this through their task context. (Reviewers are
-  read-only but still target the worktree, not main.)
+- **Worktree-pinned dispatch.** Give every subagent the absolute worktree path + branch and
+  have it act only there — absolute paths / `git -C <worktree>`, never inherited cwd — and
+  **before any write assert** `git -C <worktree> branch --show-current` is the run branch;
+  **never** main/master. Producers dispatched via subagent-driven-development
+  inherit this through their task context.
 - **Disk-backed.** Persist the spec and a **plan doc** (implementation plan + progress
   section + RESUME block) so the run survives compaction. Location follows the
-  user's/project's convention — see **State & resumption**.
+  user's/project's convention — see **Resume & state**.
 - **A STOP is a handoff, never a question:** emit current state + the exact next step a
   human (or a resumed run) would take. Do not pose questions.
 - **No merge.** The run ends at a review-ready branch. You never merge to the base.
 
-## Resume first (the resume contract)
+## Resume & state
 
-Before anything else, look for an existing **plan doc** with a RESUME block in the
+**On start, resume first.** Look for an existing **plan doc** with a RESUME block in the
 project's convention location. If found: reconcile worktree/branch/base_ref existence on
 disk, then continue from `phase`. An interrupted review round is **re-run from scratch**
 (re-dispatch the whole frozen panel — bounded, idempotent), so only `review_round` need be
 persisted to locate the loop. No plan doc → start at E1.
 
+**Persist two things** so the run survives compaction: the **spec** (E2's output in
+requirements mode, or the user-provided file in spec-file mode — E1 writes only the plan
+doc's progress section, S2 fills the implementation-plan section) and the **plan doc**
+(implementation plan + progress section, carrying the RESUME block):
+
+```
+RESUME: phase=<E1|E2|S1..S7> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> spec_file=<path>
+```
+
+(`spec_file` is present only in spec-file mode.) **Keep RESUME current:** rewrite it at every
+phase transition — `phase=` as you advance (E1→E2→S1…→S7; spec-file mode advances E1→S2) and
+`review_round=` each loop iteration; a stale `phase=` breaks resumption. **Where this lives
+follows the user's / project's convention** — honor CLAUDE.md and existing repo patterns; no
+fixed path (don't assume `dev-docs/`), no gitignore-vs-commit policy.
+
 ## Deciding at decision points (expert council)
 
-When a choice is genuinely in doubt, **convene an expert council** — 2–4 ad-hoc expert
-sub-agents (personas from the decision's domain), in **one parallel batch** via
-`superpowers:dispatching-parallel-agents`, each returning a concise position (recommendation
-+ rationale + trade-offs + any dissent). The orchestrator **synthesizes, decides, and
-records** a one-line decision (see **Progress log format**); it is the decider and breaks
-ties.
-
-**Convene** when the choice has two-plus viable approaches with materially different
-trade-offs, shapes architecture / data model / interface / scope, is costly to reverse, or is
-a fork a later review might miss. **Decide solo** (and record) when an obvious default or
-convention dictates, or it is cosmetic / local / easily reversible (a wrong guess is caught
-by S1/S5). Pay-per-use: fires zero-plus times per run. Fewer than two distinct lenses →
-smaller council or solo; never fabricate personas to hit a count.
+- At a genuine fork — two-plus viable approaches with materially different trade-offs, or a
+  choice shaping architecture / data model / interface / scope, costly to reverse, or one a
+  later review might miss — **convene a council**: 2–4 ad-hoc expert personas in one parallel
+  batch via `superpowers:dispatching-parallel-agents`, each returning a concise position
+  (recommendation, rationale, trade-offs, dissent). You **synthesize, decide, and record** a
+  one-line decision (see **Progress log format**) — the decider, breaking ties.
+- Otherwise decide solo and record (a wrong guess is caught by review). Never fabricate
+  personas to hit a count — fewer than two real lenses → solo.
 
 ## Review rounds (S1 & S5)
 
@@ -250,36 +257,3 @@ skill/workflow consumes the outcome without parsing prose:
 - `reason` — empty when converged; else classification + detail (cap → oscillation | unfixable | requirements-conflict; stop → root-contradiction | phase-failure | destructive-op).
 
 Additive only — it changes no phase's behavior.
-
-## Token discipline
-
-Thin orchestrator · by-reference dispatch (never pipe diffs into N prompts) · smallest
-panel (2–4, conditional lenses only on signal) · round-0 short-circuit · per-phase cap
-(`maxIterations.spec-phase` / `.implementation-phase`, default 3), re-dispatch only the
-`(FAILed ∪ touched)` subset · bounded subagent prompts, no superpowers skills loaded into
-reviewers · producer primed by blockers + cited files only · expert councils bounded
-(2–4), at genuine decision points only, one parallel batch · workflow transport returns a
-round's verdicts as one JSON payload (reviewer output stays off the main thread) · progress
-log is one-line-per-event (see **Progress log format**).
-
-## State & resumption
-
-Persist two things so the run survives compaction: the **spec** (E2's output in
-requirements mode, or the user-provided file in spec-file mode — E1 writes only the plan
-doc's progress section, S2 fills the implementation-plan section) and the **plan doc**
-(implementation plan + progress section, carrying the RESUME block):
-
-```
-RESUME: phase=<E1|E2|S1..S7> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> spec_file=<path>
-```
-
-(`spec_file` is present only in spec-file mode.)
-
-**Keep RESUME current:** rewrite it at every phase transition — `phase=` as you advance
-(E1→E2→S1…→S7; spec-file mode advances E1→S2) and `review_round=` each loop iteration. The
-resume contract (**Resume first**) depends on `phase=` reflecting the true current phase; a
-stale one breaks resumption.
-
-**Where these live follows the user's / project's existing convention** — honor CLAUDE.md
-preferences and existing repo patterns. The command imposes no fixed path (do not assume
-`dev-docs/`) and no gitignore-vs-commit policy.

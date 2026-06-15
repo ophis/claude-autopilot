@@ -35,30 +35,20 @@ handoff asking for requirements.
 - **Thin orchestrator.** Dispatch by reference and judge structured output. Never hoard
   whole files, diffs, or logs in the main thread; read only bounded slices when you must
   inspect something yourself. **You never edit the work product** — a producer subagent does.
-- **Worktree-pinned dispatch.** Every subagent you dispatch — producer, fix-producer,
-  reviewer, council advisor — operates **only** inside the run's worktree on its branch,
-  **never** main/master. Build each prompt with the absolute worktree path + branch and
-  require the subagent to: act by absolute paths under the worktree (or `git -C <worktree>`),
-  never rely on inherited cwd, and **before any write assert**
-  `git -C <worktree> branch --show-current` equals the run branch — else STOP without editing. (Reviewers are
-  read-only but still target the worktree, not main.)
-- **Lazy state — persist by exception, not by default.** There is **no spec doc and no
-  mandatory plan/state file**. A straight-through run (produce → verify → S5 round-0 all-PASS
-  → squash → finish) writes **nothing to disk** — hold the requirement,
-  worktree/branch/base_ref, phase, and any decisions in context. **Materialize a minimal
-  state file the first time the run crosses a compaction-risk boundary** — whichever happens
-  first: a council/`FORK` is resolved, S5 returns a FAIL and a fix round begins, or the
-  producer reports multi-step work spanning several dispatches. The file holds **only** the
-  **verbatim requirement** + a **one-line RESUME block** (+ a terse 1-line-per-task list for
-  multi-step S3) — **never an audit trail**. Once it exists, keep RESUME current. See
-  **State & resumption**.
+- **Worktree-pinned dispatch.** Give every subagent the absolute worktree path + branch and
+  have it act only there — absolute paths / `git -C <worktree>`, never inherited cwd — and
+  **before any write assert** `git -C <worktree> branch --show-current` is the run branch;
+  **never** main/master.
+- **Lazy state.** Persist by exception, not by default — a straight-through run writes no
+  file; materialize a minimal requirement + RESUME state file only at the first
+  compaction-risk boundary (see **Resume & state**).
 - **A STOP is a handoff, never a question:** emit current state + the exact next step a
   human (or a resumed run) would take. Do not pose questions.
 - **No merge.** The run ends at a review-ready branch. You never merge to the base.
 
-## Resume first (the resume contract)
+## Resume & state
 
-Before anything else, look for an existing **state file** with a RESUME block in the
+**On start, resume first.** Look for an existing **state file** with a RESUME block in the
 project's convention location. If found: reconcile worktree/branch/base_ref existence on
 disk, then continue from `phase`. An interrupted S5 review round is **re-run from scratch**
 (re-dispatch the whole frozen panel — bounded, idempotent), so only `review_round` need be
@@ -66,20 +56,31 @@ persisted to locate the loop. **No state file → start at E1** — a simple str
 may never have materialized one, so an interrupted simple run re-runs from scratch (bounded,
 idempotent; E1 reuses the existing worktree).
 
+**Persist lazily, by exception.** A straight-through run writes **no file at all** — hold the
+requirement, worktree/branch/base_ref, phase, and decisions in context. **Materialize a
+minimal state file the first time the run crosses a compaction-risk boundary** — whichever
+happens first: a council / `FORK` is resolved, S5 returns a FAIL and a fix round begins, or
+the producer reports multi-step work spanning several dispatches. The file holds **only** the
+verbatim requirement + a one-line RESUME block (and, for multi-step S3, a terse
+1-line-per-task list) — **never an audit trail**:
+
+```
+RESUME: phase=<E1|S3|S4|S5|S6|S7> worktree=<path> branch=<name> base_ref=<sha> review_round=<n>
+```
+
+**Where this lives follows the user's / project's convention** — honor CLAUDE.md and existing
+repo patterns; no fixed path, no gitignore-vs-commit policy.
+
 ## Deciding at decision points (expert council)
 
-When a choice is genuinely in doubt, **convene an expert council** — 2–4 ad-hoc expert
-sub-agents (personas from the decision's domain), in **one parallel `Task` batch** (all calls
-in a single message), each returning a concise position (recommendation + rationale +
-trade-offs + any dissent). The orchestrator **synthesizes, decides, and records** a one-line
-decision (see **Working-note shapes**); it is the decider and breaks ties.
-
-**Convene** when the choice has two-plus viable approaches with materially different
-trade-offs, shapes architecture / data model / interface / scope, is costly to reverse, or is
-a fork a later review might miss. **Decide solo** (and record) when an obvious default or
-convention dictates, or it is cosmetic / local / easily reversible (a wrong guess is caught
-by S5). Pay-per-use: fires zero-plus times per run. Fewer than two distinct lenses →
-smaller council or solo; never fabricate personas to hit a count.
+- At a genuine fork — two-plus viable approaches with materially different trade-offs, or a
+  choice shaping architecture / data model / interface / scope, costly to reverse, or one a
+  later review might miss — **convene a council**: 2–4 ad-hoc expert personas in one parallel
+  `Task` batch, each returning a concise position (recommendation, rationale, trade-offs,
+  dissent). You **synthesize, decide, and record** a one-line decision (see **Working-note
+  shapes**) — the decider, breaking ties.
+- Otherwise decide solo and record (a wrong guess is caught by review). Never fabricate
+  personas to hit a count — fewer than two real lenses → solo.
 
 ## The S3 FORK mechanism (producer → orchestrator → council → re-dispatch)
 
@@ -171,7 +172,7 @@ writing-plans.
     (`-2`, …), else STOP.
   Hold worktree/branch/base_ref (HEAD) + the verbatim requirement in context. **Create no
   state file yet** — it is materialized lazily at the first compaction-risk boundary (see
-  **Lazy state** / **State & resumption**).
+  **Resume & state**).
 - **S3 — produce (step 2).** Produce the work product by dispatching a **producer subagent
   via plain `Task`** (by reference, bounded prompt; worktree-pinned — see Operating
   disciplines) — there is no per-task review and no task-driven framework. On a genuine fork the producer returns a `FORK:` marker → the
@@ -228,37 +229,3 @@ skill/workflow consumes the outcome without parsing prose:
 - `reason` — empty when converged; else classification + detail (cap → oscillation | unfixable | requirements-conflict; stop → root-contradiction | phase-failure | destructive-op).
 
 Additive only — it changes no phase's behavior.
-
-## Token discipline
-
-Thin orchestrator · by-reference dispatch (never pipe diffs into N prompts) · self-contained
-(no external plugin skills loaded anywhere) · light path = fewest phases (no E2/S1/S2) + a
-**pinned 3-lens S5 panel** (`correctness` + `requirement-fidelity` + `doc`) + **cap = 1** · round-0
-short-circuit · re-dispatch only the FAILed lens(es) on the one fix round · bounded subagent
-prompts · producer primed by blockers + cited files only · expert councils bounded (2–4), at
-genuine forks only, one parallel batch · the whole loop runs in `review-loop.js` (Workflow;
-`_shared/review-loop.md` prose fallback) so its machinery + reviewer output stay off the main
-thread, only a thin pointer + the returned result ever enter context · **lazy state** — no file for a
-straight-through run, a minimal requirement+RESUME stub only at compaction-risk boundaries
-(see **State & resumption**).
-
-## State & resumption
-
-light-build persists state **lazily, by exception**. A straight-through run writes **no file
-at all**; the orchestrator holds the requirement, worktree/branch/base_ref, phase, and
-decisions in context. **Materialize a minimal state file the first time the run crosses a
-compaction-risk boundary** — whichever happens first:
-
-- a council / `FORK` decision is made,
-- S5 returns a FAIL and a fix round begins,
-- the producer reports multi-step work spanning several dispatches.
-
-The file holds **only** the verbatim requirement + a one-line RESUME block (and, for
-multi-step S3, a terse 1-line-per-task list) — **never an audit trail**:
-
-```
-RESUME: phase=<E1|S3|S4|S5|S6|S7> worktree=<path> branch=<name> base_ref=<sha> review_round=<n>
-```
-
-**Where this lives follows the user's / project's existing convention** — honor CLAUDE.md
-preferences and existing repo patterns. The command imposes no fixed path and no gitignore-vs-commit policy.
