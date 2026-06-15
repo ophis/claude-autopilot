@@ -35,6 +35,13 @@ handoff asking for requirements.
 - **Thin orchestrator.** Dispatch by reference and judge structured output. Never hoard
   whole files, diffs, or logs in the main thread; read only bounded slices when you must
   inspect something yourself. **You never edit the work product** — a producer subagent does.
+- **Worktree-pinned dispatch.** Every subagent you dispatch — producer, fix-producer,
+  reviewer, council advisor — operates **only** inside the run's worktree on its branch,
+  **never** main/master. Build each prompt with the absolute worktree path + branch and
+  require the subagent to: act by absolute paths under the worktree (or `git -C <worktree>`),
+  never rely on inherited cwd, and **before any write assert**
+  `git -C <worktree> branch --show-current` equals the run branch — else STOP without editing. (Reviewers are
+  read-only but still target the worktree, not main.)
 - **Lazy state — persist by exception, not by default.** There is **no spec doc and no
   mandatory plan/state file**. A straight-through run (produce → verify → S5 round-0 all-PASS
   → squash → finish) writes **nothing to disk** — hold the requirement,
@@ -118,52 +125,21 @@ S3 has no per-task reviews, so S5 carries it alone (a deliberate property of the
 not an oversight).
 
 - **Pin the panel directly** — `autopilot:correctness-reviewer`,
-  `autopilot:requirement-fidelity-reviewer`, AND `autopilot:doc-reviewer`. No other
-  reviewers; **no `select-panel.py`** (pinned, not selected). **Why these three:**
-  `correctness` judges internal correctness only; with no spec doc/review,
-  `requirement-fidelity` is the *sole* lens checking the work realizes the **requirement** —
-  without it a producer could build the wrong thing, bug-free, and pass; `doc` (roster-core,
-  `applies_to: ["**"]`) catches docs the change falsified — **a change can leave docs
-  elsewhere stale** — and self-scopes via bounded mono-repo discovery, PASSing cleanly when
-  nothing is affected (pin it every round, don't gate on a file-type signal).
-  **`requirement-fidelity`'s reference is the run's requirement text** (`$ARGUMENTS` — the
-  verbatim requirement held in context, recorded in the state file once materialized), **not
-  a spec doc**.
+  `autopilot:requirement-fidelity-reviewer`, AND `autopilot:doc-reviewer`.
 - **Freeze** the pinned panel in context as the one-line freeze shape (see **Working-note
-  shapes**); reuse it every round of S5.
-- **Dispatch the whole round together** — never one at a time. Build each member's run-input
-  prompt once — "PHASE=work. Inputs: worktree=…, base_ref=…, requirement=<the verbatim
-  requirement>, focus=…. Output ONLY the verdict, no prose." (absolute paths) — the identical
-  prompt rides whichever transport carries it:
-  - **Workflow transport (preferred):** one call per round —
-    `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`,
-    `args` a real JSON object (it tolerates a stringified one; don't rely on it). Members keep
-    their own model + read-only allowlist (`agentType` resolves like `Task`). The call returns
-    a task ID; the round's verdicts arrive in its completion notification as `{phase, verdicts:
-    [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` — wait for it (never poll/judge
-    early). Never pass `resumeFromRunId` — every round is a fresh run. `synthetic: true` = that
-    member's infra failure, not a FAIL: re-dispatch just those lenses once via `Task`; still
-    nothing → FAIL. No `verdicts` array, or one shorter than sent (incl. `[]`) → failed/partial
-    → Task fallback for the missing members.
-  - **Task fallback (plain parallel batch):** if `Workflow` is unavailable or a call failed,
-    dispatch the pinned members as `Task(subagent_type="autopilot:<name>", …)` — body is the
-    system prompt; send ONLY the run-input prompt, **all calls in a single message** (a plain
-    parallel `Task` batch), rest of the run. The transport + any fallback that fired ride the
-    freeze line's `transport=` field (see **Working-note shapes**) — not a separate log line.
-- Each reviewer returns the verdict block; collect verdicts → the loop below.
-
-**Cap = 1** (round 0 + at most one fix round) — pinned, not from config. **Round 0** = the
-full pinned panel; all-PASS short-circuits. A FAIL → **ONE** fresh producer subagent primed
-with the deduped open blockers + cited files only (entering this fix round **materializes the
-state file** if not already present), then **re-review only the FAILed
-lens(es)** (also re-run `doc` if the fix touched docs — it can regress) — there is no `select-panel.py` / `touched`
-computation here; the pinned set is fixed and a skipped lens keeps its PASS as its current
-verdict. Advance when every pinned lens's current verdict (fresh or carried) is PASS with no
-open BLOCKING; on convergence record `AUTOPILOT: WORK READY` and proceed (S5→S6). Still
-failing at the cap (= 1) → **non-convergence STOP** with the 3-way classification
-(oscillation | unfixable | requirements-conflict) and a handoff — do not proceed. Every
-dispatched reviewer is a fresh instance; convergence is decided from the structured verdicts
-(the marker is printed ONLY when convergence is genuinely true — never to escape the loop).
+  shapes**); pass it to the loop.
+- **Run the loop via `review-loop.js`**:
+  `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-loop.js", args: {phase:"work",
+  worktree, base_ref, requirement, spec_doc:null, plan_doc:<state file|null>, cap:1,
+  panel:[{agent, subagent_type, focus}, …]}})` — `args` a real JSON object. The call
+  returns a task ID; its completion notification carries `{converged, rounds, head,
+  verdicts, blockers, reason, decisions}` — wait for it (never poll/judge early). Map it:
+  `converged:true` → record `AUTOPILOT: WORK READY`, proceed S5→S6; `converged:false` →
+  **non-convergence STOP** with `reason` (oscillation | unfixable | requirements-conflict).
+  Log each `decisions[]` entry as a decision line. The S5 fix and any fix-time FORK/council
+  run **inside** the loop; S3-produce FORKs still use the orchestrator council (unchanged).
+- **No-Workflow fallback:** iff the `Workflow` tool is unavailable, `Read`
+  `${CLAUDE_PLUGIN_ROOT}/skills/_shared/review-loop.md` and run the prose loop in-session.
 
 ## Working-note shapes (in context — not persisted)
 
@@ -197,8 +173,8 @@ writing-plans.
   state file yet** — it is materialized lazily at the first compaction-risk boundary (see
   **Lazy state** / **State & resumption**).
 - **S3 — produce (step 2).** Produce the work product by dispatching a **producer subagent
-  via plain `Task`** (by reference, bounded prompt) — there is no per-task review and no
-  task-driven framework. On a genuine fork the producer returns a `FORK:` marker → the
+  via plain `Task`** (by reference, bounded prompt; worktree-pinned — see Operating
+  disciplines) — there is no per-task review and no task-driven framework. On a genuine fork the producer returns a `FORK:` marker → the
   orchestrator runs the **S3 FORK mechanism** (council → decide → record → re-dispatch with
   the decision). Producers do **NOT** consult the council directly. If the producer reports
   genuinely multi-step work, **materialize the state file** with a terse 1-line-per-task list
@@ -209,10 +185,10 @@ writing-plans.
   tests/test_scripts.py` + the documented manual smoke). Cap fixes at **3**. **Never weaken,
   skip, or delete a check; a drop in the check count → STOP** (non-review phase failure).
   Idempotent — re-running it is safe.
-- **S5 — work review (step 4).** Run the **S5 review** above (**cap = 1**) over the work:
-  pin `correctness` + `requirement-fidelity` + `doc`, dispatch via
-  `review-round.js` (Workflow transport; plain parallel `Task` batch fallback), one fix on
-  FAIL, re-review only the FAILed lens(es). On convergence record `AUTOPILOT: WORK READY`.
+- **S5 — work review (step 4).** Run the **S5 review** above (**cap = 1**) over the work: pin
+  `correctness` + `requirement-fidelity` + `doc`, then run the whole loop via `review-loop.js`
+  (Workflow; `_shared/review-loop.md` prose fallback when `Workflow` is unavailable). On
+  `converged:true` record `AUTOPILOT: WORK READY`; on `converged:false` STOP with `reason`.
 - **S6 — squash (step 5).** Idempotent squash to one commit **via `git` (`Bash`)** — **skip
   if already exactly 1 ahead of base_ref**. The state file (if one was materialized) is
   committed or ignored per the project's convention — do not force either.
@@ -260,8 +236,9 @@ Thin orchestrator · by-reference dispatch (never pipe diffs into N prompts) · 
 **pinned 3-lens S5 panel** (`correctness` + `requirement-fidelity` + `doc`) + **cap = 1** · round-0
 short-circuit · re-dispatch only the FAILed lens(es) on the one fix round · bounded subagent
 prompts · producer primed by blockers + cited files only · expert councils bounded (2–4), at
-genuine forks only, one parallel batch · workflow transport returns a round's verdicts as one
-JSON payload (reviewer output stays off the main thread) · **lazy state** — no file for a
+genuine forks only, one parallel batch · the whole loop runs in `review-loop.js` (Workflow;
+`_shared/review-loop.md` prose fallback) so its machinery + reviewer output stay off the main
+thread, only a thin pointer + the returned result ever enter context · **lazy state** — no file for a
 straight-through run, a minimal requirement+RESUME stub only at compaction-risk boundaries
 (see **State & resumption**).
 
@@ -283,14 +260,5 @@ multi-step S3, a terse 1-line-per-task list) — **never an audit trail**:
 RESUME: phase=<E1|S3|S4|S5|S6|S7> worktree=<path> branch=<name> base_ref=<sha> review_round=<n>
 ```
 
-**Why lazy:** a simple single-shot run finishes inside one context and never reads state
-back, so a file is pure overhead; the boundaries above are exactly where a run grows long
-enough to risk compaction, and only then is durable state worth its cost. **Keep RESUME
-current** once the file exists — rewrite `phase=` at every transition and `review_round=`
-each S5 loop iteration; the resume contract (**Resume first**) depends on `phase=` being
-true. Trade-off: an interrupted simple run that never materialized a file re-runs from
-scratch (bounded, idempotent) rather than resuming.
-
 **Where this lives follows the user's / project's existing convention** — honor CLAUDE.md
-preferences and existing repo patterns. The command imposes no fixed path (do not assume
-`dev-docs/`) and no gitignore-vs-commit policy.
+preferences and existing repo patterns. The command imposes no fixed path and no gitignore-vs-commit policy.

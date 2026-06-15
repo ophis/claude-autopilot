@@ -23,6 +23,7 @@ SELECT_PANEL = os.path.join(SCRIPTS, "select-panel.py")
 CONFIG = os.path.join(SCRIPTS, "autopilot-config.py")
 LINT_ROSTER = os.path.join(SCRIPTS, "lint-roster.py")
 REVIEW_ROUND = os.path.join(SCRIPTS, "review-round.js")
+REVIEW_LOOP = os.path.join(SCRIPTS, "review-loop.js")
 SKILLS = os.path.join(REPO, "skills")
 
 AGENT_TEMPLATE = """\
@@ -694,6 +695,113 @@ class SkillLockstepTests(unittest.TestCase):
             self._progress_log_format_block("build"),
             self._progress_log_format_block("fix"),
         )
+
+
+class ReviewLoopPureTests(unittest.TestCase):
+    """Behavioral tests for review-loop.js pure helpers. The PURE block is
+    sentinel-delimited and self-contained (no runtime globals), so we slice it
+    out, append an export + a tiny assertion driver, and run it under node."""
+
+    @unittest.skipUnless(shutil.which("node"), "node not installed")
+    def test_pure_helpers(self):
+        with open(REVIEW_LOOP, encoding="utf-8") as fh:
+            text = fh.read()
+        start = text.index("// ──PURE START")
+        end = text.index("// ──PURE END")
+        block = text[start:end]
+        driver = block + r"""
+const assert = (c, m) => { if (!c) { throw new Error(m) } }
+assert(normalize({agent:'a'}, null).synthetic === true, 'null->synthetic')
+assert(normalize({agent:'a'}, null).VERDICT === 'FAIL', 'null->FAIL')
+assert(normalize({agent:'a'}, {VERDICT:'PASS',BLOCKING:[],NON_BLOCKING:[]}).VERDICT === 'PASS', 'pass')
+assert(normalize({agent:'a'}, {VERDICT:'PASS',BLOCKING:['x'],NON_BLOCKING:[]}).VERDICT === 'FAIL', 'pass+blocking->FAIL')
+assert(normalize({agent:'a'}, {VERDICT:'PASS',BLOCKING:[],NON_BLOCKING:[]}).synthetic === false, 'real not synthetic')
+assert(JSON.stringify(dedup(['a','a','b'])) === JSON.stringify(['a','b']), 'dedup')
+assert(failedOf([{VERDICT:'PASS'},{VERDICT:'FAIL',agent:'b'}]).length === 1, 'failedOf')
+const cf = carryForward([{agent:'a',VERDICT:'FAIL'},{agent:'b',VERDICT:'PASS'}],[{agent:'a',VERDICT:'PASS'}])
+assert(cf.find(v=>v.agent==='a').VERDICT === 'PASS', 'cf overrides')
+assert(cf.find(v=>v.agent==='b').VERDICT === 'PASS', 'cf keeps prior')
+const r = [{VERDICT:'FAIL',BLOCKING:['x']}]
+assert(classify([r, r]) === 'oscillation', 'oscillation')
+assert(classify([[{VERDICT:'FAIL',BLOCKING:['x']}]]) === 'unfixable', 'single->unfixable')
+const mp = memberPrompt({focus:'F'}, {ph:'work',worktree:'/wt',base_ref:'S',spec_doc:null,plan_doc:null,requirement:'R'})
+assert(mp.includes('PHASE=work') && mp.includes('/wt') && mp.includes('R') && mp.includes('F'), 'memberPrompt')
+assert(subsetFor([{agent:'a'}], [{agent:'a',subagent_type:'x',focus:'y'},{agent:'b',subagent_type:'z',focus:'w'}]).length === 1, 'subsetFor maps to members')
+assert(subsetFor([{agent:'a'}], [{agent:'a',subagent_type:'x',focus:'y'}])[0].subagent_type === 'x', 'subsetFor returns members')
+console.log('PURE_OK')
+"""
+        with tempfile.TemporaryDirectory() as td:
+            mjs = os.path.join(td, "pure.mjs")
+            with open(mjs, "w", encoding="utf-8") as fh:
+                fh.write(driver)
+            proc = subprocess.run(["node", mjs], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+            self.assertIn(b"PURE_OK", proc.stdout)
+
+
+class ReviewLoopScriptTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with open(REVIEW_LOOP, encoding="utf-8") as fh:
+            cls.text = fh.read()
+    def test_contract_markers_present(self):
+        for marker in ("export const meta", "autopilot-review-loop", "agentType", "schema",
+            "no verdict returned (skip/terminal error)", "synthetic", "converged", "decisions",
+            "return {", "required: ['VERDICT', 'BLOCKING', 'NON_BLOCKING'],", "enum: ['PASS', 'FAIL']",
+            "// ──PURE START", "// ──PURE END"):
+            self.assertIn(marker, self.text, marker)
+    def test_no_ambient_authority(self):
+        for banned in ("require(", "import ", "import(", "process.", "fs.", "fetch(", "Date.now", "Math.random"):
+            self.assertNotIn(banned, self.text, banned)
+    @unittest.skipUnless(shutil.which("node"), "node not installed")
+    def test_node_syntax_check(self):
+        wrapped = "async function _wf() {\n%s\n}\n" % self.text.replace("export const meta", "const meta", 1)
+        with tempfile.TemporaryDirectory() as td:
+            mjs = os.path.join(td, "review-loop.mjs")
+            with open(mjs, "w", encoding="utf-8") as fh:
+                fh.write(wrapped)
+            proc = subprocess.run(["node", "--check", mjs], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+
+
+class SharedFallbackTests(unittest.TestCase):
+    def test_review_loop_fallback_present(self):
+        path = os.path.join(SKILLS, "_shared", "review-loop.md")
+        self.assertTrue(os.path.exists(path), "fallback md missing")
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        for marker in ("all-PASS", "FAILed", "cap", "oscillation", "unfixable",
+                       "requirements-conflict"):
+            self.assertIn(marker, text, marker)
+
+
+class LightBuildCutoverTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
+            cls.text = fh.read()
+    def test_calls_review_loop(self):
+        self.assertIn("review-loop.js", self.text)
+    def test_has_no_workflow_fallback_pointer(self):
+        self.assertIn("_shared/review-loop.md", self.text)
+    def test_panel_arg_in_review_loop_call(self):
+        # the panel arg now rides the review-loop.js Workflow call (cutover-specific shape)
+        self.assertIn("panel:[{agent", self.text)
+
+    def test_no_stale_review_round_dispatch(self):
+        # light-build no longer dispatches via review-round.js (it owns no per-round transport now)
+        self.assertNotIn("review-round.js", self.text)
+
+
+class SkillWorktreePinTests(unittest.TestCase):
+    """Every orchestrator skill must require worktree-pinned subagent dispatch."""
+    def test_all_skills_pin_subagents_to_worktree(self):
+        for skill in ("build", "fix", "medium-build", "light-build"):
+            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
+                text = fh.read()
+            self.assertIn("Worktree-pinned dispatch", text, skill)
+            self.assertIn("never** main/master", text, skill)
+            self.assertIn("branch --show-current", text, skill)
 
 
 if __name__ == "__main__":

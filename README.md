@@ -5,7 +5,7 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.8.9** — the build/fix surfaces are now **skills** (`skills/build`,
+> Status: **v0.9.0** — the build/fix surfaces are now **skills** (`skills/build`,
 > `skills/fix`): model-invocable and composable as a step inside a larger
 > skill/workflow, while `/autopilot:build` and `/autopilot:fix` still work for users.
 > A third surface, **`skills/medium-build`** (`/autopilot:medium-build`), is the trimmed
@@ -29,16 +29,18 @@ The git repo is **both the marketplace and the plugin**:
 ```
 claude-autopilot/                 # git repo = marketplace + plugin
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 0.8.9)
+│   ├── plugin.json               # name: autopilot (version 0.9.0)
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # skill; /autopilot:build       still works
 │   ├── fix/SKILL.md              # skill; /autopilot:fix         still works
 │   ├── medium-build/SKILL.md     # skill; /autopilot:medium-build — trimmed path (spec + E3 + capped review)
-│   └── light-build/SKILL.md      # skill; /autopilot:light-build  — superpowers-free, low-ceremony
+│   ├── light-build/SKILL.md      # skill; /autopilot:light-build  — superpowers-free, low-ceremony
+│   └── _shared/review-loop.md    # no-Workflow fallback for the S1/S5 convergence loop
 ├── scripts/
 │   ├── autopilot-config.py       # reads/initializes ${CLAUDE_PLUGIN_DATA}/config.json
 │   ├── lint-roster.py            # A3 roster lint: validates each reviewer's frontmatter + contract
+│   ├── review-loop.js            # Dynamic Workflows transport: the S1/S5 convergence loop (round0 + fix → re-review)
 │   ├── review-round.js           # Dynamic Workflows transport: one review round → verdict JSON
 │   └── select-panel.py           # selector: (phase, signals) → panel JSON
 ├── agents/                       # named review roster (read-only)
@@ -92,7 +94,7 @@ This repo is its own single-repo marketplace, so add it and install:
 also browse and install via the interactive `/plugin` menu (Marketplaces → add →
 install).
 
-**Updating:** this plugin uses explicit semver (currently `0.8.9`). A release bumps
+**Updating:** this plugin uses explicit semver (currently `0.9.0`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```

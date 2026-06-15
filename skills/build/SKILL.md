@@ -40,6 +40,14 @@ handoff: it is required, install via
 - **Thin orchestrator.** Dispatch by reference and judge structured output. Never hoard
   whole files, diffs, or logs in the main thread; read only bounded slices when you must
   inspect something yourself.
+- **Worktree-pinned dispatch.** Every subagent you dispatch — producer, fix-producer,
+  reviewer, council advisor — operates **only** inside the run's worktree on its branch,
+  **never** main/master. Build each prompt with the absolute worktree path + branch and
+  require the subagent to: act by absolute paths under the worktree (or `git -C <worktree>`),
+  never rely on inherited cwd, and **before any write assert**
+  `git -C <worktree> branch --show-current` equals the run branch — else STOP without editing. Producers dispatched via
+  subagent-driven-development inherit this through their task context. (Reviewers are
+  read-only but still target the worktree, not main.)
 - **Disk-backed.** Persist the spec and a **plan doc** (implementation plan + progress
   section + RESUME block) so the run survives compaction. Location follows the
   user's/project's convention — see **State & resumption**.
@@ -83,6 +91,7 @@ smaller council or solo; never fabricate personas to hit a count.
 - **Dispatch the whole round together** — never one at a time, re-reviews included. Build
   each member's run-input prompt once — "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…,
   spec_doc=…, plan_doc=…, requirement=…, focus=…. Output ONLY the verdict, no prose."
+  Reviewers read the worktree at the given absolute paths, never main.
   (absolute paths) — the identical prompt rides whichever transport carries it:
   - **Workflow transport (preferred; roster and ad-hoc members):** one call per round —
     `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "<spec|work>", members: [{agent, subagent_type, prompt}, …]}})`,
@@ -193,14 +202,14 @@ READY` marker and no S1 root-contradiction stop.
   its final whole-implementation review — S5 is the authoritative whole-diff gate that
   re-reviews the same diff. It may commit per task; the S6 squash folds its commits.
   Non-code → producer subagents via the same dispatch pattern. The orchestrator never edits
-  the work product itself.
+  the work product itself. (worktree-pinned — see Operating disciplines)
 - **S4 — verify (step 6).** Use `superpowers:verification-before-completion`: run the
   discovered checks. For THIS plugin = `claude plugin validate` + `python3
   tests/test_scripts.py` + the documented manual smoke. Cap fixes at 3. Never weaken, skip,
   or delete a check; a drop in the check count → STOP.
 - **S5 — work review (step 7).** Run the S5 review loop (see **Review rounds**) over the work.
   **Fixes:** ONE fresh producer subagent primed with the deduped open blockers + cited
-  files only. Docs are part of S5: the core `doc-reviewer` gates repo-wide doc
+  files only (worktree-pinned — see Operating disciplines). Docs are part of S5: the core `doc-reviewer` gates repo-wide doc
   currency/concision (stale/missing/contradictory docs = BLOCKING → fixed by the S5
   producer; bloat = NON-BLOCKING). On convergence it records `AUTOPILOT: WORK READY`.
 - **S6 — squash (step 8).** Idempotent squash to one commit (skip if already exactly 1
