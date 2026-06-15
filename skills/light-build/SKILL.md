@@ -118,24 +118,42 @@ Convergence is decided from these structured verdicts, never from vibes.
 ## S5 — correctness + requirement-fidelity + doc review (cap 1)
 
 S5 is the **sole correctness gate** on this path — no spec review, no S1, no S3 per-task
-reviews, so S5 carries it alone (deliberate, not an oversight).
+reviews, so S5 carries it alone (deliberate, not an oversight). The orchestrator runs the
+loop itself, dispatching each round through the one-round transport `review-round.js`.
 
 - **Pin the panel directly** — `autopilot:correctness-reviewer`,
-  `autopilot:requirement-fidelity-reviewer`, AND `autopilot:doc-reviewer`.
+  `autopilot:requirement-fidelity-reviewer`, AND `autopilot:doc-reviewer`. These three cores
+  are the whole panel; there are no optionals.
 - **Freeze** the pinned panel in context as the one-line freeze shape (see **Working-note
-  shapes**); pass it to the loop.
-- **Run the loop via `review-loop.js`**:
-  `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-loop.js", args: {phase:"work",
-  worktree, base_ref, requirement, spec_doc:null, plan_doc:<state file|null>, cap:1,
-  panel:[{agent, subagent_type, focus}, …]}})` — `args` a real JSON object. The call
-  returns a task ID; its completion notification carries `{converged, rounds, head,
-  verdicts, blockers, reason, decisions}` — wait for it (never poll/judge early). Map it:
-  `converged:true` → record `AUTOPILOT: WORK READY`, proceed S5→S6; `converged:false` →
-  **non-convergence STOP** with `reason` (oscillation | unfixable | requirements-conflict).
-  Log each `decisions[]` entry as a decision line. The S5 fix and any fix-time FORK/council
-  run **inside** the loop; S3-produce FORKs still use the orchestrator council (unchanged).
-- **No-Workflow fallback:** iff the `Workflow` tool is unavailable, `Read`
-  `${CLAUDE_PLUGIN_ROOT}/skills/_shared/review-loop.md` and run the prose loop in-session.
+  shapes**); reuse it every round.
+- **Dispatch each round together** — never one at a time, the re-review included. Build each
+  member's run-input prompt once — "PHASE=work. Inputs: worktree=…, base_ref=…, requirement=…,
+  focus=…. Output ONLY the verdict, no prose." (absolute paths; reviewers read the worktree,
+  never main) — the identical prompt rides whichever transport carries it:
+  - **Workflow transport (preferred):** one call per round —
+    `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`,
+    `args` a real JSON object. Members keep their own model + read-only allowlist (`agentType`
+    resolves like `Task`). The call returns a task ID; the round's verdicts arrive in its
+    completion notification as `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING,
+    synthetic}, …]}` — wait for it (never poll/judge early). `synthetic: true` = that member's
+    infra failure, not a FAIL: re-dispatch just those lenses once via `Task`; still nothing →
+    FAIL. No `verdicts` array, or one shorter than sent → Task fallback for the missing members.
+  - **Task fallback:** if `Workflow` is unavailable or a call failed, dispatch the members as
+    parallel `Task(subagent_type="autopilot:<name>")` calls in a single message — send ONLY the
+    run-input prompt. Note the fallback on the freeze line's `transport=` field if it fired.
+- **The loop** (orchestrator-run, cap = 1):
+  - **Round 0** = the pinned panel; all-PASS short-circuits → record `AUTOPILOT: WORK READY`,
+    proceed S5→S6.
+  - **Fix:** dispatch ONE producer subagent via plain `Task` (worktree-pinned — like the S3
+    producer) primed with the deduped open blockers + cited files only. A fix-time genuine fork
+    uses the existing **S3 FORK → council** mechanism (orchestrator council), not an in-loop
+    council. Blocker text primes the fix transiently, never logged.
+  - **Re-review** (the one round cap = 1 allows) dispatches only the **FAILed subset** — the
+    lenses whose last verdict was FAIL/missing. All three are cores, so there is no `touched`
+    recompute. Skipped lenses carry their PASS.
+  - **Advance** when every pinned lens is PASS with no open BLOCKING → record `AUTOPILOT: WORK
+    READY` → S5→S6. Cap hit without the marker → **non-convergence STOP** with the 3-way
+    classification (oscillation | unfixable | requirements-conflict).
 
 ## Working-note shapes (in context — not persisted)
 
@@ -180,9 +198,11 @@ writing-plans.
   documented manual smoke). Cap fixes at **3**. **Never weaken, skip, or delete a check; a
   drop in the check count → STOP** (non-review phase failure). Idempotent — re-running is safe.
 - **S5 — work review (step 4).** Run the **S5 review** above (**cap = 1**) over the work: pin
-  `correctness` + `requirement-fidelity` + `doc`, then run the whole loop via `review-loop.js`
-  (Workflow; `_shared/review-loop.md` prose fallback when `Workflow` is unavailable). On
-  `converged:true` record `AUTOPILOT: WORK READY`; on `converged:false` STOP with `reason`.
+  `correctness` + `requirement-fidelity` + `doc`, then run the in-session loop — each round
+  dispatched via `review-round.js` (Workflow; parallel-`Task` fallback). The orchestrator owns
+  the loop and derives convergence from the verdicts itself; the fix is one `Task` producer. On
+  convergence record `AUTOPILOT: WORK READY`; cap hit without the marker → STOP with the 3-way
+  classification.
 - **S6 — squash (step 5).** Idempotent squash to one commit **via `git` (`Bash`)** — **skip
   if already exactly 1 ahead of base_ref**. The state file (if one was materialized) is
   committed or ignored per the project's convention — do not force either.

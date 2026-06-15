@@ -109,27 +109,52 @@ section**. S3's subagent-driven-development then discovers it from the plan doc.
 
 ## Review rounds (S5)
 
-**S5** (work review) is the only convergence loop — **cap = 1**, whole loop in `review-loop.js`.
+**S5** (work review) is the only convergence loop — **cap = 1** (round 0 + at most ONE
+re-review round). The orchestrator runs the loop itself, dispatching each round through the
+one-round transport `review-round.js`.
 
 - **Select, trim, freeze.** Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py"
   --phase work --worktree <worktree> --base <base_ref>` → a `selected` list of
   `{agent, subagent_type, tier, matched}`. Its `core` lenses (correctness, requirement-fidelity,
   doc) are the mandatory floor — take them as-is; **trim, don't pad**: drop `optional` lenses
-  unless a changed-path signal clearly warrants one. Freeze & log the panel to the **plan
-  doc** progress section (one-line freeze shape, see **Progress log format**).
-- **Run the loop via `review-loop.js`**:
-  `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-loop.js", args: {phase:"work",
-  worktree, base_ref, requirement, spec_doc, plan_doc, cap:1, panel:[{agent, subagent_type,
-  focus}, …]}})` — `args` a real JSON object. Ad-hoc lenses ride the same `panel` as
-  `subagent_type:"general-purpose"`, carrying their persona + "Read-only." +
-  the Verdict grammar in `focus`. The call returns a task ID; its completion notification
-  carries `{converged, rounds, head, verdicts, blockers, reason, decisions}` — wait for it
-  (never poll/judge early). Map it: `converged:true` → record `AUTOPILOT: WORK READY`, proceed
-  S5→S6; `converged:false` → **non-convergence STOP** with `reason` (oscillation | unfixable |
-  requirements-conflict). Log each `decisions[]` entry as a decision line. The S5 fix and any
-  fix-time FORK/council run **inside** the loop.
-- **No-Workflow fallback:** iff the `Workflow` tool is unavailable, `Read`
-  `${CLAUDE_PLUGIN_ROOT}/skills/_shared/review-loop.md` and run the prose loop in-session.
+  unless a changed-path signal clearly warrants one. You MAY add an ad-hoc inline lens for a
+  genuine gap no roster agent covers. Freeze & log the panel to the **plan doc** progress
+  section (one-line freeze shape, see **Progress log format**); reuse it every round.
+- **Dispatch each round together** — never one at a time, re-reviews included. Build each
+  member's run-input prompt once — "PHASE=work. Inputs: worktree=…, base_ref=…, spec_doc=…,
+  plan_doc=…, requirement=…, focus=…. Output ONLY the verdict, no prose." (absolute paths;
+  reviewers read the worktree, never main) — the identical prompt rides whichever transport
+  carries it:
+  - **Workflow transport (preferred):** one call per round —
+    `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`,
+    `args` a real JSON object (it tolerates a stringified one; don't rely on it). Members keep
+    their own model + read-only allowlist (`agentType` resolves like `Task`). The call returns
+    a task ID; the round's verdicts arrive in its completion notification as `{phase, verdicts:
+    [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` — wait for it (never poll/judge
+    early). `synthetic: true` = that member's infra failure, not a FAIL: re-dispatch just those
+    lenses once via `Task`; still nothing → FAIL. No `verdicts` array, or one shorter than sent
+    → Task fallback for the missing members. Ad-hoc lenses ride the same `members` list as
+    `subagent_type:"general-purpose"`, their `prompt` carrying the persona + "Read-only. Modify
+    nothing." + the Verdict grammar block (read-only is prompt-enforced only).
+  - **Task fallback:** if `Workflow` is unavailable or a call failed, dispatch roster members
+    as `Task(subagent_type="autopilot:<name>", …)` — send ONLY the run-input prompt, all calls
+    in one message (`superpowers:dispatching-parallel-agents`). The transport + any fallback
+    that fired ride the freeze line's `transport=` field.
+- **The loop** (orchestrator-run, cap = 1):
+  - **Round 0** = full frozen panel; all-PASS short-circuits → record `AUTOPILOT: WORK READY`,
+    proceed S5→S6.
+  - **Fix** (orchestrator-driven): dispatch ONE fresh producer subagent primed with the deduped
+    open blockers + cited files only (worktree-pinned — see Operating disciplines). A fix-time
+    FORK/council runs as the orchestrator council (see "Deciding at decision points"). Blocker
+    text primes the fix transiently, never logged.
+  - **Re-review** (the one round cap = 1 allows) dispatches only **`(FAILed ∪ touched) ∩ frozen
+    panel`** — *FAILed* = last verdict FAIL/missing; *touched* = lenses whose `applies_to`
+    matches the fix's changed files (record the **pre-fix HEAD**, re-run `select-panel.py
+    --phase work --worktree <worktree> --base <pre-fix HEAD>`; cores always match). Ad-hoc
+    lenses re-run iff FAILed. Skipped lenses carry their PASS.
+  - **Advance** when every frozen-panel lens is PASS with no open BLOCKING → record `AUTOPILOT:
+    WORK READY` → S5→S6. Cap hit without the marker → **non-convergence STOP** with the 3-way
+    classification (oscillation | unfixable | requirements-conflict).
 
 ## Verdict grammar (paste into ad-hoc review prompts only)
 
@@ -202,10 +227,11 @@ spec-review pass (the Safety-stops root-contradiction still applies).
   tests/test_scripts.py` + the documented manual smoke. Cap fixes at 3. Never weaken, skip,
   or delete a check; a drop in the check count → STOP.
 - **S5 — work review (step 6).** Compose the panel via `select-panel.py` (core floor +
-  trimmed optionals), then run the whole loop via `review-loop.js` (Workflow;
-  `_shared/review-loop.md` prose fallback when `Workflow` is unavailable) — **cap = 1**; see
-  **Review rounds**. The fix runs inside the loop; `doc-reviewer` is always in the core floor.
-  On `converged:true` record `AUTOPILOT: WORK READY`; on `converged:false` STOP with `reason`.
+  trimmed optionals), then run the in-session loop — **cap = 1**, each round dispatched via
+  `review-round.js` (Workflow; Task fallback); see **Review rounds**. The orchestrator owns the
+  loop and derives convergence from the verdicts itself; the fix is one fresh producer subagent.
+  `doc-reviewer` is always in the core floor. On convergence record `AUTOPILOT: WORK READY`;
+  cap hit without the marker → STOP with the 3-way classification.
 - **S6 — squash (step 7).** Idempotent squash to one commit (skip if already exactly 1
   ahead of base_ref). Working notes (spec/plan/progress) are committed or ignored per the
   project's convention — do not force either.
@@ -223,8 +249,8 @@ ends by emitting the **Result handoff** block (`status`=`stopped`, or
    the worktree, history rewrite beyond this branch, or rm/reset of uncommitted work.
    **In Auto Mode** (auto-accept / bypass-permissions), skip this stop — destructive-op
    judgment is deferred to Auto Mode. The other three stops apply regardless of Auto Mode.
-2. **Non-convergence at cap** — S5 (`review-loop.js`) returns `converged:false` at `cap`
-   (= 1) (with the classification).
+2. **Non-convergence at cap** — the in-session S5 loop hits `cap` (= 1) without the marker
+   (with the classification).
 3. **Non-review phase failure** — one retry, then STOP.
 4. **Root-contradiction** — the core requirement is self-contradictory; cite the two
    clauses.

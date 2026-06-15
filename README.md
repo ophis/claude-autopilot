@@ -5,7 +5,7 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.9.2** — the build/fix surfaces are now **skills** (`skills/build`,
+> Status: **v0.9.3** — the build/fix surfaces are now **skills** (`skills/build`,
 > `skills/fix`): model-invocable and composable as a step inside a larger
 > skill/workflow, while `/autopilot:build` and `/autopilot:fix` still work for users.
 > A third surface, **`skills/medium-build`** (`/autopilot:medium-build`), is the trimmed
@@ -18,9 +18,9 @@ with one explicit command.
 > The **named review roster** is complete for both phases in `agents/`, and the
 > **selection stage** (`scripts/select-panel.py`) wires the roster into the S1/S5
 > review loops — the skills select the panel from the roster and dispatch each
-> reviewer natively as `autopilot:<name>`, preferring a `Workflow` call (`build` / `fix`
-> dispatch one round via `scripts/review-round.js`; `medium-build` / `light-build` run the
-> whole loop via `scripts/review-loop.js`) with automatic `Task` fallback (see
+> reviewer natively as `autopilot:<name>`, preferring a `Workflow` call (all four surfaces
+> dispatch one round via `scripts/review-round.js`, running the convergence loop in the
+> orchestrator) with automatic `Task` fallback (see
 > [Review roster](#review-roster-agents)).
 
 ## Repository structure
@@ -30,18 +30,16 @@ The git repo is **both the marketplace and the plugin**:
 ```
 claude-autopilot/                 # git repo = marketplace + plugin
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 0.9.2)
+│   ├── plugin.json               # name: autopilot (version 0.9.3)
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # skill; /autopilot:build       still works
 │   ├── fix/SKILL.md              # skill; /autopilot:fix         still works
 │   ├── medium-build/SKILL.md     # skill; /autopilot:medium-build — trimmed path (spec + E3 + capped review)
-│   ├── light-build/SKILL.md      # skill; /autopilot:light-build  — superpowers-free, low-ceremony
-│   └── _shared/review-loop.md    # no-Workflow fallback for the S1/S5 convergence loop
+│   └── light-build/SKILL.md      # skill; /autopilot:light-build  — superpowers-free, low-ceremony
 ├── scripts/
 │   ├── autopilot-config.py       # reads/initializes ${CLAUDE_PLUGIN_DATA}/config.json
 │   ├── lint-roster.py            # A3 roster lint: validates each reviewer's frontmatter + contract
-│   ├── review-loop.js            # Dynamic Workflows transport: the S1/S5 convergence loop (round0 + fix → re-review)
 │   ├── review-round.js           # Dynamic Workflows transport: one review round → verdict JSON
 │   └── select-panel.py           # selector: (phase, signals) → panel JSON
 ├── agents/                       # named review roster (read-only)
@@ -95,7 +93,7 @@ This repo is its own single-repo marketplace, so add it and install:
 also browse and install via the interactive `/plugin` menu (Marketplaces → add →
 install).
 
-**Updating:** this plugin uses explicit semver (currently `0.9.2`). A release bumps
+**Updating:** this plugin uses explicit semver (currently `0.9.3`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```
@@ -296,15 +294,13 @@ panel: it globs `agents/`, reads each frontmatter, and returns the selected revi
 model and read-only tool allowlist on either transport (identical prompts):
 **preferred**, a `Workflow` call (Dynamic Workflows — background fan-out, schema-validated
 verdict JSON; a member's infra failure returns `synthetic: true` and is retried once
-via `Task`) — `build` / `fix` dispatch **one round** via `scripts/review-round.js`, while
-`medium-build` / `light-build` run the **whole convergence loop** via
-`scripts/review-loop.js` (with the no-Workflow `skills/_shared/review-loop.md` prose
-fallback); **fallback** (tool unavailable or a call failed — sticky for the run),
+via `Task`) — **all four surfaces** dispatch **one round** via `scripts/review-round.js`,
+running the convergence loop in the orchestrator; **fallback** (tool unavailable or a call failed — sticky for the run),
 the parallel `Task(subagent_type="autopilot:<name>")` batch. An ad-hoc review lens
 rides the same `Workflow` transport (dispatched as `general-purpose`, schema-validated
 like the roster). Nothing to configure.
 (Requires the installed plugin ≥ v0.4.0; the workflow transport needs the version
-shipping `scripts/review-round.js` / `scripts/review-loop.js`.)
+shipping `scripts/review-round.js`.)
 Doc upkeep is folded into S5: the core `doc-reviewer` flags stale/missing docs **repo-wide**
 (touched files and docs elsewhere the change contradicts) as BLOCKING (fixed in the S5 loop),
 so there is no separate docs phase.
