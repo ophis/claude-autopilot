@@ -101,46 +101,39 @@ argument. This slice is the **entry action of S3**, not its own resumable phase.
 
 ## Review rounds (S5)
 
-- **Select from the script.** Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py"
+- **Select, trim, freeze.** Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py"
   --phase work --worktree <worktree> --base <base_ref>` → a `selected` list of
   `{agent, subagent_type, tier, matched}`. Its `core` lenses (correctness,
-  requirement-fidelity, doc) are the mandatory floor — take them as-is.
-- **Trim, don't pad (the trimmed-path policy).** Drop the `optional` lenses the script
-  returns unless a changed-path signal clearly warrants one; never add beyond what it returns.
-- **Freeze & log** the composed panel to the **plan doc** (progress section) as the
-  one-line freeze shape (see **Progress log format**). Reuse it every round of S5.
-- **Dispatch the whole round's panel together** — never one at a time; every S5 round,
-  re-reviews included. Build each member's run-input prompt once —
-  "PHASE=work. Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…, requirement=…,
-  focus=…. Output ONLY the verdict, no prose." (absolute paths) — the identical prompt goes
-  to whichever transport carries it:
+  requirement-fidelity, doc) are the mandatory floor — take them as-is; **trim, don't pad**
+  (the trimmed-path policy): drop the `optional` lenses unless a changed-path signal clearly
+  warrants one, never add beyond what the script returns. Freeze & log the composed panel to
+  the **plan doc** progress section as the one-line freeze shape (see **Progress log
+  format**); reuse it every round of S5.
+- **Dispatch the whole round together** — never one at a time, re-reviews included. Build
+  each member's run-input prompt once — "PHASE=work. Inputs: worktree=…, base_ref=…,
+  spec_doc=…, plan_doc=…, requirement=…, focus=…. Output ONLY the verdict, no prose."
+  (absolute paths) — the identical prompt rides whichever transport carries it:
   - **Workflow transport (preferred; roster and ad-hoc members):** one call per round —
-    `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`.
-    Pass `args` as a real JSON object (the transport tolerates a stringified one; don't rely on it).
-    Members keep their own model + read-only allowlist (`agentType` resolves like `Task`).
-    The call returns a task ID immediately; the round's verdicts arrive in its completion
-    notification as `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING,
-    synthetic}, …]}` — wait for it (never poll, never judge early). Never pass
-    `resumeFromRunId`: every round is a fresh run. `synthetic: true` = that member's infra
-    failure, not a review FAIL: once all initial results are in (incl. ad-hoc), re-dispatch
-    just those lenses once via `Task`; still nothing → FAIL. A return with no `verdicts`
-    array — or one shorter than the panel sent (incl. `[]` for a non-empty panel) — is a
-    failed/partial call → Task fallback for the missing members.
-  - **Ad-hoc members ride the SAME Workflow `members` list** as `subagent_type:
-    "general-purpose"`, carrying in the `prompt` the persona + the verdict contract —
-    "Read-only. Modify nothing." and the "Verdict grammar" block below (call
-    `StructuredOutput` when offered; no prose). Their read-only is **prompt-enforced only**
-    (roster members carry a real read-only tool allowlist; ad-hoc do not), so the summon
-    prompt MUST carry the read-only instruction. Ad-hoc follow the SAME fallback as roster
-    — both (a) the whole-round Task fallback if the Workflow call is unavailable/fails, and
-    (b) the per-member `synthetic: true` single Task re-dispatch. Dispatch ad-hoc directly
-    via `Task` only when the whole round is already on the Task fallback.
-  - **Task fallback:** if the `Workflow` tool is unavailable or any call failed, dispatch
-    roster members as `Task(subagent_type="autopilot:<name>", …)` — the agent's body is its
-    system prompt; send ONLY the run-input prompt — all calls in a single message
-    (`superpowers:dispatching-parallel-agents`), for the rest of the run. The transport (and
-    any fallback that fired) rides the freeze line's `transport=` field (see **Progress log
-    format**) — not a separate log line.
+    `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`,
+    `args` a real JSON object (it tolerates a stringified one; don't rely on it). Members keep
+    their own model + read-only allowlist (`agentType` resolves like `Task`). The call returns
+    a task ID; the round's verdicts arrive in its completion notification as `{phase, verdicts:
+    [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` — wait for it (never poll/judge
+    early). Never pass `resumeFromRunId` — every round is a fresh run. `synthetic: true` = that
+    member's infra failure, not a FAIL: once all initial results are in (incl. ad-hoc),
+    re-dispatch just those lenses once via `Task`; still nothing → FAIL. No `verdicts` array, or
+    one shorter than sent (incl. `[]`) → failed/partial → Task fallback for the missing members.
+  - **Ad-hoc members ride the SAME `members` list** as `subagent_type: "general-purpose"`,
+    their `prompt` carrying the persona + "Read-only. Modify nothing." + the "Verdict grammar"
+    block below (call `StructuredOutput` when offered). Their read-only is **prompt-enforced
+    only** (no tool allowlist), so the prompt MUST carry it. They follow the SAME dual fallback
+    as roster: the whole-round Task fallback, and the per-member `synthetic` single Task
+    re-dispatch — dispatch ad-hoc directly via `Task` only when the whole round already fell back.
+  - **Task fallback:** if `Workflow` is unavailable or a call failed, dispatch roster members as
+    `Task(subagent_type="autopilot:<name>", …)` — body is the system prompt; send ONLY the
+    run-input prompt, all calls in one message (`superpowers:dispatching-parallel-agents`), rest
+    of the run. The transport + any fallback that fired ride the freeze line's `transport=` field
+    (see **Progress log format**) — not a separate log line.
 - Each reviewer returns the verdict block; collect verdicts → the Ralph loop.
 
 medium-build has no S1, so **S5** (work review) is the only convergence loop: review → fix →

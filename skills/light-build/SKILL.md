@@ -119,40 +119,37 @@ not an oversight).
 
 - **Pin the panel directly** — `autopilot:correctness-reviewer`,
   `autopilot:requirement-fidelity-reviewer`, AND `autopilot:doc-reviewer`. No other
-  reviewers; **no `select-panel.py`** (the panel is pinned, not selected). **Why these
-  three:** `correctness` judges internal correctness only; with no spec doc and no spec
-  review, `requirement-fidelity` is the *sole* lens checking the work actually realizes the
-  **requirement** — without it a producer could build the wrong thing, bug-free, and pass;
-  `doc` (roster-core, `applies_to: ["**"]`) catches documentation the change falsified — **a
-  code change can leave docs elsewhere stale**, and the reviewer self-scopes via bounded
-  mono-repo discovery, so it PASSes cleanly when nothing is affected (pin it every round
-  rather than gating on a file-type signal). **`requirement-fidelity`'s reference is the
-  run's requirement text** (`$ARGUMENTS` — the verbatim requirement the orchestrator holds
-  in context, and which the state file records once materialized), **not a spec doc**.
-- **Freeze** the pinned panel — hold it in context as the one-line freeze shape (see
-  **Working-note shapes**). Reuse it every round of S5.
-- **Dispatch the whole round's panel together** — never one at a time. Build each member's
-  run-input prompt once — "PHASE=work. Inputs: worktree=…, base_ref=…,
-  requirement=<the verbatim requirement>, focus=…. Output ONLY the verdict, no prose."
-  (absolute paths) — the identical prompt goes to whichever transport carries it:
+  reviewers; **no `select-panel.py`** (pinned, not selected). **Why these three:**
+  `correctness` judges internal correctness only; with no spec doc/review,
+  `requirement-fidelity` is the *sole* lens checking the work realizes the **requirement** —
+  without it a producer could build the wrong thing, bug-free, and pass; `doc` (roster-core,
+  `applies_to: ["**"]`) catches docs the change falsified — **a change can leave docs
+  elsewhere stale** — and self-scopes via bounded mono-repo discovery, PASSing cleanly when
+  nothing is affected (pin it every round, don't gate on a file-type signal).
+  **`requirement-fidelity`'s reference is the run's requirement text** (`$ARGUMENTS` — the
+  verbatim requirement held in context, recorded in the state file once materialized), **not
+  a spec doc**.
+- **Freeze** the pinned panel in context as the one-line freeze shape (see **Working-note
+  shapes**); reuse it every round of S5.
+- **Dispatch the whole round together** — never one at a time. Build each member's run-input
+  prompt once — "PHASE=work. Inputs: worktree=…, base_ref=…, requirement=<the verbatim
+  requirement>, focus=…. Output ONLY the verdict, no prose." (absolute paths) — the identical
+  prompt rides whichever transport carries it:
   - **Workflow transport (preferred):** one call per round —
-    `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`.
-    Pass `args` as a real JSON object (the transport tolerates a stringified one; don't rely on it).
-    Members keep their own model + read-only allowlist (`agentType` resolves like `Task`).
-    The call returns a task ID immediately; the round's verdicts arrive in its completion
-    notification as `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING,
-    synthetic}, …]}` — wait for it (never poll, never judge early). Never pass
-    `resumeFromRunId`: every round is a fresh run. `synthetic: true` = that member's infra
-    failure, not a review FAIL: re-dispatch just those lenses once via `Task`; still nothing
-    → FAIL. A return with no `verdicts` array — or one shorter than the panel sent (incl.
-    `[]` for a non-empty panel) — is a failed/partial call → Task fallback for the missing
-    members.
-  - **Task fallback (plain parallel batch):** if the `Workflow` tool is unavailable or any
-    call failed, dispatch the pinned members as `Task(subagent_type="autopilot:<name>", …)`
-    — the agent's body is its system prompt; send ONLY the run-input prompt — **all calls in
-    a single message** (a plain parallel `Task` batch), for the rest of the run. The
-    transport (and any fallback that fired) rides the freeze line's `transport=` field (see
-    **Working-note shapes**) — not a separate log line.
+    `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`,
+    `args` a real JSON object (it tolerates a stringified one; don't rely on it). Members keep
+    their own model + read-only allowlist (`agentType` resolves like `Task`). The call returns
+    a task ID; the round's verdicts arrive in its completion notification as `{phase, verdicts:
+    [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` — wait for it (never poll/judge
+    early). Never pass `resumeFromRunId` — every round is a fresh run. `synthetic: true` = that
+    member's infra failure, not a FAIL: re-dispatch just those lenses once via `Task`; still
+    nothing → FAIL. No `verdicts` array, or one shorter than sent (incl. `[]`) → failed/partial
+    → Task fallback for the missing members.
+  - **Task fallback (plain parallel batch):** if `Workflow` is unavailable or a call failed,
+    dispatch the pinned members as `Task(subagent_type="autopilot:<name>", …)` — body is the
+    system prompt; send ONLY the run-input prompt, **all calls in a single message** (a plain
+    parallel `Task` batch), rest of the run. The transport + any fallback that fired ride the
+    freeze line's `transport=` field (see **Working-note shapes**) — not a separate log line.
 - Each reviewer returns the verdict block; collect verdicts → the loop below.
 
 **Cap = 1** (round 0 + at most one fix round) — pinned, not from config. **Round 0** = the
