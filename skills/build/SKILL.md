@@ -7,8 +7,8 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, Skill, Workflow, ToolS
 
 # Autopilot: build
 
-You are the orchestrator for an autonomous build run. Drive the pipeline below end
-to end: dispatch and judge.
+You are the orchestrator for an autonomous build run. Drive the pipeline end to end:
+dispatch and judge.
 
 ## Your input ($ARGUMENTS)
 
@@ -19,28 +19,26 @@ to end: dispatch and judge.
   file**, adopt it as the run's spec and **skip E2 and S1** (run E1 → S2 → …). The spec
   must be **self-contained** — enough to plan, implement, and verify without further
   clarification (ideally with acceptance/verification criteria). A non-existent path is
-  treated as requirements text. (Full mode rules in **Entry modes** under Pipeline.)
+  treated as requirements text. (Full rules in **Entry modes** under Pipeline.)
 
 Empty input → STOP with a handoff asking for requirements.
 
 ## Preflight (dependencies)
 
-**Load config (run first, every run):** `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`. User edits to that file take effect next run.
+**Load config:** `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It creates `${CLAUDE_PLUGIN_DATA}/config.json` with defaults if absent and prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`.
 
-Before E1, confirm the **superpowers** plugin is available — its skills must appear in your
-skill list (the whole pipeline is built on them). If **not** available, STOP with a
-handoff: it is required, install via
+Before E1, confirm **superpowers** plugin is available. If **not** available, STOP with a
+handoff: it's required, install via
 `/plugin install superpowers@claude-plugins-official`, then re-run `/autopilot:build`.
 
 ## Operating disciplines
 
-- **Autonomous — never ask the user.** At a decision point, **convene the expert
-  council** (see "Deciding at decision points") to deliberate, then decide + record;
-  trivial vagueness → decide + record solo. Only the safety stops interrupt the run.
+- **Autonomous — never ask user.** At a decision point, **convene expert
+  council or decide solo** (see "Deciding at decision points").
 - **Thin orchestrator.** Dispatch by reference and judge structured output. Never hoard
-  whole files, diffs, or logs in the main thread; read only bounded slices when you must
+  whole files, diffs, or logs in main thread; read only bounded slices when you must
   inspect something yourself.
-- **Worktree-pinned dispatch.** Give every subagent the absolute worktree path + branch and
+- **Worktree-pinned dispatch.** Give every subagent absolute worktree path + branch and
   have it act only there — absolute paths / `git -C <worktree>`, never inherited cwd — and
   **before any write assert** `git -C <worktree> branch --show-current` is the run branch;
   **never** main/master. Producers dispatched via subagent-driven-development
@@ -63,17 +61,17 @@ persisted to locate the loop. No plan doc → start at E1.
 **Persist two things** so the run survives compaction: the **spec** (E2's output in
 requirements mode, or the user-provided file in spec-file mode — E1 writes only the plan
 doc's progress section, S2 fills the implementation-plan section) and the **plan doc**
-(implementation plan + progress section, carrying the RESUME block):
+(implementation plan + progress section + RESUME block):
 
 ```
 RESUME: phase=<E1|E2|S1..S7> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> spec_file=<path>
 ```
 
 (`spec_file` is present only in spec-file mode.) **Keep RESUME current:** rewrite it at every
-phase transition — `phase=` as you advance (E1→E2→S1…→S7; spec-file mode advances E1→S2) and
-`review_round=` each loop iteration; a stale `phase=` breaks resumption. **Where this lives
-follows the user's / project's convention** — honor CLAUDE.md and existing repo patterns; no
-fixed path (don't assume `dev-docs/`), no gitignore-vs-commit policy.
+phase transition — `phase=` as you advance (E1→E2→S1…→S7; spec-file mode advances E1→S2),
+`review_round=` each loop iteration; a stale `phase=` breaks resumption. **Location follows
+the user's / project's convention** — honor CLAUDE.md and existing repo patterns; no fixed
+path (don't assume `dev-docs/`), no gitignore-vs-commit policy.
 
 ## Deciding at decision points (expert council)
 
@@ -98,8 +96,8 @@ fixed path (don't assume `dev-docs/`), no gitignore-vs-commit policy.
 - **Dispatch the whole round together** — never one at a time, re-reviews included. Build
   each member's run-input prompt once — "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…,
   spec_doc=…, plan_doc=…, requirement=…, focus=…. Output ONLY the verdict, no prose."
-  Reviewers read the worktree at the given absolute paths, never main.
-  (absolute paths) — the identical prompt rides whichever transport carries it:
+  (absolute paths; reviewers read the worktree, never main) — the identical prompt rides
+  whichever transport carries it:
   - **Workflow transport (preferred; roster and ad-hoc members):** one call per round —
     `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "<spec|work>", members: [{agent, subagent_type, prompt}, …]}})`,
     `args` a real JSON object (it tolerates a stringified one; don't rely on it). Members keep
@@ -126,11 +124,11 @@ fixed path (don't assume `dev-docs/`), no gitignore-vs-commit policy.
 **S1** (spec review) and **S5** (work review) run a native loop: review → fix → re-review
 until the frozen panel PASSes, capped per phase by `ralphLoop.maxIterations.spec-phase` /
 `.implementation-phase` (default 3, from config). Blocker text primes the fix transiently,
-never logged. Every reviewer is a fresh instance; convergence is read from the verdicts,
-and the marker is printed only when genuinely converged.
+never logged. Every reviewer is a fresh instance; the marker prints only when genuinely
+converged.
 
-- **The loop.** The orchestrator runs the rounds itself and logs each round as one line
-  (see **Progress log format**).
+- **The loop.** The orchestrator runs the rounds itself, logging each as one line (see
+  **Progress log format**).
 - **Round 0** = full frozen panel; all-PASS short-circuits.
 - **Re-review (N>0)** dispatches only **`(FAILed ∪ touched) ∩ frozen panel`** — *FAILed* =
   last verdict FAIL/missing; *touched* (S5) = lenses whose `applies_to` matches the fix's
@@ -142,7 +140,7 @@ and the marker is printed only when genuinely converged.
   (S1→S2, S5→S6; spec-file mode starts at S2, no S1/marker). Cap hit without the marker →
   non-convergence STOP (oscillation | unfixable | requirements-conflict) + handoff.
 
-## Verdict grammar (paste into ad-hoc summon prompts only — roster agents already embed it)
+## Verdict grammar (paste into ad-hoc review prompts only)
 
 Output ONLY the verdict — no prose/preamble. When a `StructuredOutput` tool is offered
 (Workflow transport), the verdict IS that call: `{VERDICT: PASS|FAIL, BLOCKING: [...],
@@ -175,10 +173,10 @@ spine (common to build & fix).
 
 **Entry modes (build):** *requirements mode* (default) runs E1 → E2 → S1 → S2 → …;
 *spec-file mode* (when `$ARGUMENTS` is an existing spec file) runs **E1 → S2**, skipping
-E2 and S1: the provided spec becomes the run's spec — record its absolute path in the
-RESUME block as `spec_file=<path>`; S2 plans from it; S5's `requirement-fidelity` reviewer
-uses it as the work⊨spec reference. With S1 skipped, this mode has no `AUTOPILOT: SPEC
-READY` marker and no S1 root-contradiction stop.
+E2 and S1: the provided spec becomes the run's spec — record its absolute path in RESUME
+as `spec_file=<path>`; S2 plans from it; S5's `requirement-fidelity` reviewer uses it as
+the work⊨spec reference. S1 skipped → no `AUTOPILOT: SPEC READY` marker, no S1
+root-contradiction stop.
 
 - **E1 — worktree (step 1).** Use `superpowers:using-git-worktrees` → branch
   `autopilot/<slug>`. Slug = `$ARGUMENTS` lowercased, non-alphanumerics → hyphens,
@@ -194,31 +192,31 @@ READY` marker and no S1 root-contradiction stop.
   decision (see **Progress log format**; trivial defaults: decide + record). (Skipped in
   **spec-file mode** — provided spec adopted as-is; see **Entry modes**.)
 - **S1 — spec review (steps 2–3).** Run the S1 review loop (see **Review rounds**) over the
-  (change-)spec. **Fixes:** the orchestrator edits the spec doc directly (the spec is a
-  small artifact it holds; only S5 delegates fixes to a producer). On convergence it
-  records `AUTOPILOT: SPEC READY`. **Root-contradiction STOP:** if the reviewers find the
-  core requirement asks for two things that cannot both be true, STOP and hand off — quote
-  the two conflicting clauses (a handoff, never a question; mere vagueness is decided, not
-  stopped). (Skipped in **spec-file mode** — no marker, no root-contradiction stop; see
-  **Entry modes**.)
+  spec. **Fixes:** the orchestrator edits the spec doc directly (a small artifact it holds;
+  only S5 delegates fixes to a producer). On convergence records `AUTOPILOT: SPEC READY`.
+  **Root-contradiction STOP:** if reviewers find the core requirement asks for two things
+  that cannot both be true, STOP and hand off — quote the two conflicting clauses (a
+  handoff, never a question; mere vagueness is decided, not stopped). (Skipped in
+  **spec-file mode** — no marker, no root-contradiction stop; see **Entry modes**.)
 - **S2 — plan (step 4).** Use `superpowers:writing-plans` → write the implementation plan
   into the **plan doc's implementation-plan section** (NOT the spec doc); record how the
   work will be verified. On a consequential plan fork → convene the expert council.
 - **S3 — produce (step 5).** Produce the work product. Code →
   `superpowers:subagent-driven-development`: keep its per-task reviews (early-catch), SKIP
-  its final whole-implementation review — S5 is the authoritative whole-diff gate that
-  re-reviews the same diff. It may commit per task; the S6 squash folds its commits.
-  Non-code → producer subagents via the same dispatch pattern. The orchestrator never edits
-  the work product itself. (worktree-pinned — see Operating disciplines)
+  its final whole-implementation review — S5 is the authoritative whole-diff gate. It may
+  commit per task; the S6 squash folds its commits. Non-code → producer subagents via the
+  same dispatch pattern. The orchestrator never edits the work product itself.
+  (worktree-pinned — see Operating disciplines)
 - **S4 — verify (step 6).** Use `superpowers:verification-before-completion`: run the
   discovered checks. For THIS plugin = `claude plugin validate` + `python3
   tests/test_scripts.py` + the documented manual smoke. Cap fixes at 3. Never weaken, skip,
   or delete a check; a drop in the check count → STOP.
 - **S5 — work review (step 7).** Run the S5 review loop (see **Review rounds**) over the work.
   **Fixes:** ONE fresh producer subagent primed with the deduped open blockers + cited
-  files only (worktree-pinned — see Operating disciplines). Docs are part of S5: the core `doc-reviewer` gates repo-wide doc
-  currency/concision (stale/missing/contradictory docs = BLOCKING → fixed by the S5
-  producer; bloat = NON-BLOCKING). On convergence it records `AUTOPILOT: WORK READY`.
+  files only (worktree-pinned — see Operating disciplines). Docs are part of S5: the core
+  `doc-reviewer` gates repo-wide doc currency/concision (stale/missing/contradictory =
+  BLOCKING → fixed by the S5 producer; bloat = NON-BLOCKING). On convergence records
+  `AUTOPILOT: WORK READY`.
 - **S6 — squash (step 8).** Idempotent squash to one commit (skip if already exactly 1
   ahead of base_ref). Working notes (spec/plan/progress) are committed or ignored per the
   project's convention — do not force either.
@@ -244,8 +242,8 @@ ends by emitting the **Result handoff** block (`status`=`stopped`, or
 ## Result handoff (always emit last)
 
 On **every** terminal path — S7 finish AND any safety-stop handoff — emit as the final
-output exactly one fenced `autopilot-result` block (one JSON object) so a calling
-skill/workflow consumes the outcome without parsing prose:
+output exactly one fenced `autopilot-result` block (one JSON object) so a caller consumes
+the outcome without parsing prose:
 
 ```autopilot-result
 { "status": "converged", "branch": "autopilot/<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
@@ -255,5 +253,3 @@ skill/workflow consumes the outcome without parsing prose:
 - `branch` / `base_ref` / `head` — branch name, its base SHA, its final commit SHA (`head` = `base_ref` if nothing was produced).
 - `blockers` — residual open BLOCKING items (strings) when `status != converged`, else `[]`.
 - `reason` — empty when converged; else classification + detail (cap → oscillation | unfixable | requirements-conflict; stop → root-contradiction | phase-failure | destructive-op).
-
-Additive only — it changes no phase's behavior.

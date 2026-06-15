@@ -8,18 +8,17 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, Workflow, ToolSearch, 
 # Autopilot: light-build
 
 You are the orchestrator for an autonomous **light-build** run — the **self-contained,
-low-ceremony** path. Drive the pipeline below end to end: dispatch and judge. It is
-**dual-use**: for simple tasks, and as a **lighter alternative to `build`** when you want
-autopilot's autonomy + expert-council-at-forks without the spec/review rigor. Its defining
-trait is the **interaction model** (just do it autonomously; experts resolve forks, never
-the user), NOT a file-count scope.
+low-ceremony** path. Drive the pipeline end to end: dispatch and judge. It is **dual-use**:
+for simple tasks, and as a **lighter alternative to `build`** when you want autopilot's
+autonomy + expert-council-at-forks without the spec/review rigor. Its defining trait is the
+**interaction model** (do it autonomously; experts resolve forks, never the user), NOT a
+file-count scope.
 
-This is the **only fully self-contained surface** — it has **no plugin dependency**: every
-phase uses a native tool, autopilot's own script, or inline logic. **It invokes no external
-plugin skill (no `<plugin>:<skill>` call) and runs even with nothing else installed** —
-there is no dependency preflight. (Keeping this property intact matters: naming any external
-plugin skill anywhere would re-introduce a dependency through the back door — so do not name
-or invoke one.)
+This is the **only fully self-contained surface** — **no plugin dependency**: every phase
+uses a native tool, autopilot's own script, or inline logic. **It invokes no external plugin
+skill (no `<plugin>:<skill>` call) and runs with nothing else installed** — no dependency
+preflight. Naming any external plugin skill anywhere re-introduces a dependency — so do not
+name or invoke one.
 
 ## Your input ($ARGUMENTS)
 
@@ -29,13 +28,12 @@ handoff asking for requirements.
 
 ## Operating disciplines
 
-- **Autonomous — never ask the user.** At a genuine decision point, **convene the expert
-  council** (see "Deciding at decision points") to deliberate, then decide + record;
-  trivial vagueness → decide + record solo. Only the safety stops interrupt the run.
+- **Autonomous — never ask user.** At a decision point, **convene expert
+  council or decide solo** (see "Deciding at decision points").
 - **Thin orchestrator.** Dispatch by reference and judge structured output. Never hoard
-  whole files, diffs, or logs in the main thread; read only bounded slices when you must
+  whole files, diffs, or logs in main thread; read only bounded slices when you must
   inspect something yourself. **You never edit the work product** — a producer subagent does.
-- **Worktree-pinned dispatch.** Give every subagent the absolute worktree path + branch and
+- **Worktree-pinned dispatch.** Give every subagent absolute worktree path + branch and
   have it act only there — absolute paths / `git -C <worktree>`, never inherited cwd — and
   **before any write assert** `git -C <worktree> branch --show-current` is the run branch;
   **never** main/master.
@@ -52,24 +50,24 @@ handoff asking for requirements.
 project's convention location. If found: reconcile worktree/branch/base_ref existence on
 disk, then continue from `phase`. An interrupted S5 review round is **re-run from scratch**
 (re-dispatch the whole frozen panel — bounded, idempotent), so only `review_round` need be
-persisted to locate the loop. **No state file → start at E1** — a simple straight-through run
-may never have materialized one, so an interrupted simple run re-runs from scratch (bounded,
+persisted to locate the loop. **No state file → start at E1** — a straight-through run may
+never have materialized one, so an interrupted simple run re-runs from scratch (bounded,
 idempotent; E1 reuses the existing worktree).
 
 **Persist lazily, by exception.** A straight-through run writes **no file at all** — hold the
 requirement, worktree/branch/base_ref, phase, and decisions in context. **Materialize a
-minimal state file the first time the run crosses a compaction-risk boundary** — whichever
-happens first: a council / `FORK` is resolved, S5 returns a FAIL and a fix round begins, or
-the producer reports multi-step work spanning several dispatches. The file holds **only** the
-verbatim requirement + a one-line RESUME block (and, for multi-step S3, a terse
-1-line-per-task list) — **never an audit trail**:
+minimal state file the first time the run crosses a compaction-risk boundary** — whichever is
+first: a council / `FORK` resolved, S5 returns a FAIL and a fix round begins, or the producer
+reports multi-step work across several dispatches. The file holds **only** the verbatim
+requirement + a one-line RESUME block (and, for multi-step S3, a terse 1-line-per-task list)
+— **never an audit trail**:
 
 ```
 RESUME: phase=<E1|S3|S4|S5|S6|S7> worktree=<path> branch=<name> base_ref=<sha> review_round=<n>
 ```
 
-**Where this lives follows the user's / project's convention** — honor CLAUDE.md and existing
-repo patterns; no fixed path, no gitignore-vs-commit policy.
+**Location follows the user's / project's convention** — honor CLAUDE.md and existing repo
+patterns; no fixed path, no gitignore-vs-commit policy.
 
 ## Deciding at decision points (expert council)
 
@@ -84,10 +82,9 @@ repo patterns; no fixed path, no gitignore-vs-commit policy.
 
 ## The S3 FORK mechanism (producer → orchestrator → council → re-dispatch)
 
-Producers do **NOT** consult the council directly. When a producer hits a **genuine fork**
-(two-plus viable approaches with materially different trade-offs — the council triggers
-above) it **does not guess**: it stops and returns a `FORK:` marker naming the options,
-instead of picking one silently. Shape:
+Producers do **NOT** consult the council directly. On a **genuine fork** (the council
+trigger above) the producer **does not guess** — it stops and returns a `FORK:` marker
+naming the options instead of picking one silently. Shape:
 
 ```
 FORK: <one-line question>
@@ -95,15 +92,14 @@ FORK: <one-line question>
 - option B: <terse description + trade-off>
 ```
 
-On a `FORK:` return, the orchestrator **convenes the expert council** (above), **decides**,
-**records** the one-line decision (in context — this **materializes the state file**, since a
-fork is a compaction-risk boundary), and **re-dispatches the producer** with
-the decision baked into its prompt ("DECISION: <chosen option + one-line rationale>;
-proceed — do not re-fork on this"). The council resolves the fork; the producer then
-executes it. A trivial/low-stakes ambiguity is NOT a fork — the producer picks the obvious
-default and proceeds (a wrong guess is caught by S5).
+On a `FORK:` return the orchestrator **convenes the expert council** (above), **decides**,
+**records** the one-line decision (in context — this **materializes the state file**, a fork
+being a compaction-risk boundary), and **re-dispatches the producer** with the decision baked
+into its prompt ("DECISION: <chosen option + one-line rationale>; proceed — do not re-fork on
+this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the obvious default
+(a wrong guess is caught by S5).
 
-## Verdict grammar (paste into ad-hoc summon prompts only — roster agents already embed it)
+## Verdict grammar (paste into ad-hoc review prompts only)
 
 Output ONLY the verdict — no prose/preamble. When a `StructuredOutput` tool is offered
 (Workflow transport), the verdict IS that call: `{VERDICT: PASS|FAIL, BLOCKING: [...],
@@ -121,9 +117,8 @@ Convergence is decided from these structured verdicts, never from vibes.
 
 ## S5 — correctness + requirement-fidelity + doc review (cap 1)
 
-S5 is the **sole correctness gate** on this path — there is no spec review and no S1, and
-S3 has no per-task reviews, so S5 carries it alone (a deliberate property of the light path,
-not an oversight).
+S5 is the **sole correctness gate** on this path — no spec review, no S1, no S3 per-task
+reviews, so S5 carries it alone (deliberate, not an oversight).
 
 - **Pin the panel directly** — `autopilot:correctness-reviewer`,
   `autopilot:requirement-fidelity-reviewer`, AND `autopilot:doc-reviewer`.
@@ -144,10 +139,9 @@ not an oversight).
 
 ## Working-note shapes (in context — not persisted)
 
-light-build keeps its working notes **in context**, not on disk. The materialized state file
-(when one exists) holds only the verbatim requirement + the RESUME line — **never an audit
-trail**. Track the shapes below in context for the S7 report; `review_round` (in the RESUME
-block) is the only field that is load-bearing for resume.
+Keep working notes **in context**, not on disk; the materialized state file (when one exists)
+holds only the verbatim requirement + RESUME line, **never an audit trail**. Track the shapes
+below for the S7 report; `review_round` (in RESUME) is the only resume-load-bearing field.
 
 - **Panel freeze** (transport record): `S5 panel: pinned=[correctness,requirement-fidelity,doc] transport=Workflow` (note a fallback only if it fired: `transport=Workflow->Task`).
 - **Each review round** (lens=VERDICT roll-up + blocker COUNT, never blocker text): `S5 r0: correctness=FAIL requirement-fidelity=PASS -> 1 blocker, fix dispatched`.
@@ -175,17 +169,16 @@ writing-plans.
   **Resume & state**).
 - **S3 — produce (step 2).** Produce the work product by dispatching a **producer subagent
   via plain `Task`** (by reference, bounded prompt; worktree-pinned — see Operating
-  disciplines) — there is no per-task review and no task-driven framework. On a genuine fork the producer returns a `FORK:` marker → the
-  orchestrator runs the **S3 FORK mechanism** (council → decide → record → re-dispatch with
-  the decision). Producers do **NOT** consult the council directly. If the producer reports
-  genuinely multi-step work, **materialize the state file** with a terse 1-line-per-task list
-  for resumability. A producer may commit its work; the S6 squash folds its commits. The
-  orchestrator never edits the work product itself.
-- **S4 — verify (step 3).** Run the discovered checks **inline via `Bash`** (no skill).
-  Discover the project's checks (for THIS plugin = `claude plugin validate` + `python3
-  tests/test_scripts.py` + the documented manual smoke). Cap fixes at **3**. **Never weaken,
-  skip, or delete a check; a drop in the check count → STOP** (non-review phase failure).
-  Idempotent — re-running it is safe.
+  disciplines) — no per-task review, no task-driven framework. On a genuine fork the producer
+  returns a `FORK:` marker → the orchestrator runs the **S3 FORK mechanism** (council →
+  decide → record → re-dispatch with the decision). If the producer reports genuinely
+  multi-step work, **materialize the state file** with a terse 1-line-per-task list. A
+  producer may commit its work; the S6 squash folds its commits. The orchestrator never edits
+  the work product itself.
+- **S4 — verify (step 3).** Run the discovered checks **inline via `Bash`** (no skill;
+  for THIS plugin = `claude plugin validate` + `python3 tests/test_scripts.py` + the
+  documented manual smoke). Cap fixes at **3**. **Never weaken, skip, or delete a check; a
+  drop in the check count → STOP** (non-review phase failure). Idempotent — re-running is safe.
 - **S5 — work review (step 4).** Run the **S5 review** above (**cap = 1**) over the work: pin
   `correctness` + `requirement-fidelity` + `doc`, then run the whole loop via `review-loop.js`
   (Workflow; `_shared/review-loop.md` prose fallback when `Workflow` is unavailable). On
@@ -216,8 +209,8 @@ at the cap).
 ## Result handoff (always emit last)
 
 On **every** terminal path — S7 finish AND any safety-stop handoff — emit as the final
-output exactly one fenced `autopilot-result` block (one JSON object) so a calling
-skill/workflow consumes the outcome without parsing prose:
+output exactly one fenced `autopilot-result` block (one JSON object) so a caller consumes
+the outcome without parsing prose:
 
 ```autopilot-result
 { "status": "converged", "branch": "autopilot/<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
@@ -227,5 +220,3 @@ skill/workflow consumes the outcome without parsing prose:
 - `branch` / `base_ref` / `head` — branch name, its base SHA, its final commit SHA (`head` = `base_ref` if nothing was produced).
 - `blockers` — residual open BLOCKING items (strings) when `status != converged`, else `[]`.
 - `reason` — empty when converged; else classification + detail (cap → oscillation | unfixable | requirements-conflict; stop → root-contradiction | phase-failure | destructive-op).
-
-Additive only — it changes no phase's behavior.

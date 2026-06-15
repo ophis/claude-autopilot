@@ -77,11 +77,11 @@ system means reading those four skill files plus `agents/` and `scripts/` togeth
   covers) ride the **same `Workflow` transport** as `general-purpose` members —
   schema-validated like the roster, read-only by prompt (not by a tool allowlist) —
   and share the roster's fallbacks. `scriptPath` resolves from the *installed* plugin,
-  like agent dispatch. `review-round.js` dispatches **one** round (used by not-yet-migrated
-  skills); `scripts/review-loop.js` runs the **whole** convergence loop (round 0 + fix →
-  re-review until all-PASS or cap), inlining the round dispatch — `light-build` now calls it
-  (with the no-Workflow `skills/_shared/review-loop.md` prose fallback), and it retires
-  `review-round.js` once all skills migrate.
+  like agent dispatch. `review-round.js` dispatches **one** round (still used by
+  `build` / `fix`); `scripts/review-loop.js` runs the **whole** convergence loop (round 0 +
+  fix → re-review until all-PASS or cap), inlining the round dispatch — `medium-build` and
+  `light-build` now call it (with the no-Workflow `skills/_shared/review-loop.md` prose
+  fallback), and it retires `review-round.js` once `build` / `fix` migrate too.
 
 - **Selection stage (`scripts/select-panel.py`).** Deterministic, stdlib-only router:
   `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every

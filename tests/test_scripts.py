@@ -793,6 +793,19 @@ class LightBuildCutoverTests(unittest.TestCase):
         self.assertNotIn("review-round.js", self.text)
 
 
+class MediumBuildCutoverTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(SKILLS, "medium-build", "SKILL.md"), encoding="utf-8") as fh:
+            cls.text = fh.read()
+    def test_calls_review_loop(self):
+        self.assertIn("review-loop.js", self.text)
+    def test_has_no_workflow_fallback_pointer(self):
+        self.assertIn("_shared/review-loop.md", self.text)
+    def test_no_stale_review_round_dispatch(self):
+        self.assertNotIn("review-round.js", self.text)
+
+
 class SkillWorktreePinTests(unittest.TestCase):
     """Every orchestrator skill must require worktree-pinned subagent dispatch."""
     def test_all_skills_pin_subagents_to_worktree(self):

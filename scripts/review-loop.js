@@ -79,7 +79,9 @@ function classify(history) {
 
 // Deterministic per-member run-input prompt (ctx = {ph,worktree,base_ref,spec_doc,plan_doc,requirement}).
 const memberPrompt = (m, ctx) =>
-  `PHASE=${ctx.ph}. Inputs: worktree=${ctx.worktree}, base_ref=${ctx.base_ref}, spec_doc=${ctx.spec_doc || '-'}, ` +
+  `PHASE=${ctx.ph}. Review ONLY the worktree at ${ctx.worktree}: run git as \`git -C ${ctx.worktree} …\` ` +
+  `(e.g. \`git -C ${ctx.worktree} diff ${ctx.base_ref}..HEAD\`) and read files by absolute path under it — ` +
+  `never your inherited cwd, never main/master. Inputs: base_ref=${ctx.base_ref}, spec_doc=${ctx.spec_doc || '-'}, ` +
   `plan_doc=${ctx.plan_doc || '-'}, requirement=<<${ctx.requirement}>>, focus=${m.focus}. Output ONLY the verdict, no prose.`
 
 // Re-review subset: FAILed lenses only on every surface (the launcher passes the
@@ -166,6 +168,7 @@ async function council(fork) {
     agent(
       `As a ${p}, advise on this fork:\n${question}\nOptions:\n` +
         options.map(o => `- ${o.label}: ${o.tradeoff}`).join('\n') +
+        `\nIf you inspect code, do so read-only in the worktree at ${worktree} (\`git -C ${worktree}\` / absolute paths), never main/cwd.` +
         `\nReturn a concise position (recommendation + rationale + tradeoffs + dissent).`,
       { schema: POSITION_SCHEMA, label: `council:${p}`, phase: 'Review' })))
   const d = await agent(
@@ -182,8 +185,8 @@ const MAX_FORKS = 2
 async function runFix(blockers) {
   // S1 (spec phase) fixes edit the spec doc; S5 (work phase) fixes write the worktree.
   const target = ph === 'spec'
-    ? `Edit the spec doc at ${spec_doc} to resolve them (do NOT write the worktree)`
-    : `In ${worktree} (operate by absolute path / git -C ${worktree}), fix them in the worktree, then commit`
+    ? `Edit the spec doc at ${spec_doc} by absolute path to resolve them (do NOT write the worktree)`
+    : `Operate ONLY in the worktree at ${worktree}: edit files by absolute path under it and commit with \`git -C ${worktree}\` — never your inherited cwd, never main/master`
   let note = ''
   for (let f = 0; f <= MAX_FORKS; f++) {
     const r = await agent(
