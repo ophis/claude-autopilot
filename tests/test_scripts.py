@@ -639,63 +639,6 @@ class ReviewRoundScriptTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr.decode())
 
 
-class SkillLockstepTests(unittest.TestCase):
-    """skills/build/SKILL.md and skills/fix/SKILL.md must carry a byte-identical
-    workflow-transport block (spec A2). Until now this was enforced only by
-    review; prose drift between the two skills now fails here instead.
-    """
-
-    @staticmethod
-    def _transport_block(skill):
-        path = os.path.join(SKILLS, skill, "SKILL.md")
-        with open(path, encoding="utf-8") as fh:
-            lines = fh.read().splitlines()
-        start = next(
-            (i for i, l in enumerate(lines) if "Workflow transport (preferred" in l),
-            None,
-        )
-        end = next(
-            (i for i, l in enumerate(lines) if "not a separate log line" in l),
-            None,
-        )
-        if start is None or end is None or end < start:
-            raise AssertionError("transport block not found in %s" % skill)
-        return "\n".join(lines[start : end + 1])
-
-    @staticmethod
-    def _progress_log_format_block(skill):
-        path = os.path.join(SKILLS, skill, "SKILL.md")
-        with open(path, encoding="utf-8") as fh:
-            lines = fh.read().splitlines()
-        start = next(
-            (i for i, l in enumerate(lines) if "progress-log-format:start" in l),
-            None,
-        )
-        end = next(
-            (i for i, l in enumerate(lines) if "progress-log-format:end" in l),
-            None,
-        )
-        if start is None or end is None or end < start:
-            raise AssertionError("progress-log-format block not found in %s" % skill)
-        return "\n".join(lines[start : end + 1])
-
-    def test_transport_block_identical(self):
-        """The block from 'Workflow transport (preferred' through the
-        transport-record sentence is the shared dispatch contract — byte-identical
-        or bust."""
-        self.assertEqual(
-            self._transport_block("build"), self._transport_block("fix")
-        )
-
-    def test_progress_log_format_block_identical(self):
-        """The progress-log-format block (between the HTML markers) is mirrored
-        byte-for-byte across both skills — byte-identical or bust."""
-        self.assertEqual(
-            self._progress_log_format_block("build"),
-            self._progress_log_format_block("fix"),
-        )
-
-
 class LightBuildTransportTests(unittest.TestCase):
     """light-build runs the S5 loop in-orchestrator via review-round.js — no
     whole-loop review-loop.js, no _shared prose fallback."""
@@ -729,7 +672,7 @@ class MediumBuildTransportTests(unittest.TestCase):
 class SkillWorktreePinTests(unittest.TestCase):
     """Every orchestrator skill must require worktree-pinned subagent dispatch."""
     def test_all_skills_pin_subagents_to_worktree(self):
-        for skill in ("build", "fix", "medium-build", "light-build"):
+        for skill in ("build", "medium-build", "light-build"):
             with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
                 text = fh.read()
             self.assertIn("Worktree-pinned dispatch", text, skill)

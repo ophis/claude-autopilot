@@ -165,7 +165,7 @@ resume. Keep these plus the final residual NON-BLOCKING items.
 
 ## Pipeline (E1, E2, S1–S7)
 
-Legend: **E#** = entry phase (command-specific; `′` = fix variant); **S#** = shared
+Legend: **E#** = entry phase (command-specific); **S#** = shared
 spine.
 
 **Entry modes (build):** *requirements mode* (default) runs E1 → E2 → S1 → S2 → …;

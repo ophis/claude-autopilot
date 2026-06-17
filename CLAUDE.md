@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 Claude Autopilot is a **Claude Code plugin** that packages an autonomous
-build / fix / medium-build / light-build pipeline driven by a committed roster of named
+build / medium-build / light-build pipeline driven by a committed roster of named
 review agents. The git repo **is both
 the marketplace and the plugin** (`.claude-plugin/marketplace.json` points its single
 plugin entry at `source: "./"`). The "product" is the plugin's prompts/agents/scripts,
@@ -36,10 +36,10 @@ so they're not importable — the CLI is the contract).
 
 ## Architecture (the big picture)
 
-The four surfaces — `skills/build/SKILL.md`, `skills/fix/SKILL.md`,
+The three surfaces — `skills/build/SKILL.md`,
 `skills/medium-build/SKILL.md`, and `skills/light-build/SKILL.md` — are **orchestrator
 prompts**, not code. They are **skills** (model-invocable, so composable as a step inside a
-larger skill/workflow); users still type `/autopilot:build` / `/autopilot:fix` /
+larger skill/workflow); users still type `/autopilot:build` /
 `/autopilot:medium-build` / `/autopilot:light-build`.
 `medium-build` is a sibling orchestrator on a trimmed path — same S-spine concept but no S1
 roster panel (a single expert reviewer does a one-shot spec review instead), no
@@ -51,12 +51,12 @@ every phase uses a native tool, the plugin's own script, or inline logic, so it 
 gates scope — surface choice is the user's responsibility. When invoked, the
 *main-session Claude becomes a thin orchestrator*: it dispatches subagents and judges
 their structured output, and never edits the work product itself. Understanding the
-system means reading those four skill files plus `agents/` and `scripts/` together:
+system means reading those three skill files plus `agents/` and `scripts/` together:
 
-- **Shared spine.** Both commands run entry phases (`build`: E1 worktree, E2
-  brainstorm; `fix`: E1′ locate branch, E2′ brainstorm feedback) then a common
-  **S1–S7** spine: S1 spec-review → S2 plan → S3 produce → S4 verify → S5 work-review →
-  S6 squash → S7 finish. **It never merges** — the deliverable is a review-ready branch.
+- **Shared spine.** `build` runs its entry phases (E1 worktree, E2 brainstorm) then a
+  common **S1–S7** spine: S1 spec-review → S2 plan → S3 produce → S4 verify → S5
+  work-review → S6 squash → S7 finish. **It never merges** — the deliverable is a
+  review-ready branch.
 
 - **Ralph convergence loops (S1, S5).** review → fix → re-review until the frozen
   review panel all-PASSes or a per-phase cap (default 3) is hit. Convergence is decided
@@ -104,10 +104,10 @@ system means reading those four skill files plus `agents/` and `scripts/` togeth
   (`phase=… worktree=… branch=… base_ref=… review_round=…`) lets a run survive
   compaction and resume from the current phase; an interrupted review round re-runs whole.
 
-- **Built on `superpowers`.** `build` / `fix` / `medium-build` orchestrate superpowers
+- **Built on `superpowers`.** `build` / `medium-build` orchestrate superpowers
   skills (brainstorming, writing-plans, subagent-driven-development, using-git-worktrees,
   verification-before-completion, finishing-a-development-branch,
-  dispatching-parallel-agents). For those three surfaces it is a **hard dependency** —
+  dispatching-parallel-agents). For those two surfaces it is a **hard dependency** —
   they preflight for it and hand off install instructions if missing. `light-build` is
   the exception: it is self-contained, invokes no `superpowers:*` skill, and has no
   superpowers preflight. There is no plugin auto-dependency mechanism, so dependencies
@@ -123,9 +123,9 @@ system means reading those four skill files plus `agents/` and `scripts/` togeth
   plugin.** After adding/renaming an agent, the new `subagent_type` resolves only once
   the plugin is reloaded/updated — a fresh agent can't be dispatched natively in the
   same run that creates it (dispatch it ad-hoc via `general-purpose` until shipped).
-  The same applies to the `skills/build` + `skills/fix` + `skills/medium-build` +
+  The same applies to the `skills/build` + `skills/medium-build` +
   `skills/light-build` skills: edits to a `SKILL.md` (and `/autopilot:build` /
-  `/autopilot:fix` / `/autopilot:medium-build` / `/autopilot:light-build` by-name
+  `/autopilot:medium-build` / `/autopilot:light-build` by-name
   invocability) go live only after `/reload-plugins`.
 - **`SPEC.md` and `dev-docs/` are gitignored** (local design doc + per-build audit
   trail `dev-docs/<date>-<slug>-{spec,plan}.md`). `SPEC.md` is the design source of
@@ -151,5 +151,4 @@ It enforces A3 for every reviewer: valid frontmatter (`lens`/`phase`/`tier`/
 `applies_to` + `maxTurns`), a read-only `tools` allowlist (`Read, Grep, Glob, Bash`),
 the inlined reviewer contract, and the strict verdict block — so a malformed reviewer
 fails loudly at authoring time instead of being silently mis-routed by the selector. It
-is an authoring/CI check, **not** a step in the `/autopilot:build` or `/autopilot:fix`
-pipeline.
+is an authoring/CI check, **not** a step in the `/autopilot:build` pipeline.

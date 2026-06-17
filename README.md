@@ -5,12 +5,12 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.9.4** — the build/fix surfaces are now **skills** (`skills/build`,
-> `skills/fix`): model-invocable and composable as a step inside a larger
-> skill/workflow, while `/autopilot:build` and `/autopilot:fix` still work for users.
-> A third surface, **`skills/medium-build`** (`/autopilot:medium-build`), is the trimmed
+> Status: **v0.9.4** — the build surface is now a **skill** (`skills/build`):
+> model-invocable and composable as a step inside a larger
+> skill/workflow, while `/autopilot:build` still works for users.
+> A second surface, **`skills/medium-build`** (`/autopilot:medium-build`), is the trimmed
 > path (no S1 roster panel, no writing-plans; a one-shot single-expert spec review and a
-> capped work review). A fourth, **`skills/light-build`** (`/autopilot:light-build`), is
+> capped work review). A third, **`skills/light-build`** (`/autopilot:light-build`), is
 > the **superpowers-free**, low-ceremony path: autonomy + expert-council-at-forks with no
 > spec doc and no spec review — just produce → verify → a single capped correctness +
 > requirement-fidelity review. **Neither light-build nor medium-build gates scope** —
@@ -18,7 +18,7 @@ with one explicit command.
 > The **named review roster** is complete for both phases in `agents/`, and the
 > **selection stage** (`scripts/select-panel.py`) wires the roster into the S1/S5
 > review loops — the skills select the panel from the roster and dispatch each
-> reviewer natively as `autopilot:<name>`, preferring a `Workflow` call (all four surfaces
+> reviewer natively as `autopilot:<name>`, preferring a `Workflow` call (all three surfaces
 > dispatch one round via `scripts/review-round.js`, running the convergence loop in the
 > orchestrator) with automatic `Task` fallback (see
 > [Review roster](#review-roster-agents)).
@@ -34,7 +34,6 @@ claude-autopilot/                 # git repo = marketplace + plugin
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # skill; /autopilot:build       still works
-│   ├── fix/SKILL.md              # skill; /autopilot:fix         still works
 │   ├── medium-build/SKILL.md     # skill; /autopilot:medium-build — trimmed path (spec + E3 + capped review)
 │   └── light-build/SKILL.md      # skill; /autopilot:light-build  — superpowers-free, low-ceremony
 ├── scripts/
@@ -63,7 +62,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 
 ### 1. Install the dependency: superpowers (required)
 
-The **build / fix / medium-build** surfaces orchestrate skills from the **superpowers**
+The **build / medium-build** surfaces orchestrate skills from the **superpowers**
 plugin (brainstorming, writing-plans, subagent-driven-development, using-git-worktrees,
 verification-before-completion, finishing-a-development-branch,
 dispatching-parallel-agents). Claude Code has **no plugin dependency / auto-install
@@ -73,7 +72,7 @@ mechanism**, so you must install superpowers yourself first:
 /plugin install superpowers@claude-plugins-official
 ```
 
-(`planning-with-files` is optional.) Those three surfaces also **preflight-check** for
+(`planning-with-files` is optional.) Those two surfaces also **preflight-check** for
 superpowers and, if it's missing, stop and hand you these instructions rather than failing
 midway. **`light-build` is the exception — it is superpowers-free** (every phase uses a
 native tool, the plugin's own script, or inline logic) and runs even if superpowers is not
@@ -203,39 +202,12 @@ spec review). Choosing the surface is your responsibility.
 /autopilot:light-build add a --json flag to the status command
 ```
 
-## `/autopilot:fix <feedback>`
-
-The feedback half of the loop. After you review a `build` result, hand `fix` your
-review feedback and it drives the **same pipeline on the existing autopilot branch**:
-it locates that branch (no new worktree), brainstorms your feedback into a
-change-spec, then plans → implements → verifies → reviews (docs currency included) →
-**re-squashes** to one clean commit. Still never merges. If there's no autopilot
-branch yet, it stops and tells you to run `/autopilot:build` first. Like `build`, it
-is a skill — model-invocable / composable as a workflow step (`/autopilot:fix` still
-works for users) and it emits the same final `autopilot-result` block.
-
-- **E1′ — Locate:** find the existing autopilot branch (no new worktree); none → stop.
-- **E2′ — Brainstorm:** turn feedback into a change-spec appended to the spec doc.
-- **S1 — Change-spec review.**
-- **S2 — Plan the delta.**
-- **S3 — Produce.**
-- **S4 — Verify.**
-- **S5 — Work review** (docs currency included).
-- **S6 — Re-squash:** fold the new commits back into one clean commit.
-- **S7 — Finish:** report. **Never merges.**
-
-Legend: **E#** = entry phase (command-specific; `′` = fix variant); **S#** = the
-shared spine S1–S7 both commands run.
-
-```
-/autopilot:fix the token-refresh path isn't covered by tests
-```
-
-Together, `build` → review → `fix` → review → … is the human-in-the-loop cycle.
+Together, `build` → review → re-run `build` to iterate → … is the human-in-the-loop
+cycle.
 
 ### Invoking from a workflow
 
-Because they are skills, `build` and `fix` can be invoked **by name** from another
+Because it is a skill, `build` can be invoked **by name** from another
 skill or workflow, not just typed by a user. A nested run is self-contained: it
 creates its **own** `autopilot-<slug>` worktree + branch and persists its own
 spec/plan docs (RESUME state is per-run namespaced, so nested runs don't stomp each
@@ -294,7 +266,7 @@ panel: it globs `agents/`, reads each frontmatter, and returns the selected revi
 model and read-only tool allowlist on either transport (identical prompts):
 **preferred**, a `Workflow` call (Dynamic Workflows — background fan-out, schema-validated
 verdict JSON; a member's infra failure returns `synthetic: true` and is retried once
-via `Task`) — **all four surfaces** dispatch **one round** via `scripts/review-round.js`,
+via `Task`) — **all three surfaces** dispatch **one round** via `scripts/review-round.js`,
 running the convergence loop in the orchestrator; **fallback** (tool unavailable or a call failed — sticky for the run),
 the parallel `Task(subagent_type="autopilot:<name>")` batch. An ad-hoc review lens
 rides the same `Workflow` transport (dispatched as `general-purpose`, schema-validated
