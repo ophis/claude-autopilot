@@ -173,7 +173,7 @@ Legend: **E1** = entry phase; **S#** = the spine (light path skips S1, S2). Pipe
 **E1 → S3 → S4 → S5 → S6 → S7**. No E2 brainstorm, no spec doc, no spec review, no
 writing-plans.
 
-- **E1 — worktree (step 1).** Create an isolated worktree + branch `autopilot/<slug>` via
+- **E1 — worktree (step 1).** Create an isolated worktree + branch `autopilot-<slug>` via
   the native **`EnterWorktree`** tool. Inline rules (this path borrows no skill):
   - **Step-0 reuse:** if you are **already in an isolated worktree** for this run, reuse it
     — do not nest another.
@@ -230,7 +230,7 @@ output exactly one fenced `autopilot-result` block (one JSON object) so a caller
 the outcome without parsing prose:
 
 ```autopilot-result
-{ "status": "converged", "branch": "autopilot/<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
+{ "status": "converged", "branch": "autopilot-<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
 ```
 
 - `status` — `converged` (reached S7) | `capped-without-pass` (the S5 loop hit its cap) | `stopped` (any other safety stop).

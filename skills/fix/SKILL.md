@@ -165,13 +165,13 @@ spine.
 
 - **E1′ — locate the existing branch (no new worktree).** Find the target autopilot
   branch: read the project's **plan doc** (RESUME block) if present; else the most recent
-  `autopilot/*` branch. **If none → STOP** ("no autopilot branch found — run
+  `autopilot-*` branch. **If none → STOP** ("no autopilot branch found — run
   `/autopilot:build <requirements>` first"). Never create a new branch. E1′ reuses the
   existing plan doc if present, else creates one.
   - **Worktree:** use the branch's existing worktree; if removed, check the branch out in
     place — never create a second worktree.
   - **base_ref:** reuse the value in that branch's plan doc RESUME block if present; else
-    `git merge-base main autopilot/<slug>` (default branch = `main` unless the repo says
+    `git merge-base main autopilot-<slug>` (default branch = `main` unless the repo says
     otherwise). Record worktree/branch/base_ref.
   - **Dirty tree:** uncommitted changes → STOP with a handoff (commit or stash first) so
     they aren't folded into the re-squash — unless Auto Mode is on (then proceed).
@@ -236,7 +236,7 @@ output exactly one fenced `autopilot-result` block (one JSON object) so a caller
 the outcome without parsing prose:
 
 ```autopilot-result
-{ "status": "converged", "branch": "autopilot/<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
+{ "status": "converged", "branch": "autopilot-<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
 ```
 
 - `status` — `converged` (reached S7) | `capped-without-pass` (a Ralph loop hit its cap) | `stopped` (any other safety stop).

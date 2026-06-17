@@ -191,7 +191,7 @@ in RESUME as `spec_file=<path>`; the task-list slice and S3 work from it, and S5
 spec-review pass (the Safety-stops root-contradiction still applies).
 
 - **E1 — worktree (step 1).** Use `superpowers:using-git-worktrees` → branch
-  `autopilot/<slug>`. Slug = `$ARGUMENTS` lowercased, non-alphanumerics → hyphens,
+  `autopilot-<slug>`. Slug = `$ARGUMENTS` lowercased, non-alphanumerics → hyphens,
   collapsed/trimmed, truncated to <=40 chars. Record worktree/branch/base_ref (HEAD) in the
   RESUME block; create the **plan doc** (RESUME + progress section) per the project's
   convention. On worktree/branch collision: one retry with a uniquified slug (`-2`, …),
@@ -252,7 +252,7 @@ output exactly one fenced `autopilot-result` block (one JSON object) so a caller
 the outcome without parsing prose:
 
 ```autopilot-result
-{ "status": "converged", "branch": "autopilot/<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
+{ "status": "converged", "branch": "autopilot-<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
 ```
 
 - `status` — `converged` (reached S7) | `capped-without-pass` (the S5 loop hit its cap) | `stopped` (any other safety stop).

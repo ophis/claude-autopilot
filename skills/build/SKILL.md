@@ -174,7 +174,7 @@ E2 and S1: the provided spec becomes the run's spec — record its absolute path
 as `spec_file=<path>`. S1 skipped → no `AUTOPILOT: SPEC READY` marker.
 
 - **E1 — worktree (step 1).** Use `superpowers:using-git-worktrees` → branch
-  `autopilot/<slug>`. Slug = `$ARGUMENTS` lowercased, non-alphanumerics → hyphens,
+  `autopilot-<slug>`. Slug = `$ARGUMENTS` lowercased, non-alphanumerics → hyphens,
   collapsed/trimmed, truncated to <=40 chars. Record worktree/branch/base_ref (HEAD) in the
   RESUME block; create the **plan doc** (with RESUME + progress section) per the project's
   convention. On worktree/branch collision: retry with a uniquified slug (`-2`, …).
@@ -231,7 +231,7 @@ output exactly one fenced `autopilot-result` block (one JSON object) so a caller
 the outcome without parsing prose:
 
 ```autopilot-result
-{ "status": "converged", "branch": "autopilot/<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
+{ "status": "converged", "branch": "autopilot-<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
 ```
 
 - `status` — `converged` (reached S7) | `capped-without-pass` (a Ralph loop hit its cap) | `stopped` (any other safety stop).

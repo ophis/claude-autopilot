@@ -107,7 +107,7 @@ A skill, so it is model-invocable now — call it directly, or compose it as a s
 larger skill/workflow; `/autopilot:build` is preserved for users. Hand it a requirement
 and it drives, end to end and without asking you questions:
 
-- **E1 — Worktree:** create `autopilot/<slug>` worktree+branch; create the plan doc (progress + RESUME).
+- **E1 — Worktree:** create `autopilot-<slug>` worktree+branch; create the plan doc (progress + RESUME).
 - **E2 — Brainstorm:** turn requirements into the spec (expert council at decision points).
 - **S1 — Spec review:** Ralph loop over the spec until the panel passes.
 - **S2 — Plan:** write the execution plan + how it will be verified.
@@ -142,7 +142,7 @@ In a throwaway git repo:
 /autopilot:build add a function add(a,b) with a passing unit test
 ```
 
-Expect: a new `autopilot/<slug>` worktree+branch; the spec and work review loops
+Expect: a new `autopilot-<slug>` worktree+branch; the spec and work review loops
 each reach `VERDICT: PASS`; the test actually runs and passes; the run ends at a
 **single squashed commit with no merge** and a final report.
 
@@ -155,7 +155,7 @@ reviewer** as the spec review, slices a terse task list inline, and runs a **min
 cap-1** work review. It is a skill (model-invocable / composable) and emits the same final
 `autopilot-result` block; `/autopilot:medium-build` is preserved for users.
 
-- **E1 — Worktree:** create `autopilot/<slug>` worktree+branch; create the plan doc.
+- **E1 — Worktree:** create `autopilot-<slug>` worktree+branch; create the plan doc.
 - **E2 — Brainstorm:** turn requirements into the spec.
 - **E3 — Expert spec review:** one `general-purpose` expert reviews the spec (advice, not the VERDICT grammar); the orchestrator revises the spec **once** and proceeds — no loop, no marker.
 - **Task list:** a terse ordered 1-line-per-task list written straight into the plan doc (no writing-plans).
@@ -188,7 +188,7 @@ Its defining trait is **self-containment**: every phase uses a native tool, the 
 own script, or inline logic — it invokes **no `superpowers:*` skill** and runs even if
 superpowers is not installed.
 
-- **E1 — Worktree:** create `autopilot/<slug>` worktree+branch (native `EnterWorktree`). **Lazy state:** no spec doc, and no file by default — a minimal state file (the requirement recorded verbatim + a one-line RESUME block) is materialized only at the first compaction-risk boundary; a simple single-shot run writes nothing.
+- **E1 — Worktree:** create `autopilot-<slug>` worktree+branch (native `EnterWorktree`). **Lazy state:** no spec doc, and no file by default — a minimal state file (the requirement recorded verbatim + a one-line RESUME block) is materialized only at the first compaction-risk boundary; a simple single-shot run writes nothing.
 - **S3 — Produce:** dispatch a producer subagent via plain `Task`. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
 - **S4 — Verify:** run the discovered checks inline.
 - **S5 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc`, `requirement-fidelity` checking the work against the requirement text — **capped at 1** review+fix round. This is the sole correctness gate.
@@ -237,7 +237,7 @@ Together, `build` → review → `fix` → review → … is the human-in-the-lo
 
 Because they are skills, `build` and `fix` can be invoked **by name** from another
 skill or workflow, not just typed by a user. A nested run is self-contained: it
-creates its **own** `autopilot/<slug>` worktree + branch and persists its own
+creates its **own** `autopilot-<slug>` worktree + branch and persists its own
 spec/plan docs (RESUME state is per-run namespaced, so nested runs don't stomp each
 other). The pipeline **never merges**, so the calling workflow owns integration of the
 returned branch — it reads the outcome from the final `autopilot-result` block
