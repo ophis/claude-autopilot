@@ -190,7 +190,8 @@ in RESUME as `spec_file=<path>`; the task-list slice and S3 work from it, and S5
 `requirement-fidelity` reviewer uses it as the work⊨spec reference. E3 skipped → no
 spec-review pass (the Safety-stops root-contradiction still applies).
 
-- **E1 — worktree (step 1).** Use `superpowers:using-git-worktrees` → branch
+- **E1 — worktree (step 1).** If you are already in an isolated worktree for this run,
+  reuse it — do not nest another. Else use `superpowers:using-git-worktrees` → branch
   `autopilot-<slug>`. Slug = `$ARGUMENTS` lowercased, non-alphanumerics → hyphens,
   collapsed/trimmed, truncated to <=40 chars. Record worktree/branch/base_ref (HEAD) in the
   RESUME block; create the **plan doc** (RESUME + progress section) per the project's

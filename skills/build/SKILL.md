@@ -173,7 +173,8 @@ spine.
 E2 and S1: the provided spec becomes the run's spec — record its absolute path in RESUME
 as `spec_file=<path>`. S1 skipped → no `AUTOPILOT: SPEC READY` marker.
 
-- **E1 — worktree (step 1).** Use `superpowers:using-git-worktrees` → branch
+- **E1 — worktree (step 1).** If you are already in an isolated worktree for this run,
+  reuse it — do not nest another. Else use `superpowers:using-git-worktrees` → branch
   `autopilot-<slug>`. Slug = `$ARGUMENTS` lowercased, non-alphanumerics → hyphens,
   collapsed/trimmed, truncated to <=40 chars. Record worktree/branch/base_ref (HEAD) in the
   RESUME block; create the **plan doc** (with RESUME + progress section) per the project's
