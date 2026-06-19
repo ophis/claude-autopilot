@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Lint the Claude Autopilot review roster (A3): validate every ``agents/*.md``
 so a malformed reviewer fails loudly at authoring/CI time instead of mis-routing
-the §8.6 selector. CLI: ``python3 scripts/lint-roster.py [--agents-dir DIR]``,
+the selector. CLI: ``python3 scripts/lint-roster.py [--agents-dir DIR]``,
 non-zero exit on any failure. Stdlib only.
 """
 import argparse

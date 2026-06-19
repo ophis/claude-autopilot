@@ -15,8 +15,8 @@ DEFAULTS = {
     # The deprecated "enabled" driver toggle is gone (native loop is the only
     # driver); a user config still carrying it merges through harmlessly.
     "ralphLoop": {
-        # Per-phase round cap: spec-phase = S1 spec review,
-        # implementation-phase = S5 work review.
+        # Per-phase round cap: spec-phase = S3 spec review,
+        # implementation-phase = S7 work review.
         "maxIterations": {"spec-phase": 3, "implementation-phase": 3},
     }
 }

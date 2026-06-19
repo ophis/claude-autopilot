@@ -41,11 +41,11 @@ The three surfaces — `skills/build/SKILL.md`,
 prompts**, not code. They are **skills** (model-invocable, so composable as a step inside a
 larger skill/workflow); users still type `/autopilot:build` /
 `/autopilot:medium-build` / `/autopilot:light-build`.
-`medium-build` is a sibling orchestrator on a trimmed path — same S-spine concept but no S1
-roster panel (a single expert reviewer does a one-shot spec review instead), no
-`writing-plans`, and a trimmed S5. `light-build` is the **superpowers-free** surface: a
-self-contained, low-ceremony harness (E1 → S3 → S4 → S5 → S6 → S7) with no spec doc, no
-spec review, no `writing-plans`, a lazy by-exception state model (no mandatory plan doc), and a pinned cap-1 S5 (correctness + requirement-fidelity + doc);
+`medium-build` is a sibling orchestrator on a trimmed path — same S-numbering but no S3
+roster panel (a single expert reviewer does a one-shot spec review, **S3'**, instead), no
+`writing-plans` (S4 skipped), and a trimmed S7. `light-build` is the **superpowers-free** surface: a
+self-contained, low-ceremony harness (S1 → S5 → S6 → S7 → S8 → S9) with no spec doc, no
+spec review, no `writing-plans`, a lazy by-exception state model (no mandatory plan doc), and a pinned cap-1 S7 (correctness + requirement-fidelity + doc);
 every phase uses a native tool, the plugin's own script, or inline logic, so it invokes no
 `superpowers:*` skill and has no superpowers preflight. Neither medium-build nor light-build
 gates scope — surface choice is the user's responsibility. When invoked, the
@@ -53,12 +53,12 @@ gates scope — surface choice is the user's responsibility. When invoked, the
 their structured output, and never edits the work product itself. Understanding the
 system means reading those three skill files plus `agents/` and `scripts/` together:
 
-- **Shared spine.** `build` runs its entry phases (E1 worktree, E2 brainstorm) then a
-  common **S1–S7** spine: S1 spec-review → S2 plan → S3 produce → S4 verify → S5
-  work-review → S6 squash → S7 finish. **It never merges** — the deliverable is a
-  review-ready branch.
+- **Shared spine.** `build` runs a single **S1–S9** pipeline: S1 worktree → S2 brainstorm →
+  S3 spec-review → S4 plan → S5 produce → S6 verify → S7 work-review → S8 squash → S9 finish.
+  Medium/light reuse the same numbering (same number = same step; they skip or prime steps).
+  **It never merges** — the deliverable is a review-ready branch.
 
-- **Ralph convergence loops (S1, S5).** review → fix → re-review until the frozen
+- **Ralph convergence loops (S3, S7).** review → fix → re-review until the frozen
   review panel all-PASSes or a per-phase cap (default 3) is hit. Convergence is decided
   **only from on-disk verdicts** in the strict `VERDICT / BLOCKING / NON-BLOCKING`
   grammar — never from the orchestrator's opinion. Round 0 short-circuits if all-PASS.
@@ -77,16 +77,16 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
   covers) ride the **same `Workflow` transport** as `general-purpose` members —
   schema-validated like the roster, read-only by prompt (not by a tool allowlist) —
   and share the roster's fallbacks. `scriptPath` resolves from the *installed* plugin,
-  like agent dispatch. `scripts/review-round.js` dispatches **one** round; **all four
+  like agent dispatch. `scripts/review-round.js` dispatches **one** round; **all three
   surfaces** run the convergence loop natively in the orchestrator (round 0 + fix → re-review
   until all-PASS or the per-phase cap), dispatching each round through it. The orchestrator
-  owns the loop, the fix, and (S5) the `(FAILed ∪ touched)` re-review subset — preserving
+  owns the loop, the fix, and (S7) the `(FAILed ∪ touched)` re-review subset — preserving
   ground-truth `touched` (via `select-panel.py`) and a warm, same-session fixer.
 
 - **Selection stage (`scripts/select-panel.py`).** Deterministic, stdlib-only router:
   `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every
   `core` agent is a mandatory floor; `optional` agents route in when their `applies_to`
-  matches the signals (spec keywords for S1; changed paths for S5). `tier` is usually a
+  matches the signals (spec keywords for S3; changed paths for S7). `tier` is usually a
   scalar but may be a per-phase JSON map (`tier: {"spec":"core","work":"optional"}` —
   resolved to the effective scalar per phase, emitted as such); `applies_to` may carry
   the reserved `@structural` work-phase token, which matches iff the diff changed file
@@ -105,8 +105,9 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
   compaction and resume from the current phase; an interrupted review round re-runs whole.
 
 - **Built on `superpowers`.** `build` / `medium-build` orchestrate superpowers
-  skills (brainstorming, writing-plans, subagent-driven-development, using-git-worktrees,
-  verification-before-completion, finishing-a-development-branch). For those two surfaces it is a **hard dependency** —
+  skills (brainstorming, writing-plans, subagent-driven-development,
+  verification-before-completion). (Worktree creation is raw
+  `git worktree` + the native `EnterWorktree`, not a superpowers skill.) For those two surfaces it is a **hard dependency** —
   they preflight for it and hand off install instructions if missing. `light-build` is
   the exception: it is self-contained, invokes no `superpowers:*` skill, and has no
   superpowers preflight. There is no plugin auto-dependency mechanism, so dependencies
@@ -126,12 +127,8 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
   `skills/light-build` skills: edits to a `SKILL.md` (and `/autopilot:build` /
   `/autopilot:medium-build` / `/autopilot:light-build` by-name
   invocability) go live only after `/reload-plugins`.
-- **`SPEC.md` and `dev-docs/` are gitignored** (local design doc + per-build audit
-  trail `dev-docs/<date>-<slug>-{spec,plan}.md`). `SPEC.md` is the design source of
-  truth but isn't shipped; keep it synced locally but don't reference it from
-  shipped docs (its `§` numbers would be dead links). Note SPEC's §7.3 three-file state
-  model (`task_plan.md`/`findings.md`/`progress.md`) is the aspirational "full-design
-  target" — the actual commands use the simpler spec-doc + plan-doc model above.
+- **`dev-docs/` is gitignored** (per-build audit trail
+  `dev-docs/<date>-<slug>-{spec,plan}.md`).
 - **Releases use explicit semver kept in sync across THREE places**: `version` in
   `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`, plus the status
   line + "currently `x.y.z`" + repo-tree comment in `README.md`. Tag annotated as

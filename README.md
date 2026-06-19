@@ -5,18 +5,18 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.9.4** — the build surface is now a **skill** (`skills/build`):
+> Status: **v0.9.5** — the build surface is now a **skill** (`skills/build`):
 > model-invocable and composable as a step inside a larger
 > skill/workflow, while `/autopilot:build` still works for users.
 > A second surface, **`skills/medium-build`** (`/autopilot:medium-build`), is the trimmed
-> path (no S1 roster panel, no writing-plans; a one-shot single-expert spec review and a
+> path (no S3 roster panel, no writing-plans; a one-shot single-expert spec review and a
 > capped work review). A third, **`skills/light-build`** (`/autopilot:light-build`), is
 > the **superpowers-free**, low-ceremony path: autonomy + expert-council-at-forks with no
 > spec doc and no spec review — just produce → verify → a single capped correctness +
 > requirement-fidelity review. **Neither light-build nor medium-build gates scope** —
 > choosing the right surface is your call (see each section below for when it fits).
 > The **named review roster** is complete for both phases in `agents/`, and the
-> **selection stage** (`scripts/select-panel.py`) wires the roster into the S1/S5
+> **selection stage** (`scripts/select-panel.py`) wires the roster into the S3/S7
 > review loops — the skills select the panel from the roster and dispatch each
 > reviewer natively as `autopilot:<name>`, preferring a `Workflow` call (all three surfaces
 > dispatch one round via `scripts/review-round.js`, running the convergence loop in the
@@ -30,13 +30,14 @@ The git repo is **both the marketplace and the plugin**:
 ```
 claude-autopilot/                 # git repo = marketplace + plugin
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 0.9.4)
+│   ├── plugin.json               # name: autopilot (version 0.9.5)
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # skill; /autopilot:build       still works
-│   ├── medium-build/SKILL.md     # skill; /autopilot:medium-build — trimmed path (spec + E3 + capped review)
+│   ├── medium-build/SKILL.md     # skill; /autopilot:medium-build — trimmed path (spec + S3' + capped review)
 │   └── light-build/SKILL.md      # skill; /autopilot:light-build  — superpowers-free, low-ceremony
 ├── scripts/
+│   ├── _frontmatter.py           # shared frontmatter reader (imported by select-panel.py + lint-roster.py)
 │   ├── autopilot-config.py       # reads/initializes ${CLAUDE_PLUGIN_DATA}/config.json
 │   ├── lint-roster.py            # A3 roster lint: validates each reviewer's frontmatter + contract
 │   ├── review-round.js           # Dynamic Workflows transport: one review round → verdict JSON
@@ -63,8 +64,8 @@ claude-autopilot/                 # git repo = marketplace + plugin
 ### 1. Install the dependency: superpowers (required)
 
 The **build / medium-build** surfaces orchestrate skills from the **superpowers**
-plugin (brainstorming, writing-plans, subagent-driven-development, using-git-worktrees,
-verification-before-completion, finishing-a-development-branch). Claude Code has **no plugin dependency / auto-install
+plugin (brainstorming, writing-plans, subagent-driven-development,
+verification-before-completion). Claude Code has **no plugin dependency / auto-install
 mechanism**, so you must install superpowers yourself first:
 
 ```
@@ -91,7 +92,7 @@ This repo is its own single-repo marketplace, so add it and install:
 also browse and install via the interactive `/plugin` menu (Marketplaces → add →
 install).
 
-**Updating:** this plugin uses explicit semver (currently `0.9.4`). A release bumps
+**Updating:** this plugin uses explicit semver (currently `0.9.5`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```
@@ -105,17 +106,17 @@ A skill, so it is model-invocable now — call it directly, or compose it as a s
 larger skill/workflow; `/autopilot:build` is preserved for users. Hand it a requirement
 and it drives, end to end and without asking you questions:
 
-- **E1 — Worktree:** create `autopilot-<slug>` worktree+branch; create the plan doc (progress + RESUME).
-- **E2 — Brainstorm:** turn requirements into the spec (expert council at decision points).
-- **S1 — Spec review:** Ralph loop over the spec until the panel passes.
-- **S2 — Plan:** write the execution plan + how it will be verified.
-- **S3 — Produce:** implement (subagent-driven for code).
-- **S4 — Verify:** run the discovered checks.
-- **S5 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency.
-- **S6 — Squash:** idempotent squash to one clean commit.
-- **S7 — Finish:** report + integration menu. **Never merges.**
+- **S1 — Worktree:** create `autopilot-<slug>` worktree+branch; create the plan doc (progress + RESUME).
+- **S2 — Brainstorm:** turn requirements into the spec (expert council at decision points).
+- **S3 — Spec review:** Ralph loop over the spec until the panel passes.
+- **S4 — Plan:** write the execution plan + how it will be verified.
+- **S5 — Produce:** implement (subagent-driven for code).
+- **S6 — Verify:** run the discovered checks.
+- **S7 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency.
+- **S8 — Squash:** idempotent squash to one clean commit.
+- **S9 — Finish:** report + integration menu. **Never merges.**
 
-You can also hand `/autopilot:build` a path to an existing spec file instead of free-text requirements — it then skips the brainstorm + spec-review (E2/S1) and plans straight from your spec (`E1 → S2`; e.g. `/autopilot:build path/to/spec.md`).
+You can also hand `/autopilot:build` a path to an existing spec file instead of free-text requirements — it then skips the brainstorm + spec-review (S2/S3) and plans straight from your spec (`S1 → S4`; e.g. `/autopilot:build path/to/spec.md`).
 
 At a genuine decision point it convenes a small **expert council** (ad-hoc sub-agents)
 to deliberate, then decides and records — it does not ask you. It stops only to hand off on a
@@ -124,7 +125,7 @@ failure; a self-contradictory requirement; or — **only when Auto Mode is off**
 destructive git op). Reviews converge via a structured `VERDICT/BLOCKING/
 NON-BLOCKING` contract decided from disk, not vibes.
 
-On every terminal path (S7 finish or any safety stop) the run emits, as its final
+On every terminal path (S9 finish or any safety stop) the run emits, as its final
 output, one fenced `autopilot-result` JSON block (`status` / `branch` / `base_ref` /
 `head` / `blockers` / `reason`) so a calling workflow reads the outcome without parsing
 prose.
@@ -148,23 +149,23 @@ each reach `VERDICT: PASS`; the test actually runs and passes; the run ends at a
 
 The **trimmed** path: the same autonomous, thin-orchestrator, disk-backed, never-merge
 disciplines as `build`, but a shorter spine for speed. It still writes a spec and reviews
-it, but drops the S1 roster panel and writing-plans, uses a **one-shot single expert
+it, but drops the S3 roster panel and writing-plans, uses a **one-shot single expert
 reviewer** as the spec review, slices a terse task list inline, and runs a **minimal,
 cap-1** work review. It is a skill (model-invocable / composable) and emits the same final
 `autopilot-result` block; `/autopilot:medium-build` is preserved for users.
 
-- **E1 — Worktree:** create `autopilot-<slug>` worktree+branch; create the plan doc.
-- **E2 — Brainstorm:** turn requirements into the spec.
-- **E3 — Expert spec review:** one `general-purpose` expert reviews the spec (advice, not the VERDICT grammar); the orchestrator revises the spec **once** and proceeds — no loop, no marker.
+- **S1 — Worktree:** create `autopilot-<slug>` worktree+branch; create the plan doc.
+- **S2 — Brainstorm:** turn requirements into the spec.
+- **S3' — Expert spec review:** one `general-purpose` expert reviews the spec (advice, not the VERDICT grammar); the orchestrator revises the spec **once** and proceeds — no loop.
 - **Task list:** a terse ordered 1-line-per-task list written straight into the plan doc (no writing-plans).
-- **S3 — Produce:** subagent-driven from the plan-doc task list.
-- **S4 — Verify:** run the discovered checks.
-- **S5 — Work review:** a minimal panel (pin `correctness` + `requirement-fidelity` + `doc`), **capped at 1** review+fix round.
-- **S6 — Squash → S7 — Finish:** one clean commit + report. **Never merges.**
+- **S5 — Produce:** subagent-driven from the plan-doc task list.
+- **S6 — Verify:** run the discovered checks.
+- **S7 — Work review:** a minimal panel (pin `correctness` + `requirement-fidelity` + `doc`), **capped at 1** review+fix round.
+- **S8 — Squash → S9 — Finish:** one clean commit + report. **Never merges.**
 
 **No scope gate.** medium-build is a harness, not a gatekeeper — it runs whatever it is
 given and never escalates or hands off on scope. **When it fits:** a focused change where
-you still want a written, independently-reviewed spec, but not `build`'s full S1 roster
+you still want a written, independently-reviewed spec, but not `build`'s full S3 roster
 panel or writing-plans. For bigger or higher-blast-radius work where you want the full
 spine, use `/autopilot:build`; for the leanest, superpowers-free path with no spec at all,
 use `/autopilot:light-build`. Choosing the surface is your responsibility.
@@ -186,11 +187,11 @@ Its defining trait is **self-containment**: every phase uses a native tool, the 
 own script, or inline logic — it invokes **no `superpowers:*` skill** and runs even if
 superpowers is not installed.
 
-- **E1 — Worktree:** create `autopilot-<slug>` worktree+branch (native `EnterWorktree`). **Lazy state:** no spec doc, and no file by default — a minimal state file (the requirement recorded verbatim + a one-line RESUME block) is materialized only at the first compaction-risk boundary; a simple single-shot run writes nothing.
-- **S3 — Produce:** dispatch a producer subagent via plain `Task`. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
-- **S4 — Verify:** run the discovered checks inline.
-- **S5 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc`, `requirement-fidelity` checking the work against the requirement text — **capped at 1** review+fix round. This is the sole correctness gate.
-- **S6 — Squash → S7 — Finish:** one clean commit + report. **Never merges.**
+- **S1 — Worktree:** create `autopilot-<slug>` worktree+branch (native `EnterWorktree`). **Lazy state:** no spec doc, and no file by default — a minimal state file (the requirement recorded verbatim + a one-line RESUME block) is materialized only at the first compaction-risk boundary; a simple single-shot run writes nothing.
+- **S5 — Produce:** dispatch a producer subagent via plain `Task`. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
+- **S6 — Verify:** run the discovered checks inline.
+- **S7 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc`, `requirement-fidelity` checking the work against the requirement text — **capped at 1** review+fix round. This is the sole correctness gate.
+- **S8 — Squash → S9 — Finish:** one clean commit + report. **Never merges.**
 
 **No scope gate.** light-build is a harness, not a gatekeeper — it runs whatever it is
 given. **When it fits:** simple tasks, or any work where you want autonomy + forks-resolved-
@@ -219,8 +220,8 @@ returned branch — it reads the outcome from the final `autopilot-result` block
 The committed, accountable review roster. Each reviewer is a **read-only,
 single-lens** agent that returns the strict `VERDICT / BLOCKING / NON-BLOCKING`
 contract, so a review is reproducible and a lens is attributable — unlike anonymous
-ad-hoc reviewers chosen anew each time. `phase` is when a lens runs — `spec` (S1
-spec-review), `work` (S5 work-review), or `both`.
+ad-hoc reviewers chosen anew each time. `phase` is when a lens runs — `spec` (S3
+spec-review), `work` (S7 work-review), or `both`.
 
 | File | Lens | Phase | Tier |
 | --- | --- | --- | --- |
@@ -245,21 +246,22 @@ spec-fitness + architecture; work phase: correctness +
 requirement-fidelity + doc-reviewer — so every review is
 non-empty for any deliverable. `optional` lenses are **conditional**: they run only
 when the spec/diff matches their `applies_to`, auditably skipped otherwise. The
-`code-quality`/`test`/`performance` pack matches code files; `security` matches auth,
+`code-quality`/`performance` pack matches code-source files, `test` also matches
+test files/dirs; `security` matches auth,
 input-handling, network, file/DB I/O, dependency, or crypto signals;
 `architecture` is core in the spec phase but a structural-signal-gated optional in
-the work phase — it runs in S5 only when the diff changes file topology
+the work phase — it runs in S7 only when the diff changes file topology
 (`@structural`: any added/deleted/renamed/copied file).
 
 Each reviewer's frontmatter is **self-describing** (`lens`/`phase`/`tier`/
 `applies_to`), so the selection stage discovers and routes the roster with no code
 change; new lenses (domain packs) join the same way — a new file under `agents/`.
 
-**Selection stage (`scripts/select-panel.py`).** S1 and S5 call this script to pick the
+**Selection stage (`scripts/select-panel.py`).** S3 and S7 call this script to pick the
 panel: it globs `agents/`, reads each frontmatter, and returns the selected reviewers as
 `{agent, subagent_type, tier, matched}` — every `core` agent for the phase, plus every
-`optional` whose `applies_to` matches the signals (spec keywords for S1; changed paths,
-`git diff --name-only base...HEAD`, for S5). The orchestrator then runs **all** core
+`optional` whose `applies_to` matches the signals (spec keywords for S3; changed paths,
+`git diff --name-only base...HEAD`, for S7). The orchestrator then runs **all** core
 (the floor), **curates** the optionals (may drop a marginal one), and may add an
 **ad-hoc** lens for a gap no roster agent covers. Each roster member runs at its own
 model and read-only tool allowlist on either transport (identical prompts):
@@ -272,8 +274,8 @@ rides the same `Workflow` transport (dispatched as `general-purpose`, schema-val
 like the roster). Nothing to configure.
 (Requires the installed plugin ≥ v0.4.0; the workflow transport needs the version
 shipping `scripts/review-round.js`.)
-Doc upkeep is folded into S5: the core `doc-reviewer` flags stale/missing docs **repo-wide**
-(touched files and docs elsewhere the change contradicts) as BLOCKING (fixed in the S5 loop),
+Doc upkeep is folded into S7: the core `doc-reviewer` flags stale/missing docs **repo-wide**
+(touched files and docs elsewhere the change contradicts) as BLOCKING (fixed in the S7 loop),
 so there is no separate docs phase.
 
 ## Configuration
@@ -287,7 +289,7 @@ The plugin keeps its own config in its data dir — never Claude's managed
 ```
 
 - **`ralphLoop.maxIterations.spec-phase` / `.implementation-phase`** — per-phase
-  round cap for the S1 spec-review / S5 work-review loop (default 3 each).
+  round cap for the S3 spec-review / S7 work-review loop (default 3 each).
 - **Deprecated: `ralphLoop.enabled`.** The old toggle that drove the loops via the
   optional `ralph-loop` plugin is ignored — the built-in native loop (which can
   re-dispatch only the affected lens subset on re-review rounds) is the only

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Select the Claude Autopilot review panel for a phase (SPEC §8.6): read the
+"""Select the Claude Autopilot review panel for a phase: read the
 ``agents/`` frontmatter and print, as JSON, the reviewers to dispatch — ``core``
 always, ``optional`` when an ``applies_to`` entry matches the phase's signals.
 CLI: ``--phase spec|work`` with ``--spec-file`` (spec) or ``--worktree``/
