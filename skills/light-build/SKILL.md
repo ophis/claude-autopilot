@@ -138,7 +138,7 @@ loop itself, dispatching each round through the one-round transport `review-roun
     infra failure, not a FAIL: re-dispatch just those lenses once via `Task`; still nothing →
     FAIL. No `verdicts` array, or one shorter than sent → Task fallback for the missing members.
   - **Task fallback:** if `Workflow` is unavailable or a call failed, dispatch the members as
-    parallel `Task(subagent_type="autopilot:<name>")` calls in a single message — send ONLY the
+    parallel `Task(subagent_type="autopilot:<name>")` calls in one batch — send ONLY the
     run-input prompt. Note the fallback on the freeze line's `transport=` field if it fired.
 - **The loop** (orchestrator-run, cap = 1):
   - **Round 0** = the pinned panel; all-PASS short-circuits → record `AUTOPILOT: WORK READY`,

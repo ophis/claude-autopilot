@@ -80,7 +80,7 @@ existing repo patterns.
 - At a genuine fork — two-plus viable approaches with materially different trade-offs, or a
   choice shaping architecture / data model / interface / scope, costly to reverse, or one a
   later review might miss — **convene a council**: 2–4 ad-hoc expert personas in one parallel
-  batch via `superpowers:dispatching-parallel-agents`, each returning a concise position
+  batch, each returning a concise position
   (recommendation, rationale, trade-offs, dissent). You **synthesize, decide, and record** a
   one-line decision (see **Progress log format**) — the decider, breaking ties.
 - Otherwise decide solo and record (a wrong guess is caught by review). Never fabricate
@@ -134,7 +134,7 @@ one-round transport `review-round.js`.
     nothing." + the Verdict grammar block (read-only is prompt-enforced only).
   - **Task fallback:** if `Workflow` is unavailable or a call failed, dispatch roster members
     as `Task(subagent_type="autopilot:<name>", …)` — send ONLY the run-input prompt, all calls
-    in one message (`superpowers:dispatching-parallel-agents`). The transport + any fallback
+    in one batch. The transport + any fallback
     that fired ride the freeze line's `transport=` field.
 - **The loop** (orchestrator-run, cap = 1):
   - **Round 0** = full frozen panel; all-PASS short-circuits → record `AUTOPILOT: WORK READY`,

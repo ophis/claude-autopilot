@@ -64,8 +64,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 
 The **build / medium-build** surfaces orchestrate skills from the **superpowers**
 plugin (brainstorming, writing-plans, subagent-driven-development, using-git-worktrees,
-verification-before-completion, finishing-a-development-branch,
-dispatching-parallel-agents). Claude Code has **no plugin dependency / auto-install
+verification-before-completion, finishing-a-development-branch). Claude Code has **no plugin dependency / auto-install
 mechanism**, so you must install superpowers yourself first:
 
 ```

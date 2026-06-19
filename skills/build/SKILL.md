@@ -75,7 +75,7 @@ the user's / project's convention** — honor CLAUDE.md and existing repo patter
 - At a genuine fork — two-plus viable approaches with materially different trade-offs, or a
   choice shaping architecture / data model / interface / scope, costly to reverse, or one a
   later review might miss — **convene a council**: 2–4 ad-hoc expert personas in one parallel
-  batch via `superpowers:dispatching-parallel-agents`, each returning a concise position
+  batch, each returning a concise position
   (recommendation, rationale, trade-offs, dissent). You **synthesize, decide, and record** a
   one-line decision (see **Progress log format**) — the decider, breaking ties.
 - Otherwise decide solo and record (a wrong guess is caught by review). Never fabricate
@@ -112,7 +112,7 @@ the user's / project's convention** — honor CLAUDE.md and existing repo patter
     re-dispatch — dispatch ad-hoc directly via `Task` only when the whole round already fell back.
   - **Task fallback:** if `Workflow` is unavailable or a call failed, dispatch roster members as
     `Task(subagent_type="autopilot:<name>", …)` — body is the system prompt; send ONLY the
-    run-input prompt, all calls in one message (`superpowers:dispatching-parallel-agents`), rest
+    run-input prompt, all calls in one message, rest
     of the run. The transport + any fallback that fired ride the freeze line's `transport=` field
     (see **Progress log format**) — not a separate log line.
 - Each reviewer returns the verdict block; collect verdicts → the Ralph loop.

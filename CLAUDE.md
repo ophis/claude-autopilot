@@ -106,8 +106,7 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
 
 - **Built on `superpowers`.** `build` / `medium-build` orchestrate superpowers
   skills (brainstorming, writing-plans, subagent-driven-development, using-git-worktrees,
-  verification-before-completion, finishing-a-development-branch,
-  dispatching-parallel-agents). For those two surfaces it is a **hard dependency** —
+  verification-before-completion, finishing-a-development-branch). For those two surfaces it is a **hard dependency** —
   they preflight for it and hand off install instructions if missing. `light-build` is
   the exception: it is self-contained, invokes no `superpowers:*` skill, and has no
   superpowers preflight. There is no plugin auto-dependency mechanism, so dependencies
