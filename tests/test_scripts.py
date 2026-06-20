@@ -670,14 +670,32 @@ class MediumBuildTransportTests(unittest.TestCase):
 
 
 class SkillWorktreePinTests(unittest.TestCase):
-    """Every orchestrator skill must require worktree-pinned subagent dispatch."""
-    def test_all_skills_pin_subagents_to_worktree(self):
+    """Worktree-pinned dispatch is a hard safety invariant. It is single-sourced in the
+    shared protocol (references/autopilot-common.md §C1); every skill must load it."""
+    def test_common_protocol_defines_worktree_pin(self):
+        with open(os.path.join(REPO, "references", "autopilot-common.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertIn("Worktree-pinned dispatch", text)
+        self.assertIn("never** main/master", text)
+        self.assertIn("branch --show-current", text)
+    def test_all_skills_load_common_protocol(self):
         for skill in ("build", "medium-build", "light-build"):
             with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
                 text = fh.read()
-            self.assertIn("Worktree-pinned dispatch", text, skill)
-            self.assertIn("never** main/master", text, skill)
-            self.assertIn("branch --show-current", text, skill)
+            self.assertIn("Read `${CLAUDE_PLUGIN_ROOT}/references/autopilot-common.md`", text, skill)
+
+
+class CommonProtocolInvariantTests(unittest.TestCase):
+    """references/autopilot-common.md must not be a dispatchable skill and must stay superpowers-free."""
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(REPO, "references", "autopilot-common.md"), encoding="utf-8") as fh:
+            cls.text = fh.read()
+    def test_no_skill_frontmatter(self):
+        # No YAML frontmatter block -> not a dispatchable skill (no name:/description:)
+        self.assertFalse(self.text.lstrip().startswith("---"), "common file must have no YAML frontmatter")
+    def test_superpowers_free(self):
+        self.assertNotIn("superpowers:", self.text)
 
 
 if __name__ == "__main__":

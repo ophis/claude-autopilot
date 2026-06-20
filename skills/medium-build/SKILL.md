@@ -1,6 +1,6 @@
 ---
 name: medium-build
-description: "Use to build a change end to end on the trimmed path: create an isolated worktree, write a spec, one-shot expert spec review, slice a terse task list, implement, verify, and a trimmed work-review loop to a single review-ready branch (never merges). Pass the requirement text, or a path to an existing spec file."
+description: "Trimmed autopilot build path: spec + a one-shot expert spec review (no roster panel), no writing-plans, and a cap-1 work-review loop, to a single review-ready branch (never merges). Use for a lighter-than-build / trimmed build. Pass the requirement text, or a path to an existing spec file."
 argument-hint: "<requirements|spec-file-path>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, Skill, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite
 ---
@@ -26,6 +26,7 @@ Empty input → STOP with a handoff asking for requirements.
 
 ## Preflight (dependencies)
 
+- **Read `${CLAUDE_PLUGIN_ROOT}/references/autopilot-common.md`** — the shared operating protocol (disciplines, dispatch transport, verdict grammar, progress-log shapes, safety stops, result handoff). This skill defines only its pipeline + the deltas below.
 - **Load config:** `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`. medium-build pins S7 to cap = 1 (see **Review rounds**), ignoring those defaults; the load still confirms config health.
 - Before S1, confirm **superpowers** plugin is available. If **not** available, STOP with a
   handoff: superpowers required, install via `/plugin install superpowers@claude-plugins-official`,
@@ -33,22 +34,15 @@ Empty input → STOP with a handoff asking for requirements.
 
 ## Operating disciplines
 
-- **Autonomous — never ask user.** At a decision point, **convene expert
-  council or decide solo** (see "Deciding at decision points").
-- **Thin orchestrator.** Dispatch by reference and judge structured output. Never hoard
-  whole files, diffs, or logs in main thread; read only bounded slices when you must
-  inspect something yourself.
-- **Worktree-pinned dispatch.** Give every subagent absolute worktree path + branch and
-  have it act only there — absolute paths / `git -C <worktree>`, never inherited cwd — and
-  **before any write assert** `git -C <worktree> branch --show-current` is the run branch;
-  **never** main/master. Producers dispatched via subagent-driven-development
-  inherit this through their task context.
+The 5 shared disciplines (Autonomous · Thin orchestrator · Worktree-pinned dispatch ·
+STOP-is-a-handoff · No merge) → see **references/autopilot-common.md §C1**. medium-specific
+additions:
+
+- **Worktree-pinned dispatch (medium delta):** producers dispatched via
+  subagent-driven-development inherit the worktree-pin through their task context.
 - **Disk-backed.** Persist the spec and a **plan doc** (implementation plan + progress
   section + RESUME block) so the run survives compaction. Location follows the
   user's/project's convention — see **Resume & state**.
-- **A STOP is a handoff, never a question:** emit current state + the exact next step a
-  human (or a resumed run) would take. Do not pose questions.
-- **No merge.** The run ends at a review-ready branch. You never merge to the base.
 
 ## Resume & state
 
@@ -78,14 +72,7 @@ existing repo patterns.
 
 ## Deciding at decision points (expert council)
 
-- At a genuine fork — two-plus viable approaches with materially different trade-offs, or a
-  choice shaping architecture / data model / interface / scope, costly to reverse, or one a
-  later review might miss — **convene a council**: 2–4 ad-hoc expert personas in one parallel
-  batch, each returning a concise position
-  (recommendation, rationale, trade-offs, dissent). You **synthesize, decide, and record** a
-  brief decision (see **Progress log format**) — the decider, breaking ties.
-- Otherwise decide solo and record (a wrong guess is caught by review). Never fabricate
-  personas to hit a count — fewer than two real lenses → solo.
+→ see **references/autopilot-common.md §C2 Deciding at decision points**.
 
 ## S3' — spec review
 
@@ -118,25 +105,11 @@ one-round transport `review-round.js`.
   unless a changed-path signal clearly warrants one. You MAY add an ad-hoc inline lens for a
   genuine gap no roster agent covers. Freeze & log the panel to the **plan doc** progress
   section (freeze shape, see **Progress log format**); reuse it every round.
-- **Dispatch each round together** — never one at a time, re-reviews included. Build each
-  member's run-input prompt once — "PHASE=work. Inputs: worktree=…, base_ref=…, spec_doc=…,
-  plan_doc=…, requirement=…, focus=…. Output ONLY the verdict, no extra prose." (absolute paths;
-  reviewers read the worktree, never main) — the identical prompt rides whichever transport
-  carries it:
-  - **Workflow transport (preferred):** one call per round —
-    `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`,
-    `args` is a real JSON object (it tolerates a stringified one; don't rely on it). The call returns
-    a task ID; the round's verdicts arrive in its completion notification as `{phase, verdicts:
-    [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` — wait for it (never poll/judge
-    early). Never pass `resumeFromRunId` — every round is a fresh run. `synthetic: true` = that member's infra failure, not a FAIL: re-dispatch just those
-    lenses once via `Task`; still nothing → FAIL. No `verdicts` array, or one shorter than sent
-    → Task fallback for the missing members. Ad-hoc lenses ride the same `members` list as
-    `subagent_type:"general-purpose"`, their `prompt` carrying the persona + "Read-only. Modify
-    nothing." + the Verdict grammar block (read-only is prompt-enforced only).
-  - **Task fallback:** if `Workflow` is unavailable or a call failed, dispatch roster members
-    as `Task(subagent_type="autopilot:<name>", …)` — send ONLY the run-input prompt, all calls
-    in one batch. The transport + any fallback
-    that fired ride the freeze line's `transport=` field.
+- **Dispatch each round together** — never one at a time, re-reviews included. Transport
+  mechanics (Workflow-preferred / Task-fallback / `synthetic` / partial-result) →
+  **references/autopilot-common.md §C3 Dispatch transport**. Ad-hoc lenses ride the same
+  `members` list as `subagent_type:"general-purpose"`, their `prompt` carrying the persona +
+  "Read-only. Modify nothing." + the Verdict grammar block (read-only is prompt-enforced only).
 - **The loop** (orchestrator-run, cap = 1):
   - **Round 0** = full frozen panel; all-PASS short-circuits → proceed S7→S8.
   - **Fix** (orchestrator-driven): dispatch ONE fresh producer subagent primed with the deduped
@@ -154,33 +127,16 @@ one-round transport `review-round.js`.
 
 ## Verdict grammar (paste into ad-hoc review prompts only)
 
-Output ONLY the verdict — no prose/preamble. When a `StructuredOutput` tool is offered
-(Workflow transport), the verdict IS that call: `{VERDICT: PASS|FAIL, BLOCKING: [...],
-NON_BLOCKING: [...]}`, nothing else. Else (Task fallback) emit exactly:
-
-```
-VERDICT: PASS            # or exactly: VERDICT: FAIL
-BLOCKING: none           # or one "- " item per line
-NON-BLOCKING: none       # or one "- " item per line
-```
-
-PASS ⟺ no blocking items. Cite evidence (file:line / spec clause); flag blockers, not
-preferences. A missing, unparseable, or empty-on-FAIL verdict counts as **FAIL**.
-Convergence is decided from these on-disk verdicts, never from vibes.
+→ see **references/autopilot-common.md §C4 Verdict grammar**.
 
 <!-- progress-log-format:start -->
 ## Progress log format
 
-The plan doc's progress section is a simple short-entry log (audit trail, not a
-transcript): a brief entry for the panel freeze, every review round (VERDICT roll-up +
-blocker), and every decision — keep them short, not necessarily one line. Only
-`review_round` (RESUME block) is load-bearing for resume. Keep these plus the final
-residual NON-BLOCKING items.
-
-Shapes (keep each short; `S3'` decisions use the **Decision** shape):
+The plan doc's progress section is the audit-trail log. The audit-trail principle + the
+**review-round** and **decision** shapes → see **references/autopilot-common.md §C5 Progress /
+working-note shapes** (`S3'` decisions use the **Decision** shape). medium records the freeze in
+the **plan doc** progress section, using the freeze shape:
 - **Panel freeze:** `S7 panel: core=[correctness,requirement-fidelity,doc] +optional=[code-quality] transport=Workflow` (append `->Task` only if the fallback fired).
-- **Review round** (VERDICT roll-up + a concise gist per blocker): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> 1 blocker (off-by-one in slice bound), fix dispatched`.
-- **Decision** (council or solo, incl. a resolved FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 <!-- progress-log-format:end -->
 
 ## Pipeline (S1, S2, S3', S5–S9)
@@ -237,30 +193,10 @@ S7 → S8 → S9** (no S4 — medium skips the plan phase).
 
 ## Safety stops (handoffs, not questions)
 
-Stop and hand off (state + exact next step) only on the cases below. Every STOP handoff
-ends by emitting the **Result handoff** block (`status`=`stopped`, or
-`capped-without-pass` at the cap).
-1. **Destructive op — only when Auto Mode is OFF.** Before any force-push, write outside
-   the worktree, history rewrite beyond this branch, or rm/reset of uncommitted work.
-   **In Auto Mode** (auto-accept / bypass-permissions), skip this stop — destructive-op
-   judgment is deferred to Auto Mode. The other three stops apply regardless of Auto Mode.
-2. **Non-convergence at cap** — the in-session S7 loop hits `cap` (= 1) without convergence
-   (with the classification).
-3. **Non-review phase failure** — one retry, then STOP.
-4. **Root-contradiction** — the core requirement is self-contradictory; cite the two
-   clauses.
+→ see **references/autopilot-common.md §C6 Safety stops** (medium's cap-2 case is the
+in-session S7 loop at `cap` = 1).
 
 ## Result handoff (always emit last)
 
-On **every** terminal path — S9 finish AND any safety-stop handoff — emit as the final
-output exactly one fenced `autopilot-result` block (one JSON object) so a caller consumes
-the outcome without parsing prose:
-
-```autopilot-result
-{ "status": "converged", "branch": "autopilot-<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
-```
-
-- `status` — `converged` (reached S9) | `capped-without-pass` (the S7 loop hit its cap) | `stopped` (any other safety stop).
-- `branch` / `base_ref` / `head` — branch name, its base SHA, its final commit SHA (`head` = `base_ref` if nothing was produced).
-- `blockers` — residual open BLOCKING items (strings) when `status != converged`, else `[]`.
-- `reason` — empty when converged; else classification + detail (cap → oscillation | unfixable | requirements-conflict; stop → root-contradiction | phase-failure | destructive-op).
+→ emit the `autopilot-result` block per **references/autopilot-common.md §C7 Result handoff**
+on every terminal path (S9 finish AND any safety-stop handoff).
