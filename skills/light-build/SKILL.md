@@ -131,13 +131,15 @@ loop itself, dispatching each round through the one-round transport `review-roun
   focus=…. Output ONLY the verdict, no extra prose." (absolute paths; reviewers read the worktree,
   never main) — the identical prompt rides whichever transport carries it:
   - **Workflow transport (preferred):** one call per round —
-    `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`,
+    `Workflow({script: <contents of ${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js>, args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`,
+    (inline `script`: `Workflow` rejects a `scriptPath` outside the working dir; later rounds pass
+    the `scriptPath` an earlier call returned; none known (e.g. after compaction) or rejected → re-inline before any fallback),
     `args` is a real JSON object. The call returns a task ID; the round's verdicts arrive in its
     completion notification as `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING,
     synthetic}, …]}` — wait for it (never poll/judge early). Never pass `resumeFromRunId` — every round is a fresh run. `synthetic: true` = that member's
     infra failure, not a FAIL: re-dispatch just those lenses once via `Task`; still nothing →
     FAIL. No `verdicts` array, or one shorter than sent → Task fallback for the missing members.
-  - **Task fallback:** if `Workflow` is unavailable or a call failed, dispatch the members as
+  - **Task fallback:** if `Workflow` is unavailable or a call failed (after the re-inline retry), dispatch the members as
     parallel `Task(subagent_type="autopilot:<name>")` calls in one batch — send ONLY the
     run-input prompt. Note the fallback on the freeze line's `transport=` field if it fired.
 - **The loop** (orchestrator-run, cap = 1):

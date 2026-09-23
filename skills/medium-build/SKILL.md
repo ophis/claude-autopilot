@@ -124,7 +124,9 @@ one-round transport `review-round.js`.
   reviewers read the worktree, never main) — the identical prompt rides whichever transport
   carries it:
   - **Workflow transport (preferred):** one call per round —
-    `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`,
+    `Workflow({script: <contents of ${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js>, args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`,
+    (inline `script`: `Workflow` rejects a `scriptPath` outside the working dir; later rounds pass
+    the `scriptPath` an earlier call returned; none known (e.g. after compaction) or rejected → re-inline before any fallback),
     `args` is a real JSON object (it tolerates a stringified one; don't rely on it). The call returns
     a task ID; the round's verdicts arrive in its completion notification as `{phase, verdicts:
     [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` — wait for it (never poll/judge
@@ -133,7 +135,7 @@ one-round transport `review-round.js`.
     → Task fallback for the missing members. Ad-hoc lenses ride the same `members` list as
     `subagent_type:"general-purpose"`, their `prompt` carrying the persona + "Read-only. Modify
     nothing." + the Verdict grammar block (read-only is prompt-enforced only).
-  - **Task fallback:** if `Workflow` is unavailable or a call failed, dispatch roster members
+  - **Task fallback:** if `Workflow` is unavailable or a call failed (after the re-inline retry), dispatch roster members
     as `Task(subagent_type="autopilot:<name>", …)` — send ONLY the run-input prompt, all calls
     in one batch. The transport + any fallback
     that fired ride the freeze line's `transport=` field.

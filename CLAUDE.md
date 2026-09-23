@@ -76,8 +76,9 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
   read-only `tools` allowlist either way. **Ad-hoc lenses** (a gap no roster agent
   covers) ride the **same `Workflow` transport** as `general-purpose` members —
   schema-validated like the roster, read-only by prompt (not by a tool allowlist) —
-  and share the roster's fallbacks. `scriptPath` resolves from the *installed* plugin,
-  like agent dispatch. `scripts/review-round.js` dispatches **one** round; **all three
+  and share the roster's fallbacks. The script is passed **inline** (`script`, read from the
+  *installed* plugin) — `Workflow` rejects a `scriptPath` outside the working dir; later
+  rounds reuse the `scriptPath` an earlier call returned, none known or rejected → re-inline before any fallback. `scripts/review-round.js` dispatches **one** round; **all three
   surfaces** run the convergence loop natively in the orchestrator (round 0 + fix → re-review
   until all-PASS or the per-phase cap), dispatching each round through it. The orchestrator
   owns the loop, the fix, and (S7) the `(FAILed ∪ touched)` re-review subset — preserving

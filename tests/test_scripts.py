@@ -639,6 +639,19 @@ class ReviewRoundScriptTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr.decode())
 
 
+class WorkflowScriptInlineTests(unittest.TestCase):
+    """Workflow rejects a scriptPath outside the working dir: each surface inlines
+    review-round.js and reuses only a tool-returned scriptPath."""
+    def test_inline_script_and_returned_path_reuse(self):
+        for name in ("build", "medium-build", "light-build"):
+            with open(os.path.join(SKILLS, name, "SKILL.md"), encoding="utf-8") as fh:
+                text = fh.read()
+            self.assertNotIn("scriptPath: \"${CLAUDE_PLUGIN_ROOT}", text, name)
+            self.assertIn("Workflow({script: <contents of ${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js>", text, name)
+            self.assertIn("the `scriptPath` an earlier call returned", text, name)
+            self.assertIn("or rejected → re-inline before any fallback", text, name)
+
+
 class LightBuildTransportTests(unittest.TestCase):
     """light-build runs the S5 loop in-orchestrator via review-round.js — no
     whole-loop review-loop.js, no _shared prose fallback."""
