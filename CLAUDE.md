@@ -60,29 +60,24 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
 
 - **Ralph convergence loops (S3, S7).** review → fix → re-review until the frozen
   review panel all-PASSes or a per-phase cap (default 3) is hit. Convergence is decided
-  **only from on-disk verdicts** in the strict `VERDICT / BLOCKING / NON-BLOCKING`
-  grammar — never from the orchestrator's opinion. Round 0 short-circuits if all-PASS.
+  **only from reviewers' own verdicts** in the strict `VERDICT / BLOCKING / NON-BLOCKING`
+  grammar — never from the orchestrator's opinion. Rounds are batched (wait for every
+  verdict, one fix, one re-review); the orchestrator never overrides a verdict. Round 0
+  short-circuits if all-PASS.
 
 - **Named review roster (`agents/`).** Each reviewer is a **read-only, single-lens**
   agent whose frontmatter is **self-describing** (`lens` / `phase` / `tier` /
   `applies_to`) so the selector can route it with no code change. `reviewer-contract.md`
   is an authoring-time template (selector-inert: no `phase`) inlined into each reviewer.
-  Reviewers are dispatched **natively** — preferably one `Workflow` call per review
-  round (`scripts/review-round.js`, a dumb-transport Dynamic Workflows script:
-  `agentType` = the same `autopilot:<name>` handles, schema-validated verdicts,
-  `synthetic: true` = per-member infra failure; it tolerates `args` arriving as a
-  stringified JSON object), falling back stickily to a parallel
-  `Task(subagent_type="autopilot:<name>")` batch — each reviewer at its own `model` +
-  read-only `tools` allowlist either way. **Ad-hoc lenses** (a gap no roster agent
-  covers) ride the **same `Workflow` transport** as `general-purpose` members —
-  schema-validated like the roster, read-only by prompt (not by a tool allowlist) —
-  and share the roster's fallbacks. The script is passed **inline** (`script`, read from the
-  *installed* plugin) — `Workflow` rejects a `scriptPath` outside the working dir; later
-  rounds reuse the `scriptPath` an earlier call returned, none known or rejected → re-inline before any fallback. `scripts/review-round.js` dispatches **one** round; **all three
-  surfaces** run the convergence loop natively in the orchestrator (round 0 + fix → re-review
-  until all-PASS or the per-phase cap), dispatching each round through it. The orchestrator
-  owns the loop, the fix, and (S7) the `(FAILed ∪ touched)` re-review subset — preserving
-  ground-truth `touched` (via `select-panel.py`) and a warm, same-session fixer.
+  Reviewers are dispatched **natively** via `Task(subagent_type="autopilot:<name>")` —
+  each at its own `model` + read-only `tools` allowlist. Re-reviews **continue** the same
+  reviewers via `SendMessage` with the fix diff + the fixer's claimed fixes; a lost agent ID
+  → a fresh `Task` primed with that lens's persisted blocker gists. **Ad-hoc lenses** (a gap
+  no roster agent covers) ride `Task` as `general-purpose`, read-only by prompt (not by a
+  tool allowlist). **All three surfaces** run the convergence loop natively in the
+  orchestrator (round 0 + fix → re-review until all-PASS or the per-phase cap). The
+  orchestrator owns the loop, the fix, and (S7) the `(FAILed ∪ touched)` re-review subset —
+  preserving ground-truth `touched` (via `select-panel.py`) and a fixer continued across rounds.
 
 - **Selection stage (`scripts/select-panel.py`).** Deterministic, stdlib-only router:
   `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every
@@ -104,6 +99,8 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
   plan + a progress section + a `RESUME:` block). The RESUME block
   (`phase=… worktree=… branch=… base_ref=… review_round=…`) lets a run survive
   compaction and resume from the current phase; an interrupted review round re-runs whole.
+  The progress section records reviewer / fixer agent IDs and per-lens blocker gists for
+  continuation and its fallback.
 
 - **Built on `superpowers`.** `build` / `medium-build` orchestrate superpowers
   skills (brainstorming, writing-plans, subagent-driven-development,

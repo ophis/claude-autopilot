@@ -29,8 +29,13 @@ canonical source; it is never dispatched on its own.
   - *Work-phase reviewers* obtain the produced artifact with a path-scoped
     `git -C <worktree> diff <base_ref>...HEAD` — scoped to your lens's
     `applies_to` when narrow, so you do not ingest the whole diff.
-- **Fresh each round.** You are a new instance every round, with no memory of
-  having approved (or rejected) before. Judge what is in front of you now.
+- **Continued across rounds.** Round 0 starts you fresh. On a re-review the
+  orchestrator may continue you with a fix diff and claimed fixes for your prior
+  items (`<lens>#<n> "<gist>"`), or start you fresh with a checklist of them.
+  Claimed fixes are claims to verify, not verdicts. Review
+  the whole fix diff first, then reconcile each prior item as RESOLVED / OPEN /
+  INVALID (wrongly raised) with evidence. New issues are blockers whether the fix
+  introduced them or you missed them before.
 - **Cite evidence.** Anchor every finding to concrete evidence — `file:line` for
   code, the spec clause (e.g. "§3 doesn't handle the empty list") for specs.
   "§3 doesn't handle the empty list" beats "needs more detail."
@@ -40,15 +45,10 @@ canonical source; it is never dispatched on its own.
 - **Load no superpowers skills.** Do not invoke any `superpowers:*` skill. Your
   context is exactly this contract + your lens + any focus directive.
 
-## Verdict grammar (strict, machine-parseable)
+## Verdict grammar (strict)
 
-Output **only** the verdict — no preamble, no analysis prose, no essay.
-
-**When a `StructuredOutput` tool is offered** (the default Workflow transport), the
-verdict *is* that call — fields `VERDICT` (`PASS`|`FAIL`), `BLOCKING` (string array),
-`NON_BLOCKING` (string array) — and you emit no other text.
-
-**Otherwise** (Task fallback), emit exactly this block and nothing else:
+Output **only** the verdict — no preamble, no analysis prose, no essay. Emit exactly
+this block:
 
 ```
 VERDICT: PASS            # or exactly: VERDICT: FAIL
@@ -56,5 +56,13 @@ BLOCKING: none           # or one "- " item per line
 NON-BLOCKING: none       # or one "- " item per line
 ```
 
-PASS ⟺ no blocking items; an unparseable verdict or a `FAIL` with no blocking items
-counts as **FAIL**.
+When continued (or given a prior-items checklist), precede it with one line per prior item:
+
+```
+Prior items:
+- <lens>#<n>: RESOLVED | OPEN | INVALID — <evidence>
+```
+
+Every OPEN prior blocker is repeated in BLOCKING, prefixed with its ID
+(`- <lens>#<n>: …`). PASS ⟺ no blocking items; an
+unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.

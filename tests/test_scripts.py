@@ -11,7 +11,6 @@ depend on the live roster.
 """
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -22,7 +21,6 @@ SCRIPTS = os.path.join(REPO, "scripts")
 SELECT_PANEL = os.path.join(SCRIPTS, "select-panel.py")
 CONFIG = os.path.join(SCRIPTS, "autopilot-config.py")
 LINT_ROSTER = os.path.join(SCRIPTS, "lint-roster.py")
-REVIEW_ROUND = os.path.join(SCRIPTS, "review-round.js")
 SKILLS = os.path.join(REPO, "skills")
 
 AGENT_TEMPLATE = """\
@@ -306,9 +304,7 @@ GOOD_BODY = """\
 - **Cite evidence.** Anchor every finding to file:line.
 - **Load no superpowers skills.**
 
-## Verdict grammar (strict, machine-parseable)
-
-When a `StructuredOutput` tool is offered, the verdict is that call.
+## Verdict grammar (strict)
 
 VERDICT: PASS
 BLOCKING: none
@@ -465,8 +461,6 @@ class LintRosterTests(unittest.TestCase):
 
 ## Verdict grammar
 
-When a `StructuredOutput` tool is offered, the verdict is that call.
-
 VERDICT: PASS
 BLOCKING: none
 NON-BLOCKING: none
@@ -572,114 +566,6 @@ Body.
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("selector-inert", proc.stdout)
         self.assertIn("tier", proc.stdout)
-
-
-class ReviewRoundScriptTests(unittest.TestCase):
-    """Static contract + syntax gate for scripts/review-round.js (spec D1/D4).
-
-    The script runs only inside the Dynamic Workflows runtime, so there is no
-    behavioral harness here; these tests pin the *contract surface* the commands
-    and the orchestrator depend on, and the no-ambient-authority posture.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        with open(REVIEW_ROUND, encoding="utf-8") as fh:
-            cls.text = fh.read()
-
-    def test_contract_markers_present(self):
-        """The markers the commands/orchestrator rely on all appear verbatim."""
-        for marker in (
-            "export const meta",
-            "autopilot-review-round",
-            "agentType",
-            "schema",
-            "no verdict returned (skip/terminal error)",
-            "synthetic",
-            "verdicts",
-            "return {",
-            # Schema field names + verdict values: renaming any silently breaks judging.
-            "required: ['VERDICT', 'BLOCKING', 'NON_BLOCKING'],",
-            "enum: ['PASS', 'FAIL']",
-        ):
-            self.assertIn(marker, self.text, marker)
-
-    def test_no_ambient_authority(self):
-        """No imports/FS/env/network/clock — args is the script's only input."""
-        for banned in (
-            "require(",
-            "import ",
-            "import(",  # dynamic import — "import " alone would miss it
-            "process.",
-            "fs.",
-            "fetch(",
-            "Date.now",
-            "Math.random",
-        ):
-            self.assertNotIn(banned, self.text, banned)
-
-    @unittest.skipUnless(shutil.which("node"), "node not installed")
-    def test_node_syntax_check(self):
-        """node --check accepts the script under the runtime's execution model:
-        the Workflows runtime hoists the `export const meta` and runs the body
-        inside an async function (so top-level `await` and `return` are legal).
-        Emulate that: demote the export, wrap the body, check as ESM (.mjs)."""
-        wrapped = "async function _wf() {\n%s\n}\n" % self.text.replace(
-            "export const meta", "const meta", 1
-        )
-        with tempfile.TemporaryDirectory() as td:
-            mjs = os.path.join(td, "review-round.mjs")
-            with open(mjs, "w", encoding="utf-8") as fh:
-                fh.write(wrapped)
-            proc = subprocess.run(
-                ["node", "--check", mjs],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            self.assertEqual(proc.returncode, 0, proc.stderr.decode())
-
-
-class WorkflowScriptInlineTests(unittest.TestCase):
-    """Workflow rejects a scriptPath outside the working dir: each surface inlines
-    review-round.js and reuses only a tool-returned scriptPath."""
-    def test_inline_script_and_returned_path_reuse(self):
-        for name in ("build", "medium-build", "light-build"):
-            with open(os.path.join(SKILLS, name, "SKILL.md"), encoding="utf-8") as fh:
-                text = fh.read()
-            self.assertNotIn("scriptPath: \"${CLAUDE_PLUGIN_ROOT}", text, name)
-            self.assertIn("Workflow({script: <contents of ${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js>", text, name)
-            self.assertIn("the `scriptPath` an earlier call returned", text, name)
-            self.assertIn("or rejected → re-inline before any fallback", text, name)
-
-
-class LightBuildTransportTests(unittest.TestCase):
-    """light-build runs the S5 loop in-orchestrator via review-round.js — no
-    whole-loop review-loop.js, no _shared prose fallback."""
-    @classmethod
-    def setUpClass(cls):
-        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
-            cls.text = fh.read()
-    def test_dispatches_via_review_round(self):
-        self.assertIn("review-round.js", self.text)
-    def test_no_whole_loop_script(self):
-        self.assertNotIn("review-loop.js", self.text)
-    def test_no_shared_fallback_pointer(self):
-        self.assertNotIn("_shared/review-loop.md", self.text)
-
-
-class MediumBuildTransportTests(unittest.TestCase):
-    """medium-build runs the S5 loop in-orchestrator via review-round.js — no
-    whole-loop review-loop.js, no _shared prose fallback."""
-    @classmethod
-    def setUpClass(cls):
-        with open(os.path.join(SKILLS, "medium-build", "SKILL.md"), encoding="utf-8") as fh:
-            cls.text = fh.read()
-    def test_dispatches_via_review_round(self):
-        self.assertIn("review-round.js", self.text)
-    def test_no_whole_loop_script(self):
-        self.assertNotIn("review-loop.js", self.text)
-    def test_no_shared_fallback_pointer(self):
-        self.assertNotIn("_shared/review-loop.md", self.text)
 
 
 class SkillWorktreePinTests(unittest.TestCase):

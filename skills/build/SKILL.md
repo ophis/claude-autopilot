@@ -2,7 +2,7 @@
 name: build
 description: "Use to build a new work product from a requirement, end to end: create an isolated worktree, write and review a spec, plan, implement, verify, and review-loop to a single review-ready branch (never merges). Pass the requirement text, or a path to an existing spec file."
 argument-hint: "<requirements|spec-file-path>"
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, Skill, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite, ScheduleWakeup
+allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, SendMessage, Skill, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite, ScheduleWakeup
 ---
 
 # Autopilot: build
@@ -54,7 +54,8 @@ Empty input → STOP with a handoff asking for requirements.
 **On start, resume first.** Look for an existing **plan doc** with a RESUME block in the
 project's convention location. If found: reconcile worktree/branch/base_ref existence on
 disk, then continue from `phase`. An interrupted review round is **re-run from scratch**
-(re-dispatch the whole frozen panel — bounded), only `review_round` need be
+(re-dispatch the whole frozen panel — bounded — continuing recorded agent IDs where
+reachable; after a resumed session expect the fallback (fresh + gists)), only `review_round` need be
 persisted to locate the loop. No plan doc → start at S1.
 
 **Persist two things** so the run survives compaction: the **spec** (S2's output, or the
@@ -93,56 +94,57 @@ the user's / project's convention** — honor CLAUDE.md and existing repo patter
 - **Dispatch the whole round together** — never one at a time, re-reviews included. Build
   each member's run-input prompt once — "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…,
   spec_doc=…, plan_doc=…, requirement=…, focus=…. Output ONLY the verdict, no extra prose."
-  (absolute paths; reviewers read the worktree, never main) — the identical prompt rides
-  whichever transport carries it:
-  - **Workflow transport (preferred):** one call per round —
-    `Workflow({script: <contents of ${CLAUDE_PLUGIN_ROOT}/scripts/review-round.js>, args: {phase: "<spec|work>", members: [{agent, subagent_type, prompt}, …]}})`,
-    (inline `script`: `Workflow` rejects a `scriptPath` outside the working dir; later rounds pass
-    the `scriptPath` an earlier call returned; none known (e.g. after compaction) or rejected → re-inline before any fallback),
-    `args` is a real JSON object (it tolerates a stringified one; don't rely on it). The call returns
-    a task ID; the round's verdicts arrive in its completion notification as `{phase, verdicts:
-    [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` — wait for it (never poll/judge
-    early). Never pass `resumeFromRunId` — every round is a fresh run. `synthetic: true` = that
-    member's infra failure, not a FAIL: once all initial results are in (incl. ad-hoc),
-    re-dispatch just those lenses once via `Task`; still nothing → FAIL. No `verdicts` array, or
-    one shorter than sent (incl. `[]`) → failed/partial → Task fallback for the missing members.
-  - **Ad-hoc members ride the SAME `members` list** as `subagent_type: "general-purpose"`,
-    their `prompt` carrying the persona + "Read-only. Modify nothing." + the "Verdict grammar"
-    block below (call `StructuredOutput` when offered). Their read-only is **prompt-enforced
-    only** (no tool allowlist), so the prompt MUST carry it. They follow the SAME dual fallback
-    as roster: the whole-round Task fallback, and the per-member `synthetic` single Task
-    re-dispatch — dispatch ad-hoc directly via `Task` only when the whole round already fell back.
-  - **Task fallback:** if `Workflow` is unavailable or a call failed (after the re-inline retry), dispatch roster members as
-    `Task(subagent_type="autopilot:<name>", …)` — body is the system prompt; send ONLY the
-    run-input prompt, all calls in one batch, rest
-    of the run. The transport + any fallback that fired ride the freeze line's `transport=` field
-    (see **Progress log format**) — not a separate log line.
+  (absolute paths; reviewers read the worktree, never main).
+  - **Round 0:** one parallel batch of `Task(subagent_type="autopilot:<name>", …)` sending
+    ONLY the run-input prompt (the agent body is its system prompt). Ad-hoc lenses:
+    `Task(subagent_type="general-purpose")`, prompt = persona + "Read-only. Modify
+    nothing." + the Verdict grammar block below (read-only is prompt-enforced only).
+    Record every returned agent ID (see **Progress log format**).
+  - **Wait for the whole round:** dispatches and continuations run in the background
+    (`run_in_background`); replies arrive as hand-back messages plus completion
+    notifications — wait for every member's; never poll or judge early. Then ONE fix over
+    all open blockers, then ONE re-review round; never fix as single verdicts arrive.
+  - **Re-review = continuation:** `SendMessage` to each re-reviewed lens's recorded agent
+    ID (all in one batch) with: the fix diff reference, and the fixer's claimed fixes for
+    that lens's items (`<lens>#<n> "<gist>"` → where addressed | not addressed) plus `[other]` =
+    every other change (location only) — claims to verify, never "I fixed it". Ask for the
+    `Prior items:` list, then the verdict. Ad-hoc lenses: restate "Read-only. Modify nothing."
+  - **Fallback:** continuation errors, the ID is unknown (compaction, resumed session), or no
+    verdict comes back → fresh `Task` of that lens with its persisted blocker gists as a
+    checklist (it also emits `Prior items:` for them; none → plain fresh review); its new
+    agent ID replaces the recorded one; still no verdict → FAIL.
+  - **Item IDs:** before deduping for the fixer, label every BLOCKING / NON-BLOCKING item
+    `<lens>#<n>`; numbering continues per lens across the phase (never reused). A repeated
+    OPEN item keeps its ID (reviewers prefix it); number only new items.
 - Each reviewer returns the verdict block; collect verdicts → the Ralph loop.
 
 **S3** (spec review) and **S7** (work review) run a native loop: review → fix → re-review
 until the frozen panel PASSes, capped per phase by `ralphLoop.maxIterations.spec-phase` /
 `.implementation-phase` (default 3, from config). Full blocker text primes the fix
-transiently; logged only as a concise gist. Every reviewer is a fresh instance; convergence holds only when genuinely
+transiently; logged only as a concise gist. Re-reviewed lenses are continued (see **Re-review = continuation**); convergence holds only when genuinely
 all-PASS. The orchestrator runs the rounds itself, logging each briefly (see
 **Progress log format**).
 
 - **Round 0** = full frozen panel; all-PASS short-circuits.
 - **Re-review (N>0):**
-  - S3 stays full-panel.
+  - S3 stays full-panel. Before each S3 fix, snapshot the spec to `<spec stem>.r<N>.md` beside
+    it; the S3 diff reference is `diff -u <snapshot> <spec_doc>` (snapshots stay, gitignored).
   - S7 dispatches only **`(FAILed ∪ touched) ∩ frozen panel`** — *FAILed* = last verdict
     FAIL/missing; *touched* = lenses whose `applies_to` matches the fix's changed files
     (record the **pre-fix HEAD**, re-run `select-panel.py --phase work --worktree <worktree> --base <pre-fix HEAD>`; cores always match). Skipped lenses carry their PASS; `∪ touched`
-    re-checks what a fix might regress.
+    re-checks what a fix might regress. S7 diff reference:
+    `git -C <worktree> diff <pre-fix HEAD>..HEAD`.
   - Ad-hoc lenses re-run iff FAILed.
 - **Advance** when every lens in the round is PASS with no open BLOCKING → proceed
   (S3→S4, S7→S8; spec-file mode starts at S4, no S3). Cap hit without convergence →
   non-convergence STOP (oscillation | unfixable | requirements-conflict) + handoff.
+  Convergence comes only from reviewers' own verdicts: never override one — never downgrade
+  a blocker, never mark an item INVALID yourself.
 
 ## Verdict grammar (paste into ad-hoc review prompts only)
 
-Output ONLY the verdict — no prose/preamble. When a `StructuredOutput` tool is offered
-(Workflow transport), the verdict IS that call: `{VERDICT: PASS|FAIL, BLOCKING: [...],
-NON_BLOCKING: [...]}`, nothing else. Else (Task fallback) emit exactly:
+Output **only** the verdict — no preamble, no analysis prose, no essay. Emit exactly
+this block:
 
 ```
 VERDICT: PASS            # or exactly: VERDICT: FAIL
@@ -150,9 +152,17 @@ BLOCKING: none           # or one "- " item per line
 NON-BLOCKING: none       # or one "- " item per line
 ```
 
-PASS ⟺ no blocking items. Cite evidence (file:line / spec clause); flag blockers, not
-preferences. A missing, unparseable, or empty-on-FAIL verdict counts as **FAIL**.
-Convergence is decided from these on-disk verdicts, never from vibes.
+When continued (or given a prior-items checklist), precede it with one line per prior item:
+
+```
+Prior items:
+- <lens>#<n>: RESOLVED | OPEN | INVALID — <evidence>
+```
+
+Every OPEN prior blocker is repeated in BLOCKING, prefixed with its ID
+(`- <lens>#<n>: …`). PASS ⟺ no blocking items; an
+unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.
+Cite evidence (file:line / spec clause); flag blockers, not preferences.
 
 <!-- progress-log-format:start -->
 ## Progress log format
@@ -160,12 +170,14 @@ Convergence is decided from these on-disk verdicts, never from vibes.
 The plan doc's progress section is a simple short-entry log (audit trail, not a
 transcript): a brief entry for the panel freeze, every review round (VERDICT roll-up +
 blocker), and every decision — keep them short, not necessarily one line. Only
-`review_round` (RESUME block) is load-bearing for resume. Keep these plus the final
+`review_round` (RESUME block) is load-bearing for resume; the agent IDs and per-lens blocker
+gists feed the continuation fallback. Keep these plus the final
 residual NON-BLOCKING items.
 
 Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
-- **Panel freeze:** `S7 panel: core=[correctness,requirement-fidelity,doc] +optional=[code-quality] transport=Workflow` (append `->Task` only if the fallback fired).
-- **Review round** (VERDICT roll-up + a concise gist per blocker): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> 1 blocker (off-by-one in slice bound), fix dispatched`.
+- **Panel freeze:** `S7 panel: core=[correctness,requirement-fidelity,doc] +optional=[code-quality]`.
+- **Agent IDs:** `S7 reviewers: correctness=<id> requirement-fidelity=<id> … fixer=<id>`.
+- **Review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; fix dispatched`.
 - **Decision** (council or solo, incl. a resolved FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 <!-- progress-log-format:end -->
 
@@ -190,7 +202,8 @@ Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
   decision points, see **Deciding at decision points**; record the decision (see
   **Progress log format**).
 - **S3 — spec review. (Skipped in spec-file mode)** Run the S3 review loop (see **Review rounds**) over the
-  spec. **Fixes:** the orchestrator edits the spec doc directly.
+  spec. **Fixes:** the orchestrator edits the spec doc directly
+  (snapshot first; it writes the claimed-fixes list).
   **Root-contradiction STOP:** if reviewers find the core requirement asks for two things
   that cannot both be true, STOP and hand off — quote the two conflicting clauses (a
   handoff, never a question; mere vagueness is decided, not stopped), record the handoff in plan file.
@@ -206,8 +219,10 @@ Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
   discovered checks. Never weaken, skip,
   or delete a check.
 - **S7 — work review.** Run the S7 review loop (see **Review rounds**) over the work.
-  **Fixes:** ONE fresh producer subagent primed with the deduped open blockers + cited
-  files only (worktree-pinned — see Operating disciplines). Docs are part of S7.
+  **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the deduped
+  open blockers (with item IDs) + cited files only; later fixes continue it via `SendMessage`
+  (unknown ID / error → fresh producer, whose ID replaces the recorded one). It returns the claimed-fixes mapping for every change
+  it made, incl. non-blockers fixed opportunistically (worktree-pinned — see Operating disciplines). Docs are part of S7.
 - **S8 — squash.** Idempotent squash to one commit (skip if already exactly 1
   ahead of `base_ref`). Working notes (spec/plan/progress) are committed or ignored per the
   project's convention — do not force either.
