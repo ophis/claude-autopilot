@@ -193,9 +193,10 @@ Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
 - **S1 — worktree.**
   - If already in an isolated worktree (not on `main`/`master`), reuse it — do not nest another. `base_ref` is current local HEAD.
   - Else create worktree on local HEAD, then enter:
-    - `<path>` = `.claude/worktrees/autopilot-<slug>`, ensure `.claude/worktrees/` is gitignored (add it to `.gitignore` if not)
-    - `<slug>` = `$ARGUMENTS` lowercased, non-alphanumerics → hyphens, collapsed to <=40 chars. On worktree/branch collision: retry with a uniquified slug (`-2`, …).
-    - `git worktree add <path> -b autopilot-<slug> HEAD`
+    - `<prefix>` = the ticket ID when the work is for one single ticket (e.g. Linear `TASK-123`), else `autopilot`.
+    - `<path>` = `.claude/worktrees/<prefix>-<slug>`, ensure `.claude/worktrees/` is gitignored (add it to `.gitignore` if not)
+    - `<slug>` = `$ARGUMENTS` lowercased, non-alphanumerics → hyphens, collapsed to <=40 chars; with a ticket prefix, a short feature description instead (not the ticket ID again). On worktree/branch collision: retry with a uniquified slug (`-2`, …).
+    - `git worktree add <path> -b <prefix>-<slug> HEAD`
     - `EnterWorktree({path: <path>})`
   - Create the **plan doc** (with RESUME + progress section) at location per the project's convention. Record `worktree`, `branch`, and `base_ref` (HEAD) in the RESUME block.
 - **S2 — brainstorm. (Skipped in spec-file mode)** Use `superpowers:brainstorming` on `$ARGUMENTS` → write the spec into the spec doc. At
@@ -252,7 +253,7 @@ output exactly one fenced `autopilot-result` block (one JSON object) so a caller
 the outcome without parsing prose:
 
 ```autopilot-result
-{ "status": "converged", "branch": "autopilot-<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
+{ "status": "converged", "branch": "<prefix>-<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
 ```
 
 - `status` — `converged` (reached S9) | `capped-without-pass` (a Ralph loop hit its cap) | `stopped` (any other safety stop).
