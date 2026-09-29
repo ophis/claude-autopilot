@@ -89,6 +89,11 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
   topology (any A/D/R/C file in `git diff --name-status`). A file is a "reviewer" iff its
   frontmatter has `phase` (`lint-roster.py` mirrors this rule — keep the two in lockstep).
 
+- **Plugin workflow (`workflows/review-round.js`).** The v0.9.x per-round review transport,
+  restored byte-identical and invoked by name as `autopilot:autopilot-review-round` (the
+  runtime names plugin workflows `<plugin>:<meta.name>`). Standalone: no skill calls it
+  yet — S3/S7 still use the Task transport. Contract in README "Plugin workflow".
+
 - **Config (`scripts/autopilot-config.py`).** Reads/initializes
   `${CLAUDE_PLUGIN_DATA}/config.json` (the plugin's own data dir, never Claude's
   `settings.json`). Holds the Ralph-loop per-phase caps (`ralphLoop.maxIterations.*`).

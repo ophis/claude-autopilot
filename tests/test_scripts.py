@@ -11,6 +11,7 @@ depend on the live roster.
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -21,6 +22,7 @@ SCRIPTS = os.path.join(REPO, "scripts")
 SELECT_PANEL = os.path.join(SCRIPTS, "select-panel.py")
 CONFIG = os.path.join(SCRIPTS, "autopilot-config.py")
 LINT_ROSTER = os.path.join(SCRIPTS, "lint-roster.py")
+REVIEW_ROUND = os.path.join(REPO, "workflows", "review-round.js")
 SKILLS = os.path.join(REPO, "skills")
 
 AGENT_TEMPLATE = """\
@@ -577,6 +579,71 @@ class SkillWorktreePinTests(unittest.TestCase):
             self.assertIn("Worktree-pinned dispatch", text, skill)
             self.assertIn("never** main/master", text, skill)
             self.assertIn("branch --show-current", text, skill)
+
+
+class ReviewRoundScriptTests(unittest.TestCase):
+    """Static contract + syntax gate for workflows/review-round.js.
+
+    The script runs only inside the Workflows runtime, so there is no behavioral
+    harness here; these tests pin its args/return contract and verdict schema
+    (README "Plugin workflow"), and the no-ambient-authority posture.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        with open(REVIEW_ROUND, encoding="utf-8") as fh:
+            cls.text = fh.read()
+
+    def test_contract_markers_present(self):
+        """The contract markers all appear verbatim."""
+        for marker in (
+            "export const meta",
+            "autopilot-review-round",
+            "agentType",
+            "schema",
+            "no verdict returned (skip/terminal error)",
+            "synthetic",
+            "verdicts",
+            "return {",
+            # Schema field names + verdict values: renaming any silently breaks judging.
+            "required: ['VERDICT', 'BLOCKING', 'NON_BLOCKING'],",
+            "enum: ['PASS', 'FAIL']",
+        ):
+            self.assertIn(marker, self.text, marker)
+
+    def test_no_ambient_authority(self):
+        """No imports/FS/env/network/clock — args is the script's only input."""
+        for banned in (
+            "require(",
+            "import ",
+            "import(",  # dynamic import — "import " alone would miss it
+            "process.",
+            "fs.",
+            "fetch(",
+            "Date.now",
+            "Math.random",
+        ):
+            self.assertNotIn(banned, self.text, banned)
+
+    @unittest.skipUnless(shutil.which("node"), "node not installed")
+    def test_node_syntax_check(self):
+        """node --check accepts the script under the runtime's execution model:
+        the Workflows runtime hoists the `export const meta` and runs the body
+        inside an async function (so top-level `await` and `return` are legal).
+        Emulate that: demote the export, wrap the body, check as ESM (.mjs)."""
+        wrapped = "async function _wf() {\n%s\n}\n" % self.text.replace(
+            "export const meta", "const meta", 1
+        )
+        with tempfile.TemporaryDirectory() as td:
+            mjs = os.path.join(td, "review-round.mjs")
+            with open(mjs, "w", encoding="utf-8") as fh:
+                fh.write(wrapped)
+            proc = subprocess.run(
+                ["node", "--check", mjs],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr.decode())
 
 
 if __name__ == "__main__":
