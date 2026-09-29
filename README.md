@@ -5,7 +5,7 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.10.2** — the build surface is now a **skill** (`skills/build`):
+> Status: **v0.11.0** — the build surface is now a **skill** (`skills/build`):
 > model-invocable and composable as a step inside a larger
 > skill/workflow, while `/autopilot:build` still works for users.
 > A second surface, **`skills/medium-build`** (`/autopilot:medium-build`), is the trimmed
@@ -17,9 +17,9 @@ with one explicit command.
 > choosing the right surface is your call (see each section below for when it fits).
 > The **named review roster** is complete for both phases in `agents/`, and the
 > **selection stage** (`scripts/select-panel.py`) wires the roster into the S3/S7
-> review loops — the skills select the panel from the roster and dispatch each
-> reviewer natively via `Task` as `autopilot:<name>` and continuing the same reviewers
-> across re-review rounds via `SendMessage` (see [Review roster](#review-roster-agents)).
+> review loops — the skills select the panel from the roster and dispatch each round
+> through the plugin workflow `autopilot:autopilot-review-round`, falling back to native
+> `Task` dispatch with `SendMessage` continuation (see [Review roster](#review-roster-agents)).
 
 ## Repository structure
 
@@ -28,7 +28,7 @@ The git repo is **both the marketplace and the plugin**:
 ```
 claude-autopilot/                 # git repo = marketplace + plugin
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 0.10.2)
+│   ├── plugin.json               # name: autopilot (version 0.11.0)
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # skill; /autopilot:build       still works
@@ -40,7 +40,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 │   ├── lint-roster.py            # A3 roster lint: validates each reviewer's frontmatter + contract
 │   └── select-panel.py           # selector: (phase, signals) → panel JSON
 ├── workflows/
-│   └── review-round.js           # plugin workflow autopilot:autopilot-review-round — one parallel review round (not yet wired into the skills)
+│   └── review-round.js           # plugin workflow autopilot:autopilot-review-round — one parallel review round (the skills' default review transport)
 ├── agents/                       # named review roster (read-only)
 │   ├── reviewer-contract.md      # authoring template, inlined into each reviewer
 │   ├── spec-fitness-reviewer.md  # spec / core
@@ -91,7 +91,7 @@ This repo is its own single-repo marketplace, so add it and install:
 also browse and install via the interactive `/plugin` menu (Marketplaces → add →
 install).
 
-**Updating:** this plugin uses explicit semver (currently `0.10.2`). A release bumps
+**Updating:** this plugin uses explicit semver (currently `0.11.0`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```
@@ -263,11 +263,14 @@ panel: it globs `agents/`, reads each frontmatter, and returns the selected revi
 `git diff --name-only base...HEAD`, for S7). The orchestrator then runs **all** core
 (the floor), **curates** the optionals (may drop a marginal one), and may add an
 **ad-hoc** lens for a gap no roster agent covers. Each roster member runs at its own
-model and read-only tool allowlist, dispatched as a parallel
-`Task(subagent_type="autopilot:<name>")` batch; an ad-hoc lens rides `Task` as
-`general-purpose` (read-only by prompt). Re-reviews **continue** the same reviewers via
-`SendMessage` with the fix diff + the fixer's claimed fixes (a lost agent ID → a fresh
-reviewer primed with its persisted blocker gists); the S7 fixer is continued the same way.
+model and read-only tool allowlist; an ad-hoc lens runs as `general-purpose` (read-only by
+prompt). Each round is one call to the [plugin workflow](#plugin-workflow-workflowsreview-roundjs);
+a re-reviewed lens is a fresh member primed with its prior items (ID + blocker gist) and
+the fix diff. If the call fails, that phase falls back to a parallel
+`Task(subagent_type="autopilot:<name>")` batch whose re-reviews **continue** the same
+reviewers via `SendMessage` with the fix diff + the fixer's claimed fixes (a lost agent ID
+→ a fresh reviewer primed with its persisted blocker gists). The S7 fixer is a `Task`,
+continued the same way.
 Rounds are batched, and convergence comes only from the reviewers' own verdicts.
 Nothing to configure.
 Doc upkeep is folded into S7: the core `doc-reviewer` flags stale/missing docs **repo-wide**
@@ -279,14 +282,14 @@ so there is no separate docs phase.
 The v0.9.x per-round transport, restored unchanged and shipped as a plugin workflow:
 `Workflow({name: "autopilot:autopilot-review-round", args})` (the name comes from its
 `meta.name`). It runs one review round — every member in parallel, each verdict
-schema-validated — and is **not yet wired into the skills**, which still dispatch
-reviewers via `Task`.
+schema-validated — and is the skills' **default review-round transport** (`Task` is the
+fallback).
 
 - **Input** `args`: `{phase, members: [{agent, subagent_type, prompt}]}`.
 - **Output**: `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}]}`,
   in member order. `VERDICT` is `PASS` only when the reviewer said `PASS` and
   `BLOCKING` is empty. A member that yields no verdict becomes `FAIL` with
-  `synthetic: true` and is not retried.
+  `synthetic: true` and is not retried (the skills re-dispatch it once via `Task`).
 
 ## Configuration
 

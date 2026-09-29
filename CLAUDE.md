@@ -69,12 +69,14 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
   agent whose frontmatter is **self-describing** (`lens` / `phase` / `tier` /
   `applies_to`) so the selector can route it with no code change. `reviewer-contract.md`
   is an authoring-time template (selector-inert: no `phase`) inlined into each reviewer.
-  Reviewers are dispatched **natively** via `Task(subagent_type="autopilot:<name>")` —
-  each at its own `model` + read-only `tools` allowlist. Re-reviews **continue** the same
-  reviewers via `SendMessage` with the fix diff + the fixer's claimed fixes; a lost agent ID
-  → a fresh `Task` primed with that lens's persisted blocker gists. **Ad-hoc lenses** (a gap
-  no roster agent covers) ride `Task` as `general-purpose`, read-only by prompt (not by a
-  tool allowlist). **All three surfaces** run the convergence loop natively in the
+  Reviewers run as `autopilot:<name>`, each at its own `model` + read-only `tools`
+  allowlist. **Each round** is one call to the plugin workflow (below) — a re-reviewed lens
+  is a fresh member primed with its prior items + the fix diff. If that call fails, the
+  phase falls back to native `Task` dispatch: re-reviews **continue** the same reviewers
+  via `SendMessage` with the fix diff + the fixer's claimed fixes; a lost agent ID → a fresh
+  `Task` primed with that lens's persisted blocker gists. **Ad-hoc lenses** (a gap no
+  roster agent covers) run as `general-purpose`, read-only by prompt (not by a tool
+  allowlist). **All three surfaces** run the convergence loop natively in the
   orchestrator (round 0 + fix → re-review until all-PASS or the per-phase cap). The
   orchestrator owns the loop, the fix, and (S7) the `(FAILed ∪ touched)` re-review subset —
   preserving ground-truth `touched` (via `select-panel.py`) and a fixer continued across rounds.
@@ -91,8 +93,8 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
 
 - **Plugin workflow (`workflows/review-round.js`).** The v0.9.x per-round review transport,
   restored byte-identical and invoked by name as `autopilot:autopilot-review-round` (the
-  runtime names plugin workflows `<plugin>:<meta.name>`). Standalone: no skill calls it
-  yet — S3/S7 still use the Task transport. Contract in README "Plugin workflow".
+  runtime names plugin workflows `<plugin>:<meta.name>`). The default S3/S7 review-round
+  transport of all three skills; Task is the fallback. Contract in README "Plugin workflow".
 
 - **Config (`scripts/autopilot-config.py`).** Reads/initializes
   `${CLAUDE_PLUGIN_DATA}/config.json` (the plugin's own data dir, never Claude's
@@ -104,8 +106,8 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
   plan + a progress section + a `RESUME:` block). The RESUME block
   (`phase=… worktree=… branch=… base_ref=… review_round=…`) lets a run survive
   compaction and resume from the current phase; an interrupted review round re-runs whole.
-  The progress section records reviewer / fixer agent IDs and per-lens blocker gists for
-  continuation and its fallback.
+  The progress section records the review transport, reviewer (Task) / fixer agent IDs, and
+  per-lens blocker gists for fresh re-review members and Task continuation.
 
 - **Built on `superpowers`.** `build` / `medium-build` orchestrate superpowers
   skills (brainstorming, writing-plans, subagent-driven-development,
