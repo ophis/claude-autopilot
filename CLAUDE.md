@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 Claude Autopilot is a **Claude Code plugin** that packages an autonomous
-build / medium-build / light-build pipeline driven by a committed roster of named
+build / light-build pipeline driven by a committed roster of named
 review agents. The git repo **is both
 the marketplace and the plugin** (`.claude-plugin/marketplace.json` points its single
 plugin entry at `source: "./"`). The "product" is the plugin's prompts/agents/scripts,
@@ -36,30 +36,28 @@ so they're not importable — the CLI is the contract).
 
 ## Architecture (the big picture)
 
-The three surfaces — `skills/build/SKILL.md`,
-`skills/medium-build/SKILL.md`, and `skills/light-build/SKILL.md` — are **orchestrator
-prompts**, not code. They are **skills** (model-invocable, so composable as a step inside a
-larger skill/workflow); users still type `/autopilot:build` /
-`/autopilot:medium-build` / `/autopilot:light-build`.
-`medium-build` is a sibling orchestrator on a trimmed path — same S-numbering but no S3
-roster panel (a single expert reviewer does a one-shot spec review, **S3'**, instead), no
-`writing-plans` (S4 skipped), and a trimmed S7. `light-build` is the **superpowers-free** surface: a
+The two surfaces — `skills/build/SKILL.md` and `skills/light-build/SKILL.md` — are
+**orchestrator prompts**, not code. They are **skills** (model-invocable, so composable as a
+step inside a larger skill/workflow); users still type `/autopilot:build` /
+`/autopilot:light-build`. `build --medium` is a trimmed mode — a one-shot single-expert spec
+review (**S3'**) instead of the S3 roster panel, and a cap-1, trimmed-panel S7.
+`light-build` is the **superpowers-free** surface: a
 self-contained, low-ceremony harness (S1 → S5 → S6 → S7 → S8 → S9) with no spec doc, no
-spec review, no `writing-plans`, a lazy by-exception state model (no mandatory plan doc), and a pinned cap-1 S7 (correctness + requirement-fidelity + doc);
+spec review, a lazy by-exception state model (no mandatory plan doc), and a pinned cap-1 S7 (correctness + requirement-fidelity + doc);
 every phase uses a native tool, the plugin's own script, or inline logic, so it invokes no
-`superpowers:*` skill and has no superpowers preflight. Neither medium-build nor light-build
+`superpowers:*` skill and has no superpowers preflight. Neither medium mode nor light-build
 gates scope — surface choice is the user's responsibility. When invoked, the
 *main-session Claude becomes a thin orchestrator*: it dispatches subagents and judges
 their structured output, and never edits the work product itself. Understanding the
-system means reading those three skill files plus `agents/` and `scripts/` together:
+system means reading those two skill files plus `agents/` and `scripts/` together:
 
 - **Shared spine.** `build` runs a single **S1–S9** pipeline: S1 worktree → S2 brainstorm →
-  S3 spec-review → S4 plan → S5 produce → S6 verify → S7 work-review → S8 squash → S9 finish.
-  Medium/light reuse the same numbering (same number = same step; they skip or prime steps).
+  S3 spec-review → S4 task list → S5 produce → S6 verify → S7 work-review → S8 squash → S9 finish.
+  Medium mode swaps S3 for S3'; light-build skips S2–S4 (same number = same step).
   **It never merges** — the deliverable is a review-ready branch.
 
 - **Ralph convergence loops (S3, S7).** review → fix → re-review until the frozen
-  review panel all-PASSes or a per-phase cap (default 3) is hit. Convergence is decided
+  review panel all-PASSes or a per-phase cap (default 3; medium-mode S7: 1) is hit. Convergence is decided
   **only from reviewers' own verdicts** in the strict `VERDICT / BLOCKING / NON-BLOCKING`
   grammar — never from the orchestrator's opinion. Rounds are batched (wait for every
   verdict, one fix, one re-review); the orchestrator never overrides a verdict. Round 0
@@ -76,7 +74,7 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
   via `SendMessage` with the fix diff + the fixer's claimed fixes; a lost agent ID → a fresh
   `Task` primed with that lens's persisted blocker gists. **Ad-hoc lenses** (a gap no
   roster agent covers) run as `general-purpose`, read-only by prompt (not by a tool
-  allowlist). **All three surfaces** run the convergence loop natively in the
+  allowlist). **Both surfaces** run the convergence loop natively in the
   orchestrator (round 0 + fix → re-review until all-PASS or the per-phase cap). The
   orchestrator owns the loop, the fix, and (S7) the `(FAILed ∪ touched)` re-review subset —
   preserving ground-truth `touched` (via `select-panel.py`) and a fixer continued across rounds.
@@ -94,7 +92,7 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
 - **Plugin workflow (`workflows/review-round.js`).** The v0.9.x per-round review transport,
   restored byte-identical and invoked by name as `autopilot:autopilot-review-round` (the
   runtime names plugin workflows `<plugin>:<meta.name>`). The default S3/S7 review-round
-  transport of all three skills; Task is the fallback. Contract in README "Plugin workflow".
+  transport of both skills; Task is the fallback. Contract in README "Plugin workflow".
 
 - **Config (`scripts/autopilot-config.py`).** Reads/initializes
   `${CLAUDE_PLUGIN_DATA}/config.json` (the plugin's own data dir, never Claude's
@@ -102,18 +100,18 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
   The old `ralphLoop.enabled` driver toggle (native vs. `ralph-loop` plugin) is
   deprecated and ignored — the native loop is the only driver.
 
-- **Disk-backed state.** A run persists a **spec doc** and a **plan doc** (implementation
-  plan + a progress section + a `RESUME:` block). The RESUME block
+- **Disk-backed state.** A run persists a **spec doc** and a **plan doc** (task list +
+  a progress section + a `RESUME:` block). The RESUME block
   (`phase=… worktree=… branch=… base_ref=… review_round=…`) lets a run survive
   compaction and resume from the current phase; an interrupted review round re-runs whole.
   The progress section records the review transport, reviewer (Task) / fixer agent IDs, and
   per-lens blocker gists for fresh re-review members and Task continuation.
 
-- **Built on `superpowers`.** `build` / `medium-build` orchestrate superpowers
-  skills (brainstorming, writing-plans, subagent-driven-development,
+- **Built on `superpowers`.** `build` orchestrates superpowers
+  skills (brainstorming, subagent-driven-development,
   verification-before-completion). (Worktree creation is raw
-  `git worktree` + the native `EnterWorktree`, not a superpowers skill.) For those two surfaces it is a **hard dependency** —
-  they preflight for it and hand off install instructions if missing. `light-build` is
+  `git worktree` + the native `EnterWorktree`, not a superpowers skill.) For `build` it is a **hard dependency** —
+  it preflights for it and hands off install instructions if missing. `light-build` is
   the exception: it is self-contained, invokes no `superpowers:*` skill, and has no
   superpowers preflight. There is no plugin auto-dependency mechanism, so dependencies
   are documented in `README.md`, not declared.
@@ -128,10 +126,8 @@ system means reading those three skill files plus `agents/` and `scripts/` toget
   plugin.** After adding/renaming an agent, the new `subagent_type` resolves only once
   the plugin is reloaded/updated — a fresh agent can't be dispatched natively in the
   same run that creates it (dispatch it ad-hoc via `general-purpose` until shipped).
-  The same applies to the `skills/build` + `skills/medium-build` +
-  `skills/light-build` skills: edits to a `SKILL.md` (and `/autopilot:build` /
-  `/autopilot:medium-build` / `/autopilot:light-build` by-name
-  invocability) go live only after `/reload-plugins`.
+  The same applies to the `skills/build` + `skills/light-build` skills: edits to a
+  `SKILL.md` (and `/autopilot:build` / `/autopilot:light-build` by-name invocability) go live only after `/reload-plugins`.
 - **`dev-docs/` is gitignored** (per-build audit trail
   `dev-docs/<date>-<slug>-{spec,plan}.md`).
 - **Releases use explicit semver kept in sync across THREE places**: `version` in

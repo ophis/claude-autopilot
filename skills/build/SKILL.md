@@ -1,7 +1,7 @@
 ---
 name: build
-description: "Use to build a new work product from a requirement, end to end: create an isolated worktree, write and review a spec, plan, implement, verify, and review-loop to a single review-ready branch (never merges). Pass the requirement text, or a path to an existing spec file."
-argument-hint: "<requirements|spec-file-path>"
+description: "Use to build a new work product from a requirement, end to end: create an isolated worktree, write and review a spec, write a task list, implement, verify, and review-loop to a single review-ready branch (never merges). Pass the requirement text, or a path to an existing spec file; a leading --medium selects the trimmed mode (one-shot spec review, cap-1 work review)."
+argument-hint: "[--medium] <requirements|spec-file-path>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, SendMessage, Workflow, Skill, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite, ScheduleWakeup
 ---
 
@@ -12,7 +12,9 @@ dispatch and judge.
 
 ## Your input ($ARGUMENTS)
 
-`$ARGUMENTS` is the single source of intent, in one of two modes:
+`$ARGUMENTS` is the single source of intent. A leading `--medium` token selects **medium
+mode** (strip it before the rules below): it differs only at S3 (→ S3', see **Pipeline**)
+and S7 (cap 1, trimmed panel, see **Review rounds**). The rest is one of two modes:
 
 - **Requirements mode (default):** free-text requirements → full pipeline (S1 → S2 → S3 → S4 → …).
 - **Spec-file mode:** if `$ARGUMENTS` is a path to an **existing spec
@@ -42,7 +44,7 @@ Empty input → STOP with a handoff asking for requirements.
   **before any write assert** `git -C <worktree> branch --show-current` is the run branch;
   **never** main/master. Producers dispatched via subagent-driven-development
   inherit this through their task context.
-- **Disk-backed.** Persist the spec and a **plan doc** (implementation plan + progress
+- **Disk-backed.** Persist the spec and a **plan doc** (task list + progress
   section + RESUME block) so the run survives compaction. Location follows the
   user's/project's convention — see **Resume & state**.
 - **A STOP is a handoff, never a question:** emit current state + the exact next step a
@@ -53,22 +55,24 @@ Empty input → STOP with a handoff asking for requirements.
 
 **On start, resume first.** Look for an existing **plan doc** with a RESUME block in the
 project's convention location. If found: reconcile worktree/branch/base_ref existence on
-disk, then continue from `phase`. An interrupted review round is **re-run from scratch**
+disk, then continue from `phase` in the recorded `mode`. An interrupted S3' re-runs whole.
+An interrupted review round is **re-run from scratch**
 (re-dispatch the whole frozen panel — bounded — on the transport its freeze line records:
 Workflow members fresh + gists; Task continuing recorded agent IDs where reachable, after a
 resumed session expect the continuation fallback (fresh + gists)), only `review_round` need be
 persisted to locate the loop. No plan doc → start at S1.
 
 **Persist two things** so the run survives compaction: the **spec** (S2's output, or the
-user-provided spec file) and the **plan doc** (implementation plan + progress section +
+user-provided spec file) and the **plan doc** (task list + progress section +
 RESUME block):
 
 ```
-RESUME: phase=<S1..S9> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> spec_file=<path>
+RESUME: phase=<S1..S9> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> spec_file=<path> mode=<full|medium>
 ```
 
 **Keep RESUME current:** rewrite it at every
-phase transition — `phase=` as you advance (S1→S2→S3…→S9; spec-file mode advances S1→S4),
+phase transition — `phase=` as you advance (S1→S2→S3…→S9, S3' in place of S3 in medium mode;
+spec-file mode advances S1→S4),
 `review_round=` each loop iteration; stale `phase=` breaks resumption. **Location follows
 the user's / project's convention** — honor CLAUDE.md and existing repo patterns.
 
@@ -89,7 +93,8 @@ the user's / project's convention** — honor CLAUDE.md and existing repo patter
   --phase spec --spec-file <spec doc>` (S3) / `... --phase work --worktree <worktree>
   --base <base_ref>` (S7) → a `selected` list of `{agent, subagent_type, tier, matched}`.
   The panel = ALL `core` agents (mandatory) + the `optional` agents you judge relevant (may
-  drop marginal ones) + any ad-hoc inline lens for a genuine gap no roster agent covers.
+  drop marginal ones; medium-mode S7 drops them unless a changed-path signal clearly warrants
+  one) + any ad-hoc inline lens for a genuine gap no roster agent covers.
 - **Freeze & log** the composed panel to the **plan doc** progress section as the
   freeze shape (see **Progress log format**); reuse it every round of that phase.
 - **Dispatch the whole round together** — never one at a time, re-reviews included. Build
@@ -134,7 +139,8 @@ the user's / project's convention** — honor CLAUDE.md and existing repo patter
 
 **S3** (spec review) and **S7** (work review) run a native loop: review → fix → re-review
 until the frozen panel PASSes, capped per phase by `ralphLoop.maxIterations.spec-phase` /
-`.implementation-phase` (default 3, from config). Full blocker text primes the fix
+`.implementation-phase` (default 3, from config); medium mode caps S7 at 1 (round 0 + at most
+one re-review), ignoring `.implementation-phase`. Full blocker text primes the fix
 transiently; logged only as a concise gist. Re-reviewed lenses carry their prior items (see **Dispatch the whole round together**); convergence holds only when genuinely
 all-PASS. The orchestrator runs the rounds itself, logging each briefly (see
 **Progress log format**).
@@ -219,12 +225,21 @@ Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
 - **S3 — spec review. (Skipped in spec-file mode)** Run the S3 review loop (see **Review rounds**) over the
   spec. **Fixes:** the orchestrator edits the spec doc directly
   (snapshot first; it writes the claimed-fixes list).
+  **Medium mode → S3' (one-shot expert spec review, not a Ralph loop):** dispatch ONE
+  `general-purpose` expert subagent ("Read-only. Modify nothing.") to review the spec → a
+  concise position; only on a genuine fork escalate to a small council (see **Deciding at
+  decision points**). Synthesize, revise the spec, record the decision (**Progress log
+  format** Decision shape), proceed.
   **Root-contradiction STOP:** if reviewers find the core requirement asks for two things
   that cannot both be true, STOP and hand off — quote the two conflicting clauses (a
   handoff, never a question; mere vagueness is decided, not stopped), record the handoff in plan file.
-- **S4 — plan.** Use `superpowers:writing-plans` → write implementation plan
-  into the **plan doc's implementation-plan section**; record how the
-  work will be verified. On a consequential plan fork → convene the expert council.
+- **S4 — task list.** Do NOT invoke `superpowers:writing-plans`. Write a code-free task
+  list into the plan doc's implementation-plan section:
+  - Header: spec path; Global Constraints (exact values, the verify command); Review Focus.
+  - Per task, a `### Task N: <name>` heading (SDD's `task-brief` extracts by it) with:
+    Files; Consumes/Produces (exact names/signatures crossing tasks); tests to write
+    first, incl. edge cases; commit message.
+  - No code. On a consequential fork → convene the expert council.
 - **S5 — produce.** Produce the work product. Code →
   `superpowers:subagent-driven-development`: keep its per-task reviews (early-catch), SKIP
   its final whole-implementation review — S7 is the authoritative whole-diff gate. Non-code → producer subagents via the

@@ -5,15 +5,14 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.11.0** — the build surface is now a **skill** (`skills/build`):
+> Status: **v0.12.0** — the build surface is now a **skill** (`skills/build`):
 > model-invocable and composable as a step inside a larger
 > skill/workflow, while `/autopilot:build` still works for users.
-> A second surface, **`skills/medium-build`** (`/autopilot:medium-build`), is the trimmed
-> path (no S3 roster panel, no writing-plans; a one-shot single-expert spec review and a
-> capped work review). A third, **`skills/light-build`** (`/autopilot:light-build`), is
+> `/autopilot:build --medium` is the trimmed mode (a one-shot single-expert spec review and
+> a cap-1 work review). A second surface, **`skills/light-build`** (`/autopilot:light-build`), is
 > the **superpowers-free**, low-ceremony path: autonomy + expert-council-at-forks with no
 > spec doc and no spec review — just produce → verify → a single capped correctness +
-> requirement-fidelity review. **Neither light-build nor medium-build gates scope** —
+> requirement-fidelity review. **Neither light-build nor medium mode gates scope** —
 > choosing the right surface is your call (see each section below for when it fits).
 > The **named review roster** is complete for both phases in `agents/`, and the
 > **selection stage** (`scripts/select-panel.py`) wires the roster into the S3/S7
@@ -28,11 +27,10 @@ The git repo is **both the marketplace and the plugin**:
 ```
 claude-autopilot/                 # git repo = marketplace + plugin
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 0.11.0)
+│   ├── plugin.json               # name: autopilot (version 0.12.0)
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
-│   ├── build/SKILL.md            # skill; /autopilot:build       still works
-│   ├── medium-build/SKILL.md     # skill; /autopilot:medium-build — trimmed path (spec + S3' + capped review)
+│   ├── build/SKILL.md            # skill; /autopilot:build [--medium] still works
 │   └── light-build/SKILL.md      # skill; /autopilot:light-build  — superpowers-free, low-ceremony
 ├── scripts/
 │   ├── _frontmatter.py           # shared frontmatter reader (imported by select-panel.py + lint-roster.py)
@@ -62,8 +60,8 @@ claude-autopilot/                 # git repo = marketplace + plugin
 
 ### 1. Install the dependency: superpowers (required)
 
-The **build / medium-build** surfaces orchestrate skills from the **superpowers**
-plugin (brainstorming, writing-plans, subagent-driven-development,
+The **build** surface orchestrates skills from the **superpowers**
+plugin (brainstorming, subagent-driven-development,
 verification-before-completion). Claude Code has **no plugin dependency / auto-install
 mechanism**, so you must install superpowers yourself first:
 
@@ -71,8 +69,8 @@ mechanism**, so you must install superpowers yourself first:
 /plugin install superpowers@claude-plugins-official
 ```
 
-(`planning-with-files` is optional.) Those two surfaces also **preflight-check** for
-superpowers and, if it's missing, stop and hand you these instructions rather than failing
+(`planning-with-files` is optional.) `build` also **preflight-checks** for
+superpowers and, if it's missing, stops and hand you these instructions rather than failing
 midway. **`light-build` is the exception — it is superpowers-free** (every phase uses a
 native tool, the plugin's own script, or inline logic) and runs even if superpowers is not
 installed; it has no preflight.
@@ -91,7 +89,7 @@ This repo is its own single-repo marketplace, so add it and install:
 also browse and install via the interactive `/plugin` menu (Marketplaces → add →
 install).
 
-**Updating:** this plugin uses explicit semver (currently `0.11.0`). A release bumps
+**Updating:** this plugin uses explicit semver (currently `0.12.0`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```
@@ -108,7 +106,7 @@ and it drives, end to end and without asking you questions:
 - **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch (`<prefix>` = the ticket ID when the work is for one single ticket, e.g. `TASK-123`, else `autopilot`); create the plan doc (progress + RESUME).
 - **S2 — Brainstorm:** turn requirements into the spec (expert council at decision points).
 - **S3 — Spec review:** Ralph loop over the spec until the panel passes.
-- **S4 — Plan:** write the execution plan + how it will be verified.
+- **S4 — Task list:** a code-free task list (files, cross-task interfaces, tests first, commit message) + the verify command.
 - **S5 — Produce:** implement (subagent-driven for code).
 - **S6 — Verify:** run the discovered checks.
 - **S7 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency.
@@ -144,40 +142,29 @@ Expect: a new `<prefix>-<slug>` worktree+branch; the spec and work review loops
 each reach `VERDICT: PASS`; the test actually runs and passes; the run ends at a
 **single squashed commit with no merge** and a final report.
 
-## `/autopilot:medium-build <requirements>`
+### Medium mode (`--medium`)
 
-The **trimmed** path: the same autonomous, thin-orchestrator, disk-backed, never-merge
-disciplines as `build`, but a shorter spine for speed. It still writes a spec and reviews
-it, but drops the S3 roster panel and writing-plans, uses a **one-shot single expert
-reviewer** as the spec review, slices a terse task list inline, and runs a **minimal,
-cap-1** work review. It is a skill (model-invocable / composable) and emits the same final
-`autopilot-result` block; `/autopilot:medium-build` is preserved for users.
+A leading `--medium` (`/autopilot:build --medium <requirements|spec-file-path>`) runs the
+same pipeline with two differences:
 
-- **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch; create the plan doc.
-- **S2 — Brainstorm:** turn requirements into the spec.
-- **S3' — Expert spec review:** one `general-purpose` expert reviews the spec (advice, not the VERDICT grammar); the orchestrator revises the spec **once** and proceeds — no loop.
-- **Task list:** a terse ordered 1-line-per-task list written straight into the plan doc (no writing-plans).
-- **S5 — Produce:** subagent-driven from the plan-doc task list.
-- **S6 — Verify:** run the discovered checks.
-- **S7 — Work review:** a minimal panel (pin `correctness` + `requirement-fidelity` + `doc`), **capped at 1** review+fix round.
-- **S8 — Squash → S9 — Finish:** one clean commit + report. **Never merges.**
+- **S3' — Expert spec review** replaces S3: one `general-purpose` expert reviews the spec (advice, not the VERDICT grammar); the orchestrator revises the spec **once** and proceeds — no loop.
+- **S7 — Work review** is **capped at 1** review+fix round, on the core lenses (an optional lens only when a changed path clearly warrants it).
 
-**No scope gate.** medium-build is a harness, not a gatekeeper — it runs whatever it is
-given and never escalates or hands off on scope. **When it fits:** a focused change where
-you still want a written, independently-reviewed spec, but not `build`'s full S3 roster
-panel or writing-plans. For bigger or higher-blast-radius work where you want the full
-spine, use `/autopilot:build`; for the leanest, superpowers-free path with no spec at all,
-use `/autopilot:light-build`. Choosing the surface is your responsibility.
+**No scope gate.** Medium mode runs whatever it is given and never escalates or hands off
+on scope. **When it fits:** a focused change where you still want a written,
+independently-reviewed spec, but not the full S3 roster panel. For bigger or
+higher-blast-radius work, drop `--medium`; for the leanest, superpowers-free path with no
+spec at all, use `/autopilot:light-build`. Choosing the mode is your responsibility.
 
 ```
-/autopilot:medium-build fix the off-by-one in the pagination helper
+/autopilot:build --medium fix the off-by-one in the pagination helper
 ```
 
 ## `/autopilot:light-build <requirements>`
 
 The **superpowers-free**, low-ceremony path. It keeps autopilot's autonomy and
 **expert-council-at-forks** but drops the rigor: no spec doc, no brainstorm, no spec review,
-no writing-plans. **The requirement IS the spec.** It is **dual-use** — for simple tasks,
+no S4 task list. **The requirement IS the spec.** It is **dual-use** — for simple tasks,
 and as a lighter alternative to `build` when you want the autonomous interaction model
 without the ceremony. It is a skill (model-invocable / composable), emits the same final
 `autopilot-result` block, and `/autopilot:light-build` is preserved for users.
