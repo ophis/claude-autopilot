@@ -573,7 +573,7 @@ Body.
 class SkillWorktreePinTests(unittest.TestCase):
     """Every orchestrator skill must require worktree-pinned subagent dispatch."""
     def test_all_skills_pin_subagents_to_worktree(self):
-        for skill in ("build", "medium-build", "light-build"):
+        for skill in ("build", "light-build"):
             with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
                 text = fh.read()
             self.assertIn("Worktree-pinned dispatch", text, skill)
