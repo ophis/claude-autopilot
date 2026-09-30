@@ -39,25 +39,23 @@ so they're not importable — the CLI is the contract).
 The two surfaces — `skills/build/SKILL.md` and `skills/light-build/SKILL.md` — are
 **orchestrator prompts**, not code. They are **skills** (model-invocable, so composable as a
 step inside a larger skill/workflow); users still type `/autopilot:build` /
-`/autopilot:light-build`. `build --medium` is a trimmed mode — a one-shot single-expert spec
-review (**S3'**) instead of the S3 roster panel, and a cap-1, trimmed-panel S7.
-`light-build` is the **superpowers-free** surface: a
+`/autopilot:light-build`. `light-build` is the **superpowers-free** surface: a
 self-contained, low-ceremony harness (S1 → S5 → S6 → S7 → S8 → S9) with no spec doc, no
 spec review, a lazy by-exception state model (no mandatory plan doc), and a pinned cap-1 S7 (correctness + requirement-fidelity + doc);
 every phase uses a native tool, the plugin's own script, or inline logic, so it invokes no
-`superpowers:*` skill and has no superpowers preflight. Neither medium mode nor light-build
-gates scope — surface choice is the user's responsibility. When invoked, the
+`superpowers:*` skill and has no superpowers preflight. `light-build` does not
+gate scope — surface choice is the user's responsibility. When invoked, the
 *main-session Claude becomes a thin orchestrator*: it dispatches subagents and judges
 their structured output, and never edits the work product itself. Understanding the
 system means reading those two skill files plus `agents/` and `scripts/` together:
 
 - **Shared spine.** `build` runs a single **S1–S9** pipeline: S1 worktree → S2 brainstorm →
   S3 spec-review → S4 task list → S5 produce → S6 verify → S7 work-review → S8 squash → S9 finish.
-  Medium mode swaps S3 for S3'; light-build skips S2–S4 (same number = same step).
+  `light-build` skips S2–S4 (same number = same step).
   **It never merges** — the deliverable is a review-ready branch.
 
 - **Ralph convergence loops (S3, S7).** review → fix → re-review until the frozen
-  review panel all-PASSes or a per-phase cap (default 3; medium-mode S7: 1) is hit. Convergence is decided
+  review panel all-PASSes or a per-phase cap (default 3) is hit. Convergence is decided
   **only from reviewers' own verdicts** in the strict `VERDICT / BLOCKING / NON-BLOCKING`
   grammar — never from the orchestrator's opinion. Rounds are batched (wait for every
   verdict, one fix, one re-review); the orchestrator never overrides a verdict. Round 0
