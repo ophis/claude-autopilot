@@ -224,10 +224,12 @@ Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
   handoff, never a question; mere vagueness is decided, not stopped), record the handoff in plan file.
 - **S4 — task list.** Do NOT invoke `superpowers:writing-plans`. Write a code-free task
   list into the plan doc's implementation-plan section:
-  - Header: spec path; Global Constraints (exact values, the verify command); Review Focus.
+  - Header: spec path; Global Constraints (exact values, the verify command).
   - Per task, a `### Task N: <name>` heading (SDD's `task-brief` extracts by it) with:
     Files; Consumes/Produces (exact names/signatures crossing tasks); tests to write
     first, incl. edge cases; commit message.
+  - The task list is the plan doc's last section; the progress section, RESUME block and
+    any verification notes go above it (`task-brief` reads to the next Task heading).
   - No code. On a consequential fork → convene the expert council.
 - **S5 — produce.** Produce the work product. Code →
   `superpowers:subagent-driven-development`: keep its per-task reviews (early-catch), SKIP
