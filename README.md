@@ -5,7 +5,7 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.13.0** — the build surface is now a **skill** (`skills/build`):
+> Status: **v0.12.1** — the build surface is now a **skill** (`skills/build`):
 > model-invocable and composable as a step inside a larger
 > skill/workflow, while `/autopilot:build` still works for users.
 > A second surface, **`skills/light-build`** (`/autopilot:light-build`), is
@@ -26,7 +26,7 @@ The git repo is **both the marketplace and the plugin**:
 ```
 claude-autopilot/                 # git repo = marketplace + plugin
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 0.13.0)
+│   ├── plugin.json               # name: autopilot (version 0.12.1)
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # skill; /autopilot:build       still works
@@ -88,7 +88,7 @@ This repo is its own single-repo marketplace, so add it and install:
 also browse and install via the interactive `/plugin` menu (Marketplaces → add →
 install).
 
-**Updating:** this plugin uses explicit semver (currently `0.13.0`). A release bumps
+**Updating:** this plugin uses explicit semver (currently `0.12.1`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```
