@@ -127,9 +127,14 @@ the user's / project's convention** — honor CLAUDE.md and existing repo patter
     arriving as hand-back messages plus completion notifications — wait for every member's;
     never poll or judge early. Then ONE fix over all open blockers, then ONE re-review round;
     never fix as single verdicts arrive.
-  - **Item IDs:** before deduping for the fixer, label every BLOCKING / NON-BLOCKING item
-    `<lens>#<n>`; numbering continues per lens across the phase (never reused). A repeated
-    OPEN item keeps its ID (reviewers prefix it); number only new items.
+  - **Item IDs & fixer scope:** label every BLOCKING / NON-BLOCKING item `<lens>#<n>`;
+    numbering continues per lens across the phase (never reused). A repeated OPEN item
+    keeps its ID (reviewers prefix it); number only new items. The fixer gets every open
+    BLOCKING item (deduped) plus only the NON-BLOCKING items that are both (a) a real
+    defect — not style, naming, robustness or a suggestion — and (b) anchored on the same
+    spot as a BLOCKING item this round (same `file:line` range or spec clause). Every other
+    NON-BLOCKING item is deferred: accumulated across rounds, deduped by item ID, reported
+    in S9's deferred non-blockers. Choosing the fixer's items never changes a verdict.
 - Each reviewer returns its verdict; collect verdicts → the Ralph loop.
 
 **S3** (spec review) and **S7** (work review) run a native loop: review → fix → re-review
@@ -177,6 +182,11 @@ Every OPEN prior blocker is repeated in BLOCKING, prefixed with its ID
 (`- <lens>#<n>: …`). PASS ⟺ no blocking items; an
 unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.
 Cite evidence (file:line / spec clause); flag blockers, not preferences.
+Write each blocker as one repro line `<anchor> — <trigger> → <wrong outcome>` (anchor = that
+evidence); no repro → not a blocker. Before returning, re-open each anchor and walk its
+repro; silently drop any that doesn't hold, is off-lens, or doesn't violate the requirement.
+NON-BLOCKING: only real in-lens defects (wrong output, factual error, misleading doc),
+at most 3 — no style, naming, robustness or suggestions; `NON-BLOCKING: none` is normal.
 
 <!-- progress-log-format:start -->
 ## Progress log format
@@ -185,13 +195,13 @@ The plan doc's progress section is a simple short-entry log (audit trail, not a
 transcript): a brief entry for the panel freeze, every review round (VERDICT roll-up +
 blocker), and every decision — keep them short, not necessarily one line. Only
 `review_round` (RESUME block) is load-bearing for resume; the per-lens blocker gists prime
-fresh re-review members, the agent IDs Task continuation. Keep these plus the final
-residual NON-BLOCKING items.
+fresh re-review members, the agent IDs Task continuation. Keep these plus each round's
+deferred NON-BLOCKING gists (S9's residual list).
 
 Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
 - **Panel freeze:** `S7 panel: core=[correctness,requirement-fidelity,doc] +optional=[code-quality] transport=Workflow` (append `->Task` if the fallback fires).
 - **Agent IDs:** `S7 reviewers: correctness=<id> requirement-fidelity=<id> … fixer=<id>` (reviewer IDs on Task only).
-- **Review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; fix dispatched`.
+- **Review round** (VERDICT roll-up + a concise gist per blocker and per deferred NON-BLOCKING item, with item IDs): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; deferred: doc#1 stale flag name in README; fix dispatched`.
 - **Decision** (council or solo, incl. a resolved FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 <!-- progress-log-format:end -->
 
@@ -217,8 +227,9 @@ Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
   decision points, see **Deciding at decision points**; record the decision (see
   **Progress log format**).
 - **S3 — spec review. (Skipped in spec-file mode)** Run the S3 review loop (see **Review rounds**) over the
-  spec. **Fixes:** the orchestrator edits the spec doc directly
-  (snapshot first; it writes the claimed-fixes list).
+  spec. **Fixes:** the orchestrator edits the spec doc directly, fixing only the fixer-scope
+  items (see **Item IDs & fixer scope**) (snapshot first; its claimed-fixes list covers only
+  those items).
   **Root-contradiction STOP:** if reviewers find the core requirement asks for two things
   that cannot both be true, STOP and hand off — quote the two conflicting clauses (a
   handoff, never a question; mere vagueness is decided, not stopped), record the handoff in plan file.
@@ -240,10 +251,10 @@ Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
   discovered checks. Never weaken, skip,
   or delete a check.
 - **S7 — work review.** Run the S7 review loop (see **Review rounds**) over the work.
-  **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the deduped
-  open blockers (with item IDs) + cited files only; later fixes continue it via `SendMessage`
-  (unknown ID / error → fresh producer, whose ID replaces the recorded one). It returns the claimed-fixes mapping for every change
-  it made, incl. non-blockers fixed opportunistically (worktree-pinned — see Operating disciplines). Docs are part of S7.
+  **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the fixer-scope
+  items (with item IDs; see **Item IDs & fixer scope**) + cited files only; later fixes continue it via `SendMessage`
+  (unknown ID / error → fresh producer, whose ID replaces the recorded one). It fixes only the
+  items handed to it; its claimed-fixes mapping covers only those items (worktree-pinned — see Operating disciplines). Docs are part of S7.
 - **S8 — squash.** Idempotent squash to one commit (skip if already exactly 1
   ahead of `base_ref`). Working notes (spec/plan/progress) are committed or ignored per the
   project's convention — do not force either.
