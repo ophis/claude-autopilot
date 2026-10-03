@@ -122,7 +122,12 @@ Prior items:
 Every OPEN prior blocker is repeated in BLOCKING, prefixed with its ID
 (`- <lens>#<n>: …`). PASS ⟺ no blocking items; an
 unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.
-Cite evidence (file:line / requirement clause); flag blockers, not preferences.
+Cite evidence (file:line / requirement clause). Write each BLOCKING item as
+`<anchor> — <trigger> → <wrong outcome>`; before returning, re-walk each against the actual
+text (and each prior item before marking it OPEN) and drop any that doesn't reproduce, is
+outside your lens, or doesn't breach the requirement or a written repo convention.
+NON-BLOCKING: only real defects in your lens (wrong output, factual error, misleading doc),
+at most 3; no style, naming, or suggestions; `none` is normal.
 
 ## S7 — correctness + requirement-fidelity + doc review (cap 1)
 
@@ -146,7 +151,7 @@ loop itself, each round dispatched via the `Workflow` transport (Task fallback).
     order (never pass `resumeFromRunId` — every round is a fresh run). A `synthetic: true`
     member is re-dispatched once via `Task` with its prompt; still no verdict → FAIL.
     Members expose no agent ID, so a re-reviewed lens is a FRESH member whose prompt adds
-    its prior items (`<lens>#<n> "<gist>"`, from the in-context notes) + the fix diff
+    its prior blockers (`<lens>#<n> "<gist>"`, from the in-context notes) + the fix diff
     reference; OPEN prior blockers come back in BLOCKING prefixed with their ID.
   - **Task transport (fallback):** the `Workflow` call itself fails (tool unavailable, name
     not resolvable, error, or no result) → run that round via `Task` and stay on Task for
@@ -155,9 +160,9 @@ loop itself, each round dispatched via the `Workflow` transport (Task fallback).
       Keep every returned agent ID in context (the state file stays requirement + RESUME).
     - **Re-review = continuation:** `SendMessage` to each re-reviewed lens's recorded agent
       ID (all in one batch) with: the fix diff reference, and the fixer's claimed fixes for
-      that lens's items (`<lens>#<n> "<gist>"` → where addressed | not addressed) plus `[other]` =
-      every other change (location only) — claims to verify, never "I fixed it". Ask for the
-      `Prior items:` list, then the verdict.
+      that lens's prior blockers (`<lens>#<n> "<gist>"` → where addressed | not addressed) plus
+      `[other]` = every other change, NON-BLOCKING fixes included (location only) — claims to
+      verify, never "I fixed it". Ask for the `Prior items:` list, then the verdict.
     - **Continuation fallback:** continuation errors, the ID is unknown (earlier rounds on
       Workflow, compaction, resumed session), or no verdict comes back → fresh `Task` of that
       lens (its in-context gists as a checklist if still known, else plain fresh review); its
@@ -165,20 +170,31 @@ loop itself, each round dispatched via the `Workflow` transport (Task fallback).
   - **Wait for the whole round:** a Workflow call completes with every verdict at once; Task
     dispatches and continuations run in the background (`run_in_background`), replies
     arriving as hand-back messages plus completion notifications — wait for every member's;
-    never poll or judge early. Then ONE fix over all open blockers, then ONE re-review round;
+    never poll or judge early. Then ONE fix over the fix set, then ONE re-review round;
     never fix as single verdicts arrive.
-  - **Item IDs:** before deduping for the fixer, label every BLOCKING / NON-BLOCKING item
-    `<lens>#<n>`; numbering continues per lens across the phase (never reused). A repeated
-    OPEN item keeps its ID (reviewers prefix it); number only new items.
+  - **Item IDs:** label every BLOCKING / NON-BLOCKING item `<lens>#<n>`; numbering continues
+    per lens across the phase (never reused). A repeated OPEN item keeps its ID (reviewers
+    prefix it); number only new items. The residual list cites these IDs.
+  - **Fix set** = all open BLOCKING items of the round, plus each NON-BLOCKING item that
+    (a) is a real defect — not style, naming, robustness, or a suggestion — and (b) anchors
+    within the lines (or requirement clause) a same-round BLOCKING anchor cites, needing no
+    new file or logic. Judged from anchors, before the fix. Deduped. It decides only what
+    the fix gets; verdicts are never changed.
+  - **Residual list** = every NON-BLOCKING item, across all rounds, that was not in a fix
+    set, or was but came back `not addressed`; each as `<lens>#<n>`, gist, anchor; an item
+    repeated in a later round is listed once. Updated after each round (in the working
+    notes).
 - **The loop** (orchestrator-run, cap = 1):
   - **Round 0** = the pinned panel; all-PASS short-circuits → proceed S7→S8.
   - **Fix:** the first fix dispatches ONE fresh producer subagent via plain `Task`
-    (worktree-pinned — like the S5 producer) primed with the deduped open blockers (with item
+    (worktree-pinned — like the S5 producer) primed with the fix set (with item
     IDs) + cited files only; keep its agent ID in context; later fixes continue it via
-    `SendMessage` (unknown ID / error → fresh producer, whose ID replaces the in-context one). It returns the claimed-fixes mapping
-    for every change it made, incl. non-blockers fixed opportunistically. A fix-time genuine fork
-    uses the existing **S5 FORK → council** mechanism (orchestrator council), not an in-loop
-    council. Full blocker text primes the fix transiently; logged only as a concise gist.
+    `SendMessage` (unknown ID / error → fresh producer, whose ID replaces the in-context
+    one). It fixes only the items given and returns the claimed-fixes mapping for those
+    items; a given NON-BLOCKING item needing lines outside its blocker's change →
+    `not addressed`. A fix-time genuine fork uses the existing **S5 FORK → council**
+    mechanism (orchestrator council), not an in-loop council. Full fix-set text primes the
+    fix transiently; logged only as a concise gist.
   - **Re-review** (the one round cap = 1 allows) dispatches only the **FAILed subset** — the
     lenses whose last verdict was FAIL/missing. All three are cores, so there is no `touched`
     recompute. Skipped lenses carry their PASS. Diff reference: `git -C <worktree> diff
@@ -196,11 +212,11 @@ holds only the verbatim requirement + RESUME line, **never an audit trail**. Tra
 below for the S9 report; `review_round` (in RESUME) is the only resume-load-bearing field.
 
 - **Panel freeze:** `S7 panel: pinned=[correctness,requirement-fidelity,doc] transport=Workflow` (append `->Task` if the fallback fires).
-- **Each review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; fix dispatched`.
+- **Each review round** (VERDICT roll-up + a concise gist per blocker, with item IDs, + the round's new residual items as `<lens>#<n>` gist @ anchor): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; residual: doc#1 stale flag name @ README.md:12; fix dispatched`.
 - **Each decision** (council or solo, incl. a resolved S5 FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 
-Hold full blocker text only to prime the fix; the notes keep a concise gist. Keep every
-line short. The S9 report surfaces these notes plus the residual NON-BLOCKING items.
+Hold full fix-set text only to prime the fix; the notes keep a concise gist. Keep every
+line short. The S9 report surfaces these notes plus the residual list.
 
 ## Pipeline (S1, S5–S9)
 
@@ -235,8 +251,8 @@ no spec doc, no spec review, no writing-plans.
 - **S8 — squash.** Idempotent squash to one commit **via `git` (`Bash`)** — **skip
   if already exactly 1 ahead of `base_ref`**. The state file (if one was materialized) is
   committed or ignored per the project's convention — do not force either.
-- **S9 — finish.** Inline (no skill): report review history, decisions, deferred
-  non-blockers (stop-reason first if the run stopped); offer integration options as an
+- **S9 — finish.** Inline (no skill): report review history, decisions, the
+  residual list (stop-reason first if the run stopped); offer integration options as an
   informational report menu, NOT a question. NO merge. Then emit the **Result handoff** block
   (below) as the final output.
 
