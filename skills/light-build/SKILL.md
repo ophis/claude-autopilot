@@ -122,13 +122,10 @@ Prior items:
 Every OPEN prior blocker is repeated in BLOCKING, prefixed with its ID
 (`- <lens>#<n>: …`). PASS ⟺ no blocking items; an
 unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.
-Cite evidence (file:line / requirement clause). Write each BLOCKING item as
-`<anchor> — <trigger> → <wrong outcome>`; before returning, re-walk each BLOCKING item
-against the actual text and drop any that doesn't reproduce, is outside your lens, or
-doesn't breach the requirement or a written repo convention. Walk each prior item the
-same way before marking it OPEN; otherwise mark it RESOLVED or INVALID.
-NON-BLOCKING: only real defects in your lens (wrong output, factual error, misleading doc),
-at most 3; no style, naming, or suggestions; `none` is normal.
+Cite evidence (file:line / requirement clause). Each blocker is one re-walked sentence,
+`<anchor> — <trigger> → <wrong outcome>`, breaching the requirement or a written repo
+convention. NON-BLOCKING: at most 3 real defects in your lens; no style, naming,
+robustness, or suggestions.
 
 ## S7 — correctness + requirement-fidelity + doc review (cap 1)
 
@@ -161,9 +158,9 @@ loop itself, each round dispatched via the `Workflow` transport (Task fallback).
       Keep every returned agent ID in context (the state file stays requirement + RESUME).
     - **Re-review = continuation:** `SendMessage` to each re-reviewed lens's recorded agent
       ID (all in one batch) with: the fix diff reference, and the fixer's claimed fixes for
-      that lens's prior blockers (`<lens>#<n> "<gist>"` → where addressed | not addressed) plus
-      `[other]` = every other change, NON-BLOCKING fixes included (location only) — claims to
-      verify, never "I fixed it". Ask for the `Prior items:` list, then the verdict.
+      that lens's blockers (`<lens>#<n> "<gist>"` → where addressed | not addressed) plus `[other]` =
+      every other change (location only) — claims to verify, never "I fixed it". Ask for the
+      `Prior items:` list, then the verdict.
     - **Continuation fallback:** continuation errors, the ID is unknown (earlier rounds on
       Workflow, compaction, resumed session), or no verdict comes back → fresh `Task` of that
       lens (its in-context gists as a checklist if still known, else plain fresh review); its
@@ -173,30 +170,23 @@ loop itself, each round dispatched via the `Workflow` transport (Task fallback).
     arriving as hand-back messages plus completion notifications — wait for every member's;
     never poll or judge early. Then ONE fix over the fix set, then ONE re-review round;
     never fix as single verdicts arrive.
-  - **Item IDs:** label every BLOCKING / NON-BLOCKING item `<lens>#<n>`; numbering continues
-    per lens across the phase (never reused). A repeated OPEN item keeps its ID (reviewers
-    prefix it); number only new items. The residual list cites these IDs.
-  - **Fix set** = all open BLOCKING items of the round, plus each NON-BLOCKING item that
-    (a) is a real defect — not style, naming, robustness, or a suggestion — and (b) anchors
-    within the lines (or requirement clause) a same-round BLOCKING anchor cites, needing no
-    new file or logic. Judged from anchors, before the fix. Deduped. It decides only what
-    the fix gets; verdicts are never changed.
-  - **Residual list** = every NON-BLOCKING item, across all rounds, that was not in a fix
-    set, or was but came back `not addressed`; each as `<lens>#<n>`, gist, anchor; an item
-    repeated in a later round is listed once. Updated after each round (in the working
-    notes).
+  - **Item IDs:** before deduping for the fixer, label every BLOCKING / NON-BLOCKING item
+    `<lens>#<n>`; numbering continues per lens across the phase (never reused). A repeated
+    OPEN item keeps its ID (reviewers prefix it); number only new items.
+  - **Fix set** = open blockers + NON-BLOCKING real defects (not style, naming,
+    robustness, or suggestions) anchored within lines (or a clause) a same-round blocker
+    cites, needing no new file or logic. Only it is fixed; such an item needing lines
+    beyond its blocker's change → `not addressed`. Other NON-BLOCKING items, and those,
+    form the **residual list** (`<lens>#<n>`, gist, anchor).
 - **The loop** (orchestrator-run, cap = 1):
   - **Round 0** = the pinned panel; all-PASS short-circuits → proceed S7→S8.
   - **Fix:** the first fix dispatches ONE fresh producer subagent via plain `Task`
     (worktree-pinned — like the S5 producer) primed with the fix set (with item
-    IDs, each NON-BLOCKING item naming the BLOCKING item it sits under) + cited files
-    only; keep its agent ID in context; later fixes continue it via `SendMessage`
-    (unknown ID / error → fresh producer, whose ID replaces the in-context one). It
-    fixes only the items given and returns the claimed-fixes mapping for those items; a
-    given NON-BLOCKING item needing lines outside its blocker's change → `not addressed`.
-    A fix-time genuine fork uses the existing **S5 FORK → council** mechanism
-    (orchestrator council), not an in-loop council. Full fix-set text primes the fix
-    transiently; logged only as a concise gist.
+    IDs) + cited files only; keep its agent ID in context; later fixes continue it via
+    `SendMessage` (unknown ID / error → fresh producer, whose ID replaces the in-context one). It returns the claimed-fixes mapping
+    for the fix set. A fix-time genuine fork
+    uses the existing **S5 FORK → council** mechanism (orchestrator council), not an in-loop
+    council. Full fix-set text primes the fix transiently; logged only as a concise gist.
   - **Re-review** (the one round cap = 1 allows) dispatches only the **FAILed subset** — the
     lenses whose last verdict was FAIL/missing. All three are cores, so there is no `touched`
     recompute. Skipped lenses carry their PASS. Diff reference: `git -C <worktree> diff
@@ -214,7 +204,7 @@ holds only the verbatim requirement + RESUME line, **never an audit trail**. Tra
 below for the S9 report; `review_round` (in RESUME) is the only resume-load-bearing field.
 
 - **Panel freeze:** `S7 panel: pinned=[correctness,requirement-fidelity,doc] transport=Workflow` (append `->Task` if the fallback fires).
-- **Each review round** (VERDICT roll-up + a concise gist per blocker, with item IDs, + the round's new residual items as `<lens>#<n>` gist @ anchor): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; residual: doc#1 stale flag name @ README.md:12; fix dispatched`.
+- **Each review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; fix dispatched`.
 - **Each decision** (council or solo, incl. a resolved S5 FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 
 Hold full fix-set text only to prime the fix; the notes keep a concise gist. Keep every
