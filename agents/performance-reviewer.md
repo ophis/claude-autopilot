@@ -50,9 +50,9 @@ scale? You flag **likely-significant** issues — not micro-optimizations.
 - **Write each blocker as a reproduction:** one sentence,
   `<anchor> — <trigger> → <wrong outcome>`. Anchor per Cite evidence; a missing-X
   finding anchors where X should be handled. Trigger: an input, state, or reader
-  action. Wrong outcome: wrong output, a crash, a misled reader, or a breach of a
-  written convention (quote it). "Might break" or "not robust enough" is neither.
-  What you can't write this way is not a blocker.
+  action. Wrong outcome: wrong output, a crash, a misled reader, or
+  a violation of the requirement (quote the breached text). "Might break" or "not robust
+  enough" is neither. What you can't write this way is not a blocker.
 - **Self-check before returning.** Reopen each blocker's anchor and walk its
   reproduction against the actual text. Delete it from BLOCKING, leaving no trace
   (no `withdrawn:` line), if it doesn't reproduce, is outside your lens, or doesn't

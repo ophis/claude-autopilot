@@ -187,9 +187,10 @@ Every OPEN prior blocker is repeated in BLOCKING, prefixed with its ID
 (`- <lens>#<n>: …`). PASS ⟺ no blocking items; an
 unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.
 Cite evidence (file:line / spec clause). Write each BLOCKING item as
-`<anchor> — <trigger> → <wrong outcome>`; before returning, re-walk each against the actual
-text (and each prior item before marking it OPEN) and drop any that doesn't reproduce, is
-outside your lens, or doesn't breach the requirement, spec, or a written repo convention.
+`<anchor> — <trigger> → <wrong outcome>`; before returning, re-walk each BLOCKING item
+against the actual text and drop any that doesn't reproduce, is outside your lens, or
+doesn't breach the requirement, spec, or a written repo convention. Walk each prior item
+the same way before marking it OPEN; otherwise mark it RESOLVED or INVALID.
 NON-BLOCKING: only real defects in your lens (wrong output, factual error, misleading doc),
 at most 3; no style, naming, or suggestions; `none` is normal.
 
@@ -257,7 +258,8 @@ Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
   or delete a check.
 - **S7 — work review.** Run the S7 review loop (see **Review rounds**) over the work.
   **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the fix
-  set (with item IDs) + cited files only; later fixes continue it via `SendMessage`
+  set (with item IDs, each NON-BLOCKING item naming the BLOCKING item it sits under) +
+  cited files only; later fixes continue it via `SendMessage`
   (unknown ID / error → fresh producer, whose ID replaces the recorded one). It fixes only
   the items given and returns the claimed-fixes mapping for those items; a given NON-BLOCKING
   item needing lines outside its blocker's change → `not addressed` (worktree-pinned — see Operating disciplines). Docs are part of S7.

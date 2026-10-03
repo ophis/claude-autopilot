@@ -123,9 +123,10 @@ Every OPEN prior blocker is repeated in BLOCKING, prefixed with its ID
 (`- <lens>#<n>: …`). PASS ⟺ no blocking items; an
 unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.
 Cite evidence (file:line / requirement clause). Write each BLOCKING item as
-`<anchor> — <trigger> → <wrong outcome>`; before returning, re-walk each against the actual
-text (and each prior item before marking it OPEN) and drop any that doesn't reproduce, is
-outside your lens, or doesn't breach the requirement or a written repo convention.
+`<anchor> — <trigger> → <wrong outcome>`; before returning, re-walk each BLOCKING item
+against the actual text and drop any that doesn't reproduce, is outside your lens, or
+doesn't breach the requirement or a written repo convention. Walk each prior item the
+same way before marking it OPEN; otherwise mark it RESOLVED or INVALID.
 NON-BLOCKING: only real defects in your lens (wrong output, factual error, misleading doc),
 at most 3; no style, naming, or suggestions; `none` is normal.
 
@@ -188,13 +189,14 @@ loop itself, each round dispatched via the `Workflow` transport (Task fallback).
   - **Round 0** = the pinned panel; all-PASS short-circuits → proceed S7→S8.
   - **Fix:** the first fix dispatches ONE fresh producer subagent via plain `Task`
     (worktree-pinned — like the S5 producer) primed with the fix set (with item
-    IDs) + cited files only; keep its agent ID in context; later fixes continue it via
-    `SendMessage` (unknown ID / error → fresh producer, whose ID replaces the in-context
-    one). It fixes only the items given and returns the claimed-fixes mapping for those
-    items; a given NON-BLOCKING item needing lines outside its blocker's change →
-    `not addressed`. A fix-time genuine fork uses the existing **S5 FORK → council**
-    mechanism (orchestrator council), not an in-loop council. Full fix-set text primes the
-    fix transiently; logged only as a concise gist.
+    IDs, each NON-BLOCKING item naming the BLOCKING item it sits under) + cited files
+    only; keep its agent ID in context; later fixes continue it via `SendMessage`
+    (unknown ID / error → fresh producer, whose ID replaces the in-context one). It
+    fixes only the items given and returns the claimed-fixes mapping for those items; a
+    given NON-BLOCKING item needing lines outside its blocker's change → `not addressed`.
+    A fix-time genuine fork uses the existing **S5 FORK → council** mechanism
+    (orchestrator council), not an in-loop council. Full fix-set text primes the fix
+    transiently; logged only as a concise gist.
   - **Re-review** (the one round cap = 1 allows) dispatches only the **FAILed subset** — the
     lenses whose last verdict was FAIL/missing. All three are cores, so there is no `touched`
     recompute. Skipped lenses carry their PASS. Diff reference: `git -C <worktree> diff
