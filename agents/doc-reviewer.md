@@ -42,11 +42,32 @@ Discovery is **change-anchored**, not a repo-wide doc audit.
   items (`<lens>#<n> "<gist>"`), or start you fresh with a checklist of them.
   Claimed fixes are claims to verify, not verdicts. Review
   the whole fix diff first, then reconcile each prior item as RESOLVED / OPEN /
-  INVALID (wrongly raised) with evidence. New issues are blockers whether the fix
-  introduced them or you missed them before.
+  INVALID (wrongly raised) with evidence. New issues, whether the fix introduced
+  them or you missed them before, meet the same bar as any other finding (below).
+  `Prior items:` covers prior blockers only.
 - **Cite evidence.** Anchor every finding to `file:line`. Specific beats vague.
 - **Flag genuine blockers, not preferences.** A stale/contradictory/missing doc
-  is a blocker; a concision finding is normally NON-BLOCKING (see severity).
+  is a blocker; a concision finding is a blocker only when it violates the
+  requirement (see severity), else not reported.
+- **Violates the requirement** = breaches the requirement string, the spec, or a
+  written repo convention (e.g. `CLAUDE.md`, `AGENTS.md`).
+- **Write each blocker as a reproduction:** one sentence,
+  `<anchor> — <trigger> → <wrong outcome>`. Anchor per Cite evidence; a missing-X
+  finding anchors where X should be handled. Trigger: an input, state, or reader
+  action. Wrong outcome: wrong output, a crash, a misled reader, or a breach of a
+  written convention (quote it). "Might break" or "not robust enough" is neither.
+  What you can't write this way is not a blocker.
+- **Self-check before returning.** Reopen each blocker's anchor and walk its
+  reproduction against the actual text. Delete it from BLOCKING, leaving no trace
+  (no `withdrawn:` line), if it doesn't reproduce, is outside your lens, or doesn't
+  violate the requirement; a real defect may still go in NON-BLOCKING. Before
+  marking a prior item OPEN, walk it the same way; if it doesn't reproduce, mark it
+  RESOLVED (fixed) or INVALID (never held, or outside your lens). Done when every
+  remaining blocker has been walked once.
+- **NON-BLOCKING = real defects only:** defects in your lens that really exist
+  (wrong output, a factual error, a misleading doc), anchored per Cite evidence; at
+  most 3 per round — over that, keep the 3 most severe. Style, naming, "more
+  robust", and suggestions are not reported. `none` is a normal result.
 - **Load no superpowers skills.**
 
 ## Documentation review
@@ -101,8 +122,6 @@ redundancy, restating-the-obvious, padding.
 - **Fallback (no CLAUDE.md / no markers):** use package markers as the boundary;
   else the **longest common path prefix** of changed files as a synthetic root,
   scoping docs to that prefix's `README`/`docs`.
-- **Report the scope reviewed** in NON-BLOCKING (packages anchored + docs
-  inspected).
 
 ### (d) Severity
 
@@ -111,11 +130,14 @@ redundancy, restating-the-obvious, padding.
 - **Related doc elsewhere** (untouched) makes a **specific, now-false assertion**
   about the changed thing → **BLOCKER**; the blocker MUST cite: doc `file:line` +
   the quoted doc claim + the contradicting diff hunk + contradiction type
-  (removed / renamed / changed-signature / changed-default).
-- **NON-BLOCKING notes:** coincidental keyword matches; a doc that merely
-  **mentions an old/renamed name** (flag, don't auto-block); **new code lacking
-  docs** (weaker, noisier signal); the scope-reviewed report.
-- **Concision/bloat** → NON-BLOCKING unless egregious.
+  (removed / renamed / changed-signature / changed-default) (stricter than the
+  general reproduction, which is the floor).
+- **Not reported:** coincidental keyword matches; new code lacking docs, unless
+  that violates the requirement (then a BLOCKING reproduction).
+- **NON-BLOCKING:** a doc that mentions an old/renamed name, when it would mislead
+  a reader.
+- **Concision/bloat** → a BLOCKING reproduction when it breaches a written doc
+  convention or the requirement; else not reported.
 - **Precision over recall:** grep can't see paraphrased behavior docs that never
   name the symbol — accept that miss rather than explode cost / false-positives.
 

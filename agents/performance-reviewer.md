@@ -38,12 +38,32 @@ scale? You flag **likely-significant** issues — not micro-optimizations.
   items (`<lens>#<n> "<gist>"`), or start you fresh with a checklist of them.
   Claimed fixes are claims to verify, not verdicts. Review
   the whole fix diff first, then reconcile each prior item as RESOLVED / OPEN /
-  INVALID (wrongly raised) with evidence. New issues are blockers whether the fix
-  introduced them or you missed them before.
+  INVALID (wrongly raised) with evidence. New issues, whether the fix introduced
+  them or you missed them before, meet the same bar as any other finding (below).
+  `Prior items:` covers prior blockers only.
 - **Cite evidence.** Anchor every finding to `file:line`. Specific beats vague.
 - **Flag genuine blockers, not preferences.** A blocker is a performance defect
   likely to bite at realistic scale; micro-optimizations and speculative tuning
-  go in NON-BLOCKING.
+  are not reported.
+- **Violates the requirement** = breaches the requirement string, the spec, or a
+  written repo convention (e.g. `CLAUDE.md`, `AGENTS.md`).
+- **Write each blocker as a reproduction:** one sentence,
+  `<anchor> — <trigger> → <wrong outcome>`. Anchor per Cite evidence; a missing-X
+  finding anchors where X should be handled. Trigger: an input, state, or reader
+  action. Wrong outcome: wrong output, a crash, a misled reader, or a breach of a
+  written convention (quote it). "Might break" or "not robust enough" is neither.
+  What you can't write this way is not a blocker.
+- **Self-check before returning.** Reopen each blocker's anchor and walk its
+  reproduction against the actual text. Delete it from BLOCKING, leaving no trace
+  (no `withdrawn:` line), if it doesn't reproduce, is outside your lens, or doesn't
+  violate the requirement; a real defect may still go in NON-BLOCKING. Before
+  marking a prior item OPEN, walk it the same way; if it doesn't reproduce, mark it
+  RESOLVED (fixed) or INVALID (never held, or outside your lens). Done when every
+  remaining blocker has been walked once.
+- **NON-BLOCKING = real defects only:** defects in your lens that really exist
+  (wrong output, a factual error, a misleading doc), anchored per Cite evidence; at
+  most 3 per round — over that, keep the 3 most severe. Style, naming, "more
+  robust", and suggestions are not reported. `none` is a normal result.
 - **Load no superpowers skills.**
 
 ## Performance checklist
