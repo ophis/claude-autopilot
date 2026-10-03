@@ -123,6 +123,11 @@ Every OPEN prior blocker is repeated in BLOCKING, prefixed with its ID
 (`- <lens>#<n>: …`). PASS ⟺ no blocking items; an
 unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.
 Cite evidence (file:line / requirement clause); flag blockers, not preferences.
+Write each blocker as one repro line `<anchor> — <trigger> → <wrong outcome>` (anchor = that
+evidence); no repro → not a blocker. Before returning, re-open each anchor and walk its
+repro; silently drop any that doesn't hold, is off-lens, or doesn't violate the requirement.
+NON-BLOCKING: only real in-lens defects (wrong output, factual error, misleading doc),
+at most 3 — no style, naming, robustness or suggestions; `NON-BLOCKING: none` is normal.
 
 ## S7 — correctness + requirement-fidelity + doc review (cap 1)
 
@@ -167,16 +172,21 @@ loop itself, each round dispatched via the `Workflow` transport (Task fallback).
     arriving as hand-back messages plus completion notifications — wait for every member's;
     never poll or judge early. Then ONE fix over all open blockers, then ONE re-review round;
     never fix as single verdicts arrive.
-  - **Item IDs:** before deduping for the fixer, label every BLOCKING / NON-BLOCKING item
-    `<lens>#<n>`; numbering continues per lens across the phase (never reused). A repeated
-    OPEN item keeps its ID (reviewers prefix it); number only new items.
+  - **Item IDs & fixer scope:** label every BLOCKING / NON-BLOCKING item `<lens>#<n>`;
+    numbering continues per lens across the phase (never reused). A repeated OPEN item
+    keeps its ID (reviewers prefix it); number only new items. The fixer gets every open
+    BLOCKING item (deduped) plus only the NON-BLOCKING items that are both (a) a real
+    defect — not style, naming, robustness or a suggestion — and (b) anchored on the same
+    spot as a BLOCKING item this round (same `file:line` range or requirement clause). Every
+    other NON-BLOCKING item is deferred: accumulated across rounds, deduped by item ID,
+    reported in S9's deferred non-blockers. Choosing the fixer's items never changes a verdict.
 - **The loop** (orchestrator-run, cap = 1):
   - **Round 0** = the pinned panel; all-PASS short-circuits → proceed S7→S8.
   - **Fix:** the first fix dispatches ONE fresh producer subagent via plain `Task`
-    (worktree-pinned — like the S5 producer) primed with the deduped open blockers (with item
-    IDs) + cited files only; keep its agent ID in context; later fixes continue it via
-    `SendMessage` (unknown ID / error → fresh producer, whose ID replaces the in-context one). It returns the claimed-fixes mapping
-    for every change it made, incl. non-blockers fixed opportunistically. A fix-time genuine fork
+    (worktree-pinned — like the S5 producer) primed with the fixer-scope items (with item
+    IDs; see **Item IDs & fixer scope**) + cited files only; keep its agent ID in context; later fixes continue it via
+    `SendMessage` (unknown ID / error → fresh producer, whose ID replaces the in-context one). It fixes only the items
+    handed to it; its claimed-fixes mapping covers only those items. A fix-time genuine fork
     uses the existing **S5 FORK → council** mechanism (orchestrator council), not an in-loop
     council. Full blocker text primes the fix transiently; logged only as a concise gist.
   - **Re-review** (the one round cap = 1 allows) dispatches only the **FAILed subset** — the
@@ -196,11 +206,11 @@ holds only the verbatim requirement + RESUME line, **never an audit trail**. Tra
 below for the S9 report; `review_round` (in RESUME) is the only resume-load-bearing field.
 
 - **Panel freeze:** `S7 panel: pinned=[correctness,requirement-fidelity,doc] transport=Workflow` (append `->Task` if the fallback fires).
-- **Each review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; fix dispatched`.
+- **Each review round** (VERDICT roll-up + a concise gist per blocker and per deferred NON-BLOCKING item, with item IDs): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; deferred: doc#1 stale flag name in README; fix dispatched`.
 - **Each decision** (council or solo, incl. a resolved S5 FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 
 Hold full blocker text only to prime the fix; the notes keep a concise gist. Keep every
-line short. The S9 report surfaces these notes plus the residual NON-BLOCKING items.
+line short. The S9 report surfaces these notes plus the accumulated deferred NON-BLOCKING items.
 
 ## Pipeline (S1, S5–S9)
 
