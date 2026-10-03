@@ -105,7 +105,7 @@ the user's / project's convention** — honor CLAUDE.md and existing repo patter
     order (never pass `resumeFromRunId` — every round is a fresh run). A `synthetic: true`
     member is re-dispatched once via `Task` with its prompt; still no verdict → FAIL.
     Members expose no agent ID, so a re-reviewed lens is a FRESH member whose prompt adds
-    its prior items (`<lens>#<n> "<gist>"`, its persisted gists) + the fix diff reference;
+    its prior blockers (`<lens>#<n> "<gist>"`, its persisted gists) + the fix diff reference;
     OPEN prior blockers come back in BLOCKING prefixed with their ID.
   - **Task transport (fallback):** the `Workflow` call itself fails (tool unavailable, name
     not resolvable, error, or no result) → run that round via `Task` and stay on Task for
@@ -114,7 +114,7 @@ the user's / project's convention** — honor CLAUDE.md and existing repo patter
       Record every returned agent ID (see **Progress log format**).
     - **Re-review = continuation:** `SendMessage` to each re-reviewed lens's recorded agent
       ID (all in one batch) with: the fix diff reference, and the fixer's claimed fixes for
-      that lens's items (`<lens>#<n> "<gist>"` → where addressed | not addressed) plus `[other]` =
+      that lens's blockers (`<lens>#<n> "<gist>"` → where addressed | not addressed) plus `[other]` =
       every other change (location only) — claims to verify, never "I fixed it". Ask for the
       `Prior items:` list, then the verdict. Ad-hoc lenses: restate "Read-only. Modify nothing."
     - **Continuation fallback:** continuation errors, the ID is unknown (earlier rounds on
@@ -125,17 +125,22 @@ the user's / project's convention** — honor CLAUDE.md and existing repo patter
   - **Wait for the whole round:** a Workflow call completes with every verdict at once; Task
     dispatches and continuations run in the background (`run_in_background`), replies
     arriving as hand-back messages plus completion notifications — wait for every member's;
-    never poll or judge early. Then ONE fix over all open blockers, then ONE re-review round;
+    never poll or judge early. Then ONE fix over the fix set, then ONE re-review round;
     never fix as single verdicts arrive.
   - **Item IDs:** before deduping for the fixer, label every BLOCKING / NON-BLOCKING item
     `<lens>#<n>`; numbering continues per lens across the phase (never reused). A repeated
     OPEN item keeps its ID (reviewers prefix it); number only new items.
+  - **Fix set** = open blockers + NON-BLOCKING real defects (not style, naming,
+    robustness, or suggestions) anchored within lines (or a clause) a same-round blocker
+    cites, needing no new file or logic. Only it is fixed; such an item needing lines
+    beyond its blocker's change → `not addressed`. Other NON-BLOCKING items, and those,
+    form the **residual list** (`<lens>#<n>`, gist, anchor).
 - Each reviewer returns its verdict; collect verdicts → the Ralph loop.
 
 **S3** (spec review) and **S7** (work review) run a native loop: review → fix → re-review
 until the frozen panel PASSes, capped per phase by `ralphLoop.maxIterations.spec-phase` /
-`.implementation-phase` (default 3, from config). Full blocker text primes the fix
-transiently; logged only as a concise gist. Re-reviewed lenses carry their prior items (see **Dispatch the whole round together**); convergence holds only when genuinely
+`.implementation-phase` (default 3, from config). Full fix-set text primes the fix
+transiently; logged only as a concise gist. Re-reviewed lenses carry their prior blockers (see **Dispatch the whole round together**); convergence holds only when genuinely
 all-PASS. The orchestrator runs the rounds itself, logging each briefly (see
 **Progress log format**).
 
@@ -176,7 +181,10 @@ Prior items:
 Every OPEN prior blocker is repeated in BLOCKING, prefixed with its ID
 (`- <lens>#<n>: …`). PASS ⟺ no blocking items; an
 unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.
-Cite evidence (file:line / spec clause); flag blockers, not preferences.
+Cite evidence (file:line / spec clause). Each blocker is one re-walked sentence,
+`<anchor> — <trigger> → <wrong outcome>`, breaching the requirement, spec, or a written
+repo convention. NON-BLOCKING: at most 3 real defects in your lens; no style, naming,
+robustness, or suggestions.
 
 <!-- progress-log-format:start -->
 ## Progress log format
@@ -185,8 +193,8 @@ The plan doc's progress section is a simple short-entry log (audit trail, not a
 transcript): a brief entry for the panel freeze, every review round (VERDICT roll-up +
 blocker), and every decision — keep them short, not necessarily one line. Only
 `review_round` (RESUME block) is load-bearing for resume; the per-lens blocker gists prime
-fresh re-review members, the agent IDs Task continuation. Keep these plus the final
-residual NON-BLOCKING items.
+fresh re-review members, the agent IDs Task continuation. Keep these plus the
+residual list.
 
 Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
 - **Panel freeze:** `S7 panel: core=[correctness,requirement-fidelity,doc] +optional=[code-quality] transport=Workflow` (append `->Task` if the fallback fires).
@@ -217,7 +225,7 @@ Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
   decision points, see **Deciding at decision points**; record the decision (see
   **Progress log format**).
 - **S3 — spec review. (Skipped in spec-file mode)** Run the S3 review loop (see **Review rounds**) over the
-  spec. **Fixes:** the orchestrator edits the spec doc directly
+  spec. **Fixes:** the orchestrator fixes the fix set in the spec doc directly
   (snapshot first; it writes the claimed-fixes list).
   **Root-contradiction STOP:** if reviewers find the core requirement asks for two things
   that cannot both be true, STOP and hand off — quote the two conflicting clauses (a
@@ -240,15 +248,15 @@ Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
   discovered checks. Never weaken, skip,
   or delete a check.
 - **S7 — work review.** Run the S7 review loop (see **Review rounds**) over the work.
-  **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the deduped
-  open blockers (with item IDs) + cited files only; later fixes continue it via `SendMessage`
-  (unknown ID / error → fresh producer, whose ID replaces the recorded one). It returns the claimed-fixes mapping for every change
-  it made, incl. non-blockers fixed opportunistically (worktree-pinned — see Operating disciplines). Docs are part of S7.
+  **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the fix set
+  (with item IDs) + cited files only; later fixes continue it via `SendMessage`
+  (unknown ID / error → fresh producer, whose ID replaces the recorded one). It returns the claimed-fixes mapping for the fix set
+  (worktree-pinned — see Operating disciplines). Docs are part of S7.
 - **S8 — squash.** Idempotent squash to one commit (skip if already exactly 1
   ahead of `base_ref`). Working notes (spec/plan/progress) are committed or ignored per the
   project's convention — do not force either.
 - **S9 — finish.** Inline (no skill): report
-  review history, decisions, deferred non-blockers (stop-reason first if the run stopped);
+  review history, decisions, the residual list (stop-reason first if the run stopped);
   offer integration options as an informational report menu, NOT a question. NO merge. Then
   emit the **Result handoff** block (below) as the final output.
 

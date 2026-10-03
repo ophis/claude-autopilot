@@ -38,11 +38,21 @@ the code is internally correct, not whether it matches the requirement or spec
   items (`<lens>#<n> "<gist>"`), or start you fresh with a checklist of them.
   Claimed fixes are claims to verify, not verdicts. Review
   the whole fix diff first, then reconcile each prior item as RESOLVED / OPEN /
-  INVALID (wrongly raised) with evidence. New issues are blockers whether the fix
-  introduced them or you missed them before.
+  INVALID (wrongly raised) with evidence. Judge new issues, from the fix or missed
+  before, like any other finding.
 - **Cite evidence.** Anchor every finding to `file:line`. Specific beats vague.
 - **Flag genuine blockers, not preferences.** A blocker produces wrong or unsafe
-  behavior; preferences go in NON-BLOCKING.
+  behavior.
+- **Blockers are reproductions:** one sentence,
+  `<anchor> — <trigger> → <wrong outcome>`; trigger = input, state, or reader action;
+  wrong outcome = wrong output, crash, misled reader, or a quoted breach of the
+  requirement, spec, or a written repo convention. Missing X → anchor where X belongs.
+- **Self-check:** before returning, re-walk each blocker, and each prior item you'd
+  mark OPEN, against the text; one that doesn't reproduce or is off-lens → out of
+  BLOCKING, no `withdrawn:` note (prior item → RESOLVED or INVALID).
+- **NON-BLOCKING:** at most 3 real defects in your lens (wrong output, factual error,
+  misleading doc), the most severe; no style, naming, robustness, or suggestions.
+  `none` is normal.
 - **Load no superpowers skills.**
 
 ## Correctness checklist

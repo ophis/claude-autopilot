@@ -42,11 +42,21 @@ Discovery is **change-anchored**, not a repo-wide doc audit.
   items (`<lens>#<n> "<gist>"`), or start you fresh with a checklist of them.
   Claimed fixes are claims to verify, not verdicts. Review
   the whole fix diff first, then reconcile each prior item as RESOLVED / OPEN /
-  INVALID (wrongly raised) with evidence. New issues are blockers whether the fix
-  introduced them or you missed them before.
+  INVALID (wrongly raised) with evidence. Judge new issues, from the fix or missed
+  before, like any other finding.
 - **Cite evidence.** Anchor every finding to `file:line`. Specific beats vague.
 - **Flag genuine blockers, not preferences.** A stale/contradictory/missing doc
-  is a blocker; a concision finding is normally NON-BLOCKING (see severity).
+  is a blocker.
+- **Blockers are reproductions:** one sentence,
+  `<anchor> — <trigger> → <wrong outcome>`; trigger = input, state, or reader action;
+  wrong outcome = wrong output, crash, misled reader, or a quoted breach of the
+  requirement, spec, or a written repo convention. Missing X → anchor where X belongs.
+- **Self-check:** before returning, re-walk each blocker, and each prior item you'd
+  mark OPEN, against the text; one that doesn't reproduce or is off-lens → out of
+  BLOCKING, no `withdrawn:` note (prior item → RESOLVED or INVALID).
+- **NON-BLOCKING:** at most 3 real defects in your lens (wrong output, factual error,
+  misleading doc), the most severe; no style, naming, robustness, or suggestions.
+  `none` is normal.
 - **Load no superpowers skills.**
 
 ## Documentation review
@@ -101,21 +111,18 @@ redundancy, restating-the-obvious, padding.
 - **Fallback (no CLAUDE.md / no markers):** use package markers as the boundary;
   else the **longest common path prefix** of changed files as a synthetic root,
   scoping docs to that prefix's `README`/`docs`.
-- **Report the scope reviewed** in NON-BLOCKING (packages anchored + docs
-  inspected).
 
 ### (d) Severity
 
 - **Touched doc** left stale/contradictory/missing (the change edited it or
   obviously affects it) → **BLOCKER**.
 - **Related doc elsewhere** (untouched) makes a **specific, now-false assertion**
-  about the changed thing → **BLOCKER**; the blocker MUST cite: doc `file:line` +
+  about the changed thing → **BLOCKER**; the blocker MUST also cite: doc `file:line` +
   the quoted doc claim + the contradicting diff hunk + contradiction type
   (removed / renamed / changed-signature / changed-default).
-- **NON-BLOCKING notes:** coincidental keyword matches; a doc that merely
-  **mentions an old/renamed name** (flag, don't auto-block); **new code lacking
-  docs** (weaker, noisier signal); the scope-reviewed report.
-- **Concision/bloat** → NON-BLOCKING unless egregious.
+- **NON-BLOCKING:** a doc whose mention of an old/renamed name misleads. Not
+  reported: coincidental keyword matches; new code lacking docs or concision/bloat,
+  unless it breaches the requirement, spec, or a written repo convention (→ BLOCKER).
 - **Precision over recall:** grep can't see paraphrased behavior docs that never
   name the symbol — accept that miss rather than explode cost / false-positives.
 
