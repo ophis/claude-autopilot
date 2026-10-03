@@ -34,14 +34,31 @@ canonical source; it is never dispatched on its own.
   items (`<lens>#<n> "<gist>"`), or start you fresh with a checklist of them.
   Claimed fixes are claims to verify, not verdicts. Review
   the whole fix diff first, then reconcile each prior item as RESOLVED / OPEN /
-  INVALID (wrongly raised) with evidence. New issues are blockers whether the fix
-  introduced them or you missed them before.
+  INVALID (wrongly raised) with evidence. A new finding on re-review — introduced
+  by the fix or missed before — is a blocker only if it passes the same repro line
+  and self-check as any other blocker.
 - **Cite evidence.** Anchor every finding to concrete evidence — `file:line` for
   code, the spec clause (e.g. "§3 doesn't handle the empty list") for specs.
   "§3 doesn't handle the empty list" beats "needs more detail."
+- **One repro line per blocker.** Write each BLOCKING item as
+  `<anchor> — <trigger> → <wrong outcome>`: the anchor is your evidence above; the
+  trigger is the input, state or reading that exercises it; the wrong outcome is
+  the concrete failure. A missing item (an unimplemented requirement, untested
+  behavior, an absent doc) anchors on the clause that requires it plus where it
+  should appear — the absence is the repro. Full line:
+  `- <lens>#<n>: <anchor> — <trigger> → <wrong outcome>`, the `<lens>#<n>:` prefix
+  only on an OPEN prior item. If you can't write the repro, it is not a blocker.
+- **Self-check before returning.** Re-open each blocker's anchor and walk its
+  repro against the actual text. Drop it — silently, with no trace in your output —
+  if the repro doesn't hold, the finding is outside your lens, or its outcome
+  doesn't violate the requirement. Every blocker you return has been walked.
 - **Flag genuine blockers, not preferences.** A blocker is something that, left
-  unfixed, makes the artifact fail the requirement. Style nits and "I'd have done
-  it differently" belong in NON-BLOCKING, if anywhere.
+  unfixed, makes the artifact fail the requirement; "violates the requirement" in
+  the self-check means exactly this, made concrete by your lens's own blocker bar.
+- **NON-BLOCKING holds real defects only.** Only genuine in-lens defects below the
+  blocker bar — wrong output, a factual error, a misleading doc — at most 3. No
+  style, naming, "more robust" or suggestions. `NON-BLOCKING: none` is the normal
+  result.
 - **Load no superpowers skills.** Do not invoke any `superpowers:*` skill. Your
   context is exactly this contract + your lens + any focus directive.
 

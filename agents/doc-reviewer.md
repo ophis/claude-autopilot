@@ -42,11 +42,31 @@ Discovery is **change-anchored**, not a repo-wide doc audit.
   items (`<lens>#<n> "<gist>"`), or start you fresh with a checklist of them.
   Claimed fixes are claims to verify, not verdicts. Review
   the whole fix diff first, then reconcile each prior item as RESOLVED / OPEN /
-  INVALID (wrongly raised) with evidence. New issues are blockers whether the fix
-  introduced them or you missed them before.
+  INVALID (wrongly raised) with evidence. A new finding on re-review —
+  introduced by the fix or missed before — is a blocker only if it passes the
+  same repro line and self-check as any other blocker.
 - **Cite evidence.** Anchor every finding to `file:line`. Specific beats vague.
-- **Flag genuine blockers, not preferences.** A stale/contradictory/missing doc
-  is a blocker; a concision finding is normally NON-BLOCKING (see severity).
+- **One repro line per blocker.** Write each BLOCKING item as
+  `<anchor> — <trigger> → <wrong outcome>`: the anchor is your evidence above;
+  the trigger is the input, state or reading that exercises it; the wrong
+  outcome is the concrete failure. A missing item (an unimplemented
+  requirement, untested behavior, an absent doc) anchors on the clause that
+  requires it plus where it should appear — the absence is the repro.
+  Full line: `- <lens>#<n>: <anchor> — <trigger> → <wrong outcome>`, the
+  `<lens>#<n>:` prefix only on an OPEN prior item.
+  If you can't write the repro, it is not a blocker.
+- **Self-check before returning.** Re-open each blocker's anchor and walk its
+  repro against the actual text. Drop it — silently, with no trace in your
+  output — if the repro doesn't hold, the finding is outside your lens, or its
+  outcome doesn't violate the requirement. Every blocker you return has been
+  walked.
+- **Flag genuine blockers, not preferences.** A stale/contradictory/missing doc,
+  or egregious bloat, is a blocker (see severity); "violates the requirement" in
+  the self-check means exactly this.
+- **NON-BLOCKING holds real defects only.** Only genuine in-lens defects below
+  the blocker bar — wrong output, a factual error, a misleading doc — at most 3.
+  No style, naming, "more robust" or suggestions. `NON-BLOCKING: none` is the
+  normal result.
 - **Load no superpowers skills.**
 
 ## Documentation review
@@ -55,8 +75,8 @@ Discovery is **change-anchored**, not a repo-wide doc audit.
 
 For docs the change edited or obviously affects: is every one updated to match
 the new behavior, with nothing left stale or contradictory, and is new behavior
-that needs documenting actually documented? Are the edits concise — flag bloat,
-redundancy, restating-the-obvious, padding.
+that needs documenting actually documented? Are the edits concise — flag
+egregious bloat (redundancy, restating-the-obvious, padding) per (d).
 
 ### (b) Related-docs discovery — "signal → grep → confirm" (bounded)
 
@@ -101,21 +121,19 @@ redundancy, restating-the-obvious, padding.
 - **Fallback (no CLAUDE.md / no markers):** use package markers as the boundary;
   else the **longest common path prefix** of changed files as a synthetic root,
   scoping docs to that prefix's `README`/`docs`.
-- **Report the scope reviewed** in NON-BLOCKING (packages anchored + docs
-  inspected).
 
 ### (d) Severity
 
 - **Touched doc** left stale/contradictory/missing (the change edited it or
   obviously affects it) → **BLOCKER**.
 - **Related doc elsewhere** (untouched) makes a **specific, now-false assertion**
-  about the changed thing → **BLOCKER**; the blocker MUST cite: doc `file:line` +
-  the quoted doc claim + the contradicting diff hunk + contradiction type
-  (removed / renamed / changed-signature / changed-default).
-- **NON-BLOCKING notes:** coincidental keyword matches; a doc that merely
-  **mentions an old/renamed name** (flag, don't auto-block); **new code lacking
-  docs** (weaker, noisier signal); the scope-reviewed report.
-- **Concision/bloat** → NON-BLOCKING unless egregious.
+  about the changed thing → **BLOCKER**; its `<anchor>` MUST cite: doc
+  `file:line` + the quoted doc claim + the contradicting diff hunk +
+  contradiction type (removed / renamed / changed-signature / changed-default).
+- **NON-BLOCKING notes:** only a doc that **mentions an old/renamed name** in a
+  way that misleads the reader.
+- **Concision/bloat:** egregious bloat → **BLOCKER** (a repro line that survives
+  the self-check); other concision observations are not reported.
 - **Precision over recall:** grep can't see paraphrased behavior docs that never
   name the symbol — accept that miss rather than explode cost / false-positives.
 
