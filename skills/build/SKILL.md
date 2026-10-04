@@ -54,10 +54,8 @@ Empty input → STOP with a handoff asking for requirements.
 **On start, resume first.** Look for an existing **plan doc** with a RESUME block in the
 project's convention location. If found: reconcile worktree/branch/base_ref existence on
 disk, then continue from `phase`. An interrupted review round is **re-run from scratch**
-(re-dispatch the whole frozen panel — bounded — on the transport its freeze line records:
-Workflow members fresh + gists; Task continuing recorded agent IDs where reachable, after a
-resumed session expect the continuation fallback (fresh + gists)), only `review_round` need be
-persisted to locate the loop. No plan doc → start at S1.
+(re-dispatch the whole frozen panel fresh — bounded — on the transport its freeze line
+records), only `review_round` need be persisted to locate the loop. No plan doc → start at S1.
 
 **Persist two things** so the run survives compaction: the **spec** (S2's output, or the
 user-provided spec file) and the **plan doc** (task list + progress section +
@@ -85,91 +83,43 @@ the user's / project's convention** — honor CLAUDE.md and existing repo patter
 
 ## Review rounds (S3 & S7)
 
-**Panel.** `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py" --phase spec --spec-file
-<spec doc>` (S3) / `... --phase work --worktree <worktree> --base <base_ref>` (S7) → a
-`selected` list of `{agent, subagent_type, tier, matched}`. Take ALL `core` + the
-`optional`s you judge relevant + ad-hoc lenses only for genuine gaps no roster agent
-covers. Freeze it in the plan doc progress section (see **Progress log
-format**); reuse it every round of the phase.
+- **Select & compose.** Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py"
+  --phase spec --spec-file <spec doc>` (S3) / `... --phase work --worktree <worktree>
+  --base <base_ref>` (S7) → a `selected` list of `{agent, subagent_type, tier, matched}`.
+  The panel = ALL `core` agents (mandatory) + the `optional` agents you judge relevant (may
+  drop marginal ones).
+- **Freeze & log** the panel to the **plan doc** progress section (see **Progress log
+  format**); reuse it every round of that phase.
+- **Dispatch the whole round together** — never one at a time, re-reviews included. Each
+  member is `autopilot:<name>` and gets ONLY a run-input prompt — "PHASE=<spec|work>.
+  Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…, requirement=…, focus=…. Output
+  ONLY the verdict, no extra prose." (absolute paths; reviewers read the worktree, never
+  main). A re-reviewed lens's prompt adds its prior items (`<lens>#<n> "<gist>"`, from the
+  persisted gists); S7 also adds the fix diff `git -C <worktree> diff <pre-fix HEAD>..HEAD` (record HEAD
+  before each fix).
+  - **Workflow (default):** one call per round —
+    `Workflow({name: "autopilot:autopilot-review-round", args: {phase: "<spec|work>", members: [{agent, subagent_type, prompt}, …]}})`
+    → `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` in member
+    order (never pass `resumeFromRunId`). A `synthetic: true` member is re-dispatched once
+    via `Task` with its prompt; still no verdict → FAIL.
+  - **Task (fallback):** if the `Workflow` call fails, dispatch the same members fresh as
+    one parallel `Task` batch with the same prompts, and stay on Task for the phase (freeze
+    line `->Task`). PASS only with no BLOCKING; no or unparseable verdict → FAIL.
+- **Wait for every verdict** — never poll or judge early — then ONE fix over all open
+  blockers, then ONE re-review round.
+- **Item IDs:** before deduping for the fixer, label each item `<lens>#<n>` — numbered per
+  lens across the phase, never reused; a repeated OPEN item keeps its ID (reviewers prefix it).
 
-**Dispatch** each round's members together, never one at a time (re-reviews too). Each member's
-run-input prompt, built once: "PHASE=<spec|work>. Inputs: worktree=…, base_ref=…, spec_doc=…,
-plan_doc=…, requirement=…, focus=…. Output ONLY the verdict, no extra prose." (absolute
-paths; reviewers read the worktree, never main). Roster: `autopilot:<name>` with ONLY that
-prompt. Ad-hoc: `general-purpose` with persona + "Read-only. Modify nothing." + the
-**Verdict grammar** block below.
-
-- **Workflow (default):** per round, one
-  `Workflow({name: "autopilot:autopilot-review-round", args: {phase: "<spec|work>", members: [{agent, subagent_type, prompt}, …]}})`
-  → `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` in member
-  order; never pass `resumeFromRunId`. Re-dispatch a `synthetic: true` member once via `Task`
-  with its prompt; still no verdict → FAIL. A re-reviewed lens is a fresh member whose prompt
-  adds its prior items (`<lens>#<n> "<gist>"`, from persisted gists) + the fix diff
-  reference.
-- **Task (fallback)** — the `Workflow` call itself fails (tool unavailable, name not
-  resolvable, error, or no result) → this and every later round of the phase go via `Task`
-  (freeze line `->Task`):
-  - Round 0: one parallel `Task(subagent_type=<member's>, prompt=<member's>)` batch; record
-    every agent ID (see **Progress log format**).
-  - Re-review: one `SendMessage` batch continuing each re-reviewed lens's recorded ID with
-    the fix diff reference + the fixer's claimed fixes for its items (`<lens>#<n> "<gist>"`
-    → where addressed | not addressed) + `[other]` = every other change (location only),
-    framed as claims to verify, never "I fixed it"; ask for `Prior items:`, then the
-    verdict. Ad-hoc lenses: restate "Read-only. Modify nothing."
-  - Continuation fallback: continuation errors, unknown ID (earlier Workflow rounds, compaction, resumed session)
-    or no verdict → fresh `Task` of that lens, its persisted gists as a checklist (it emits
-    `Prior items:`; no gists → plain fresh review); its new ID replaces the recorded one;
-    still no verdict → FAIL.
-- **Wait for the whole round** — Workflow returns all verdicts at once; Task dispatches and
-  continuations run in the background (`run_in_background`): wait for every member's
-  hand-back + completion notification, never poll or judge early. Then ONE fix over all open
-  blockers, then ONE re-review round; never fix as single verdicts arrive.
-- **Item IDs:** before deduping for the fixer, label every BLOCKING / NON-BLOCKING item
-  `<lens>#<n>` (per lens, continuing across the phase, never reused); a repeated OPEN item
-  keeps its ID (reviewers prefix it) — number only new items.
-
-**Ralph loop** (native, orchestrator-run, each round logged briefly): review → fix → re-review until
-the frozen panel genuinely all-PASSes; cap per phase = `ralphLoop.maxIterations.spec-phase`
-/ `.implementation-phase` (default 3, from config). Full blocker text primes the fix
-transiently; only a concise gist is logged.
+**Ralph loop:** review → fix → re-review until the frozen panel all-PASSes, capped by
+`ralphLoop.maxIterations.spec-phase` / `.implementation-phase` (default 3, from config).
+Full blocker text primes the fix; the log keeps only a concise gist.
 
 - **Round 0** = full frozen panel; all-PASS short-circuits.
-- **Re-review (N>0):**
-  - S3 = full panel; before each S3 fix, snapshot the spec to `<spec stem>.r<N>.md` beside
-    it (kept, gitignored), diff reference `diff -u <snapshot> <spec_doc>`.
-  - S7 = only `(FAILed ∪ touched) ∩ frozen panel`: *FAILed* = last verdict FAIL/missing;
-    *touched* = lenses whose `applies_to` matches the fix's changed files (record the
-    pre-fix HEAD, re-run `select-panel.py --phase work --worktree <worktree> --base
-    <pre-fix HEAD>`; cores always match); skipped lenses carry their PASS; diff reference
-    `git -C <worktree> diff <pre-fix HEAD>..HEAD`.
-  - Both phases: ad-hoc lenses re-run iff FAILed.
-- **Advance** when every lens in the round is PASS with no open BLOCKING (S3→S4, S7→S8).
-  Cap hit without convergence → non-convergence STOP (oscillation | unfixable |
-  requirements-conflict) + handoff. Only reviewers' own verdicts decide convergence: never
-  override one, downgrade a blocker, or mark an item INVALID yourself.
-
-## Verdict grammar (paste into ad-hoc review prompts only)
-
-Output **only** the verdict — no preamble, no analysis prose, no essay. Emit exactly
-this block:
-
-```
-VERDICT: PASS            # or exactly: VERDICT: FAIL
-BLOCKING: none           # or one "- " item per line
-NON-BLOCKING: none       # or one "- " item per line
-```
-
-When continued (or given a prior-items checklist), precede it with one line per prior item:
-
-```
-Prior items:
-- <lens>#<n>: RESOLVED | OPEN | INVALID — <evidence>
-```
-
-Every OPEN prior blocker is repeated in BLOCKING, prefixed with its ID
-(`- <lens>#<n>: …`). PASS ⟺ no blocking items; an
-unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.
-Cite evidence (file:line / spec clause); flag blockers, not preferences.
+- **Re-review:** S3 = the full panel on the whole spec. S7 = the lenses that failed last
+  round plus every core lens; the rest carry their PASS.
+- **Advance** when every lens is PASS with no open BLOCKING (S3→S4, S7→S8). Cap hit →
+  non-convergence STOP (oscillation | unfixable | requirements-conflict) + handoff. Never
+  override a reviewer's verdict — never downgrade a blocker or mark an item INVALID yourself.
 
 <!-- progress-log-format:start -->
 ## Progress log format
@@ -178,12 +128,10 @@ The plan doc's progress section is a simple short-entry log (audit trail, not a
 transcript): a brief entry for the panel freeze, every review round (VERDICT roll-up +
 blocker), and every decision — keep them short, not necessarily one line. Only
 `review_round` (RESUME block) is load-bearing for resume; the per-lens blocker gists prime
-fresh re-review members, the agent IDs Task continuation. Keep these plus the final
-residual NON-BLOCKING items.
+re-reviewed lenses. Keep these plus the final residual NON-BLOCKING items.
 
 Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
 - **Panel freeze:** `S7 panel: core=[correctness,requirement-fidelity,doc] +optional=[code-quality] transport=Workflow` (append `->Task` if the fallback fires).
-- **Agent IDs:** `S7 reviewers: correctness=<id> requirement-fidelity=<id> … fixer=<id>` (reviewer IDs on Task only).
 - **Review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; fix dispatched`.
 - **Decision** (council or solo, incl. a resolved FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 <!-- progress-log-format:end -->
@@ -211,7 +159,7 @@ Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
   **Progress log format**).
 - **S3 — spec review. (Skipped in spec-file mode)** Run the S3 review loop (see **Review rounds**) over the
   spec. **Fixes:** the orchestrator edits the spec doc directly
-  (snapshot first; it writes the claimed-fixes list).
+  (it writes the claimed-fixes list).
   **Root-contradiction STOP:** if reviewers find the core requirement asks for two things
   that cannot both be true, STOP and hand off — quote the two conflicting clauses (a
   handoff, never a question; mere vagueness is decided, not stopped), record the handoff in plan file.

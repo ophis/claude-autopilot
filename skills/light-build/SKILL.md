@@ -49,9 +49,8 @@ handoff asking for requirements.
 **On start, resume first.** Look for an existing **state file** with a RESUME block in the
 project's convention location. If found: reconcile worktree/branch/base_ref existence on
 disk, then continue from `phase`. An interrupted S7 review round is **re-run from scratch**
-(re-dispatch the whole frozen panel — bounded — on the phase's transport (Workflow unless
-the fallback fired): Workflow members fresh; Task continuing in-context agent IDs if still
-known, else fresh), only `review_round` need be persisted to locate the loop. **No state
+(re-dispatch the whole frozen panel fresh — bounded — on the phase's transport), only
+`review_round` need be persisted to locate the loop. **No state
 file → start at S1** — a straight-through run may never have materialized one, so an
 interrupted simple run re-runs from scratch (bounded, idempotent; S1 reuses the existing
 worktree).
@@ -101,69 +100,34 @@ into its prompt ("DECISION: <chosen option + one-line rationale>; proceed — do
 this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the obvious default
 (a wrong guess is caught by S7).
 
-## Verdict grammar (paste into ad-hoc review prompts only)
-
-Output **only** the verdict — no preamble, no analysis prose, no essay. Emit exactly
-this block:
-
-```
-VERDICT: PASS            # or exactly: VERDICT: FAIL
-BLOCKING: none           # or one "- " item per line
-NON-BLOCKING: none       # or one "- " item per line
-```
-
-When continued (or given a prior-items checklist), precede it with one line per prior item:
-
-```
-Prior items:
-- <lens>#<n>: RESOLVED | OPEN | INVALID — <evidence>
-```
-
-Every OPEN prior blocker is repeated in BLOCKING, prefixed with its ID
-(`- <lens>#<n>: …`). PASS ⟺ no blocking items; an
-unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.
-Cite evidence (file:line / requirement clause); flag blockers, not preferences.
-
 ## S7 — correctness + requirement-fidelity + doc review (cap 1)
 
 S7 is the **sole correctness gate** on this path — no spec review (S3) and no S5 per-task
 reviews, by design.
 
 - **Panel:** pin `autopilot:correctness-reviewer`, `autopilot:requirement-fidelity-reviewer`
-  AND `autopilot:doc-reviewer` — the whole panel: three cores, no optionals. Freeze it in context (see
-  **Working-note shapes**); reuse it every round.
+  AND `autopilot:doc-reviewer` — the whole panel: three cores, no optionals. Freeze it in
+  context (see **Working-note shapes**); reuse it every round.
 - **Dispatch** each round's members together, never one at a time (the re-review too).
-  Each member's run-input prompt, built once: "PHASE=work. Inputs: worktree=…, base_ref=…, requirement=…,
-  focus=…. Output ONLY the verdict, no extra prose." (absolute paths; reviewers read the
-  worktree, never main). Members: `autopilot:<name>` with ONLY that prompt.
+  Each member's run-input prompt, built once: "PHASE=work. Inputs: worktree=…, base_ref=…,
+  requirement=…, focus=…. Output ONLY the verdict, no extra prose." (absolute paths;
+  reviewers read the worktree, never main). Members: `autopilot:<name>` with ONLY that
+  prompt. A re-reviewed lens's prompt adds its prior items (`<lens>#<n> "<gist>"`, from the
+  in-context notes) + the fix diff `git -C <worktree> diff <pre-fix HEAD>..HEAD` (record the
+  pre-fix HEAD before the fix).
   - **Workflow (default):** per round, one
     `Workflow({name: "autopilot:autopilot-review-round", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`
     → `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` in member
     order; never pass `resumeFromRunId`. Re-dispatch a `synthetic: true` member once via
-    `Task` with its prompt; still no verdict → FAIL. A re-reviewed lens is a fresh member
-    whose prompt adds its prior items (`<lens>#<n> "<gist>"`, from the in-context notes) +
-    the fix diff reference.
-  - **Task (fallback)** — the `Workflow` call itself fails (tool unavailable, name not
-    resolvable, error, or no result) → this and every later round go via `Task` (freeze
-    note `->Task`):
-    - Round 0: one parallel `Task(subagent_type=<member's>, prompt=<member's>)` batch; keep
-      every agent ID in context (the state file stays requirement + RESUME).
-    - Re-review: one `SendMessage` batch continuing each re-reviewed lens's ID with the fix
-      diff reference + the fixer's claimed fixes for its items (`<lens>#<n> "<gist>"` →
-      where addressed | not addressed) + `[other]` = every other change (location only),
-      framed as claims to verify, never "I fixed it"; ask for `Prior items:`, then the
-      verdict.
-    - Continuation fallback: continuation errors, unknown ID (earlier Workflow rounds, compaction, resumed
-      session) or no verdict → fresh `Task` of that lens (its in-context gists as a
-      checklist if still known, else plain fresh review); its new ID replaces the
-      in-context one; still no verdict → FAIL.
-  - **Wait for the whole round** — Workflow returns all verdicts at once; Task dispatches
-    and continuations run in the background (`run_in_background`): wait for every member's
-    hand-back + completion notification, never poll or judge early. Then ONE fix over all
-    open blockers, then ONE re-review round; never fix as single verdicts arrive.
-  - **Item IDs:** before deduping for the fixer, label every BLOCKING / NON-BLOCKING item
-    `<lens>#<n>` (per lens, continuing across the phase, never reused); a repeated OPEN
-    item keeps its ID (reviewers prefix it) — number only new items.
+    `Task` with its prompt; still no verdict → FAIL.
+  - **Task (fallback):** if the `Workflow` call fails, dispatch the same members fresh as
+    one parallel `Task` batch with the same prompts, and stay on Task for the phase (freeze
+    note `->Task`). PASS only with no BLOCKING; no or unparseable verdict → FAIL.
+- **Wait for every verdict** — never poll or judge early — then ONE fix over all open
+  blockers, then the re-review.
+- **Item IDs:** before deduping for the fixer, label every BLOCKING / NON-BLOCKING item
+  `<lens>#<n>` (per lens, continuing across the phase, never reused); a repeated OPEN
+  item keeps its ID (reviewers prefix it) — number only new items.
 - **Loop** (orchestrator-run, cap = 1):
   - **Round 0** = the pinned panel; all-PASS short-circuits → S7→S8.
   - **Fix:** the first fix is ONE fresh producer via plain `Task` (worktree-pinned, like
@@ -173,10 +137,8 @@ reviews, by design.
     for every change it made, incl. non-blockers fixed opportunistically. A fix-time
     genuine fork goes through the **S5 FORK → council** mechanism, not an in-loop council.
     Full blocker text primes the fix transiently; only a concise gist is logged.
-  - **Re-review** (the one round cap = 1 allows): only the FAILed lenses (last verdict
-    FAIL/missing) — all three are cores, so no `touched` recompute; skipped lenses carry
-    their PASS. Diff reference: `git -C <worktree> diff <pre-fix HEAD>..HEAD` (record the
-    pre-fix HEAD before the fix).
+  - **Re-review** (the one round cap = 1 allows) = the lenses that failed last round plus
+    every core lens — i.e. the whole pinned panel.
   - **Advance** when every pinned lens is PASS with no open BLOCKING → S7→S8. Cap hit
     without convergence → **non-convergence STOP** with the 3-way classification
     (oscillation | unfixable | requirements-conflict). Only reviewers' own verdicts decide
@@ -221,11 +183,7 @@ no spec doc, no spec review, no writing-plans.
 - **S6 — verify.** Run the target repo's own checks (those its CLAUDE.md, README or CI name) **inline via `Bash`** (no skill);
   none named → the checks its build/test manifests define (`package.json` `test`, Makefile, pre-commit, …); none at all → say so in the S9 report.
   **Never weaken, skip, or delete a check.** Idempotent — re-running is safe.
-- **S7 — work review.** Run the **S7 review** above (**cap = 1**) over the work: pin
-  `correctness` + `requirement-fidelity` + `doc`, then run the in-session loop — each round
-  dispatched via the `Workflow` transport (Task fallback). The orchestrator owns
-  the loop and derives convergence from the verdicts itself; the fix is one `Task` producer.
-  Cap hit without convergence → STOP with the 3-way classification.
+- **S7 — work review.** Run the **S7 review** above (**cap = 1**) over the work.
 - **S8 — squash.** Idempotent squash to one commit **via `git` (`Bash`)** — **skip
   if already exactly 1 ahead of `base_ref`**. The state file (if one was materialized) is
   committed or ignored per the project's convention — do not force either.
