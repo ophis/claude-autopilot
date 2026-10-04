@@ -234,8 +234,8 @@ own model and read-only tool allowlist. Each round is one call to the
 [plugin workflow](#plugin-workflow-workflowsreview-roundjs); a re-reviewed lens is a fresh
 member primed with its prior items (ID + blocker gist) and, in S7, the fix diff. If the call
 fails, that phase falls back to a parallel `Task(subagent_type="autopilot:<name>")` batch of
-the same members and prompts. S7 re-reviews the lenses that failed plus every core lens; S3
-re-reviews the full panel. The S7 fixer is a `Task`, continued via `SendMessage`.
+the same members and prompts. S7 re-reviews the lenses that failed plus every core lens
+(light-build: only the failed ones); S3 re-reviews the full panel. The S7 fixer is a `Task`, continued via `SendMessage`.
 Rounds are batched, and convergence comes only from the reviewers' own verdicts.
 Nothing to configure.
 Doc upkeep is folded into S7: the core `doc-reviewer` flags stale/missing docs **repo-wide**

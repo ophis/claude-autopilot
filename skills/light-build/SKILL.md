@@ -133,12 +133,11 @@ reviews, so S7 carries it alone (deliberate, not an oversight).
   - **Fix:** the first fix dispatches ONE fresh producer subagent via plain `Task`
     (worktree-pinned — like the S5 producer) primed with the deduped open blockers (with item
     IDs) + cited files only; keep its agent ID in context; later fixes continue it via
-    `SendMessage` (unknown ID / error → fresh producer, whose ID replaces the in-context one). It returns the claimed-fixes mapping
-    for every change it made, incl. non-blockers fixed opportunistically. A fix-time genuine fork
+    `SendMessage` (unknown ID / error → fresh producer, whose ID replaces the in-context one). A fix-time genuine fork
     uses the existing **S5 FORK → council** mechanism (orchestrator council), not an in-loop
     council. Full blocker text primes the fix transiently; logged only as a concise gist.
-  - **Re-review** (the one round cap = 1 allows) = the lenses that failed last round plus
-    every core lens — i.e. the whole pinned panel.
+  - **Re-review** (the one round cap = 1 allows) = only the lenses that failed last round;
+    the rest carry their PASS.
   - **Advance** when every pinned lens is PASS with no open BLOCKING → S7→S8. Cap hit
     without convergence → **non-convergence STOP** with the 3-way
     classification (oscillation | unfixable | requirements-conflict).
