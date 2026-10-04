@@ -158,8 +158,7 @@ Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
   decision points, see **Deciding at decision points**; record the decision (see
   **Progress log format**).
 - **S3 — spec review. (Skipped in spec-file mode)** Run the S3 review loop (see **Review rounds**) over the
-  spec. **Fixes:** the orchestrator edits the spec doc directly
-  (it writes the claimed-fixes list).
+  spec. **Fixes:** the orchestrator edits the spec doc directly.
   **Root-contradiction STOP:** if reviewers find the core requirement asks for two things
   that cannot both be true, STOP and hand off — quote the two conflicting clauses (a
   handoff, never a question; mere vagueness is decided, not stopped), record the handoff in plan file.
@@ -183,8 +182,7 @@ Shapes (keep each short; `S3` rounds use the same shapes as `S7`):
 - **S7 — work review.** Run the S7 review loop (see **Review rounds**) over the work.
   **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the deduped
   open blockers (with item IDs) + cited files only; later fixes continue it via `SendMessage`
-  (unknown ID / error → fresh producer, whose ID replaces the recorded one). It returns the claimed-fixes mapping for every change
-  it made, incl. non-blockers fixed opportunistically (worktree-pinned — see Operating disciplines). Docs are part of S7.
+  (unknown ID / error → fresh producer, whose ID replaces the recorded one); worktree-pinned — see Operating disciplines. Docs are part of S7.
 - **S8 — squash.** Idempotent squash to one commit (skip if already exactly 1
   ahead of `base_ref`). Working notes (spec/plan/progress) are committed or ignored per the
   project's convention — do not force either.

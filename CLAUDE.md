@@ -74,7 +74,7 @@ system means reading those two skill files plus `agents/` and `scripts/` togethe
   **Both surfaces** run the convergence loop natively in the orchestrator (round 0 + fix →
   re-review until all-PASS or the per-phase cap). The orchestrator owns the loop, the fix
   (a fixer continued across rounds), and the re-review set: S3 the full panel; S7 the
-  lenses that failed plus every core lens.
+  lenses that failed plus every core lens (light-build: only the failed ones).
 
 - **Selection stage (`scripts/select-panel.py`).** Deterministic, stdlib-only router:
   `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every
