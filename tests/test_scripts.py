@@ -580,6 +580,16 @@ class SkillWorktreePinTests(unittest.TestCase):
             self.assertIn("never** main/master", text, skill)
             self.assertIn("branch --show-current", text, skill)
 
+    def test_s1_reuses_prior_run_worktree_before_creating(self):
+        for skill in ("build", "light-build"):
+            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
+                text = fh.read()
+            s1 = text[text.index("- **S1 — worktree.**"):text.index("- **S", text.index("- **S1 — worktree.**") + 1)]
+            reuse = s1.index("branch (below) exists from a prior run, reuse it with its commits")
+            self.assertLess(reuse, s1.index("Else create worktree"), skill)
+            self.assertIn("git worktree add <path> <branch>", s1, skill)
+            self.assertIn("collision with another requirement's", s1, skill)
+
 
 class ReviewRoundScriptTests(unittest.TestCase):
     """Static contract + syntax gate for workflows/review-round.js.
