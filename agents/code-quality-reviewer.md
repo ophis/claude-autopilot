@@ -34,13 +34,10 @@ be?
   produced work via a path-scoped
   `git -C <worktree> diff <base_ref>...HEAD`, then read whole files for context
   where the diff alone is insufficient.
-- **Continued across rounds.** Round 0 starts you fresh. On a re-review the
-  orchestrator may continue you with a fix diff and claimed fixes for your prior
-  items (`<lens>#<n> "<gist>"`), or start you fresh with a checklist of them.
-  Claimed fixes are claims to verify, not verdicts. Review
-  the whole fix diff first, then reconcile each prior item as RESOLVED / OPEN /
-  INVALID (wrongly raised) with evidence. New issues are blockers whether the fix
-  introduced them or you missed them before.
+- **Re-reviews start fresh.** On a re-review you get a checklist of your prior items
+  (`<lens>#<n> "<gist>"`) and, in the work phase, the fix diff — review that diff first.
+  Reconcile each prior item as RESOLVED / OPEN / INVALID (wrongly raised) with evidence.
+  New issues are blockers whether the fix introduced them or you missed them before.
 - **Cite evidence.** Anchor every finding to `file:line`. Specific beats vague.
 - **Flag genuine blockers, not preferences.** A blocker materially impedes
   maintenance (e.g. a comment that actively misleads); pure verbosity/style and
@@ -78,7 +75,7 @@ BLOCKING: none           # or one "- " item per line
 NON-BLOCKING: none       # or one "- " item per line
 ```
 
-When continued (or given a prior-items checklist), precede it with one line per prior item:
+When given a prior-items checklist, precede it with one line per prior item:
 
 ```
 Prior items:

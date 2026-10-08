@@ -69,15 +69,12 @@ system means reading those two skill files plus `agents/` and `scripts/` togethe
   is an authoring-time template (selector-inert: no `phase`) inlined into each reviewer.
   Reviewers run as `autopilot:<name>`, each at its own `model` + read-only `tools`
   allowlist. **Each round** is one call to the plugin workflow (below) — a re-reviewed lens
-  is a fresh member primed with its prior items + the fix diff. If that call fails, the
-  phase falls back to native `Task` dispatch: re-reviews **continue** the same reviewers
-  via `SendMessage` with the fix diff + the fixer's claimed fixes; a lost agent ID → a fresh
-  `Task` primed with that lens's persisted blocker gists. **Ad-hoc lenses** (a gap no
-  roster agent covers) run as `general-purpose`, read-only by prompt (not by a tool
-  allowlist). **Both surfaces** run the convergence loop natively in the
-  orchestrator (round 0 + fix → re-review until all-PASS or the per-phase cap). The
-  orchestrator owns the loop, the fix, and (S7) the `(FAILed ∪ touched)` re-review subset —
-  preserving ground-truth `touched` (via `select-panel.py`) and a fixer continued across rounds.
+  is a fresh member primed with its prior items (+ the fix diff in S7). If that call fails,
+  the phase falls back to a parallel native `Task` batch of the same members and prompts.
+  **Both surfaces** run the convergence loop natively in the orchestrator (round 0 + fix →
+  re-review until all-PASS or the per-phase cap). The orchestrator owns the loop, the fix
+  (a fixer continued across rounds), and the re-review set: S3 the full panel; S7 the
+  lenses that failed plus every core lens (light-build: only the failed ones).
 
 - **Selection stage (`scripts/select-panel.py`).** Deterministic, stdlib-only router:
   `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every
@@ -104,8 +101,8 @@ system means reading those two skill files plus `agents/` and `scripts/` togethe
   a progress section + a `RESUME:` block). The RESUME block
   (`phase=… worktree=… branch=… base_ref=… review_round=…`) lets a run survive
   compaction and resume from the current phase; an interrupted review round re-runs whole.
-  The progress section records the review transport, reviewer (Task) / fixer agent IDs, and
-  per-lens blocker gists for fresh re-review members and Task continuation.
+  The progress section records the review transport and per-lens blocker gists that
+  prime re-reviewed lenses.
 
 - **Built on `superpowers`.** `build` orchestrates superpowers
   skills (brainstorming, subagent-driven-development,
@@ -128,6 +125,9 @@ system means reading those two skill files plus `agents/` and `scripts/` togethe
   same run that creates it (dispatch it ad-hoc via `general-purpose` until shipped).
   The same applies to the `skills/build` + `skills/light-build` skills: edits to a
   `SKILL.md` (and `/autopilot:build` / `/autopilot:light-build` by-name invocability) go live only after `/reload-plugins`.
+- **Give a subagent the worktree-absolute path for `CLAUDE.md` edits.** Told to edit
+  `CLAUDE.md` in a worktree, one edited the repo-root copy loaded in its context;
+  `git -C <worktree> add -A` doesn't see it, so the edit strands on `main`.
 - **`dev-docs/` is gitignored** (per-build audit trail
   `dev-docs/<date>-<slug>-{spec,plan}.md`).
 - **Releases use explicit semver kept in sync across THREE places**: `version` in
