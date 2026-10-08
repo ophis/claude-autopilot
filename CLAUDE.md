@@ -30,6 +30,9 @@ claude --plugin-dir .
 /reload-plugins
 ```
 
+Verify a change with `claude plugin validate .` + `python3 tests/test_scripts.py` + the
+manual smoke in README "Smoke test (the build eval)".
+
 There is no build step. `tests/test_scripts.py` exercises `scripts/select-panel.py`
 and `scripts/autopilot-config.py` as CLIs via subprocess (they have hyphenated names,
 so they're not importable — the CLI is the contract).

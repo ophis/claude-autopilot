@@ -218,7 +218,7 @@ no spec doc, no spec review, no writing-plans.
   multi-step work, **materialize the state file** with a terse 1-line-per-task list. A
   producer may commit its work; the S8 squash folds its commits. The orchestrator never edits
   the work product itself.
-- **S6 — verify.** Run the discovered checks **inline via `Bash`** (no skill; for THIS plugin = `claude plugin validate` + `python3 tests/test_scripts.py` + the documented manual smoke).
+- **S6 — verify.** Run the target repo's own checks (those its CLAUDE.md, README or CI name) **inline via `Bash`** (no skill).
   **Never weaken, skip, or delete a check.** Idempotent — re-running is safe.
 - **S7 — work review.** Run the **S7 review** above (**cap = 1**) over the work: pin
   `correctness` + `requirement-fidelity` + `doc`, then run the in-session loop — each round
