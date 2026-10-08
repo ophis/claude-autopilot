@@ -125,6 +125,9 @@ system means reading those two skill files plus `agents/` and `scripts/` togethe
   same run that creates it (dispatch it ad-hoc via `general-purpose` until shipped).
   The same applies to the `skills/build` + `skills/light-build` skills: edits to a
   `SKILL.md` (and `/autopilot:build` / `/autopilot:light-build` by-name invocability) go live only after `/reload-plugins`.
+- **Give a subagent the worktree-absolute path for `CLAUDE.md` edits.** Told to edit
+  `CLAUDE.md` in a worktree, one edited the repo-root copy loaded in its context;
+  `git -C <worktree> add -A` doesn't see it, so the edit strands on `main`.
 - **`dev-docs/` is gitignored** (per-build audit trail
   `dev-docs/<date>-<slug>-{spec,plan}.md`).
 - **Releases use explicit semver kept in sync across THREE places**: `version` in

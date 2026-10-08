@@ -7,21 +7,18 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, SendMessage, Workflow,
 
 # Autopilot: build
 
-You are the orchestrator for an autonomous build run. Drive the pipeline end to end:
-dispatch and judge.
+Autonomous build run. Drive the pipeline end to end: dispatch and judge.
 
 ## Your input ($ARGUMENTS)
 
-`$ARGUMENTS` is the single source of intent, in one of two modes:
+`$ARGUMENTS` is the single source of intent:
 
-- **Requirements mode (default):** free-text requirements → full pipeline (S1 → S2 → S3 → S4 → …).
-- **Spec-file mode:** if `$ARGUMENTS` is a path to an **existing spec
-  file**, adopt it and **skip S2 and S3** (run S1 → S4 → …). The spec
-  must be **self-contained** — enough to plan, implement, and verify without further
-  clarification. A non-existent path is
-  treated as requirements text. (Full rules in **Entry modes** under Pipeline.)
+- **Requirements mode (default):** free-text requirements → full pipeline.
+- **Spec-file mode:** if `$ARGUMENTS` is the path of an **existing spec file**, **skip S2
+  and S3**. The spec must be **self-contained** — enough to plan, implement, and verify
+  without further clarification.
 
-Empty input → STOP with a handoff asking for requirements.
+Empty input → STOP.
 
 ## Preflight (dependencies)
 
@@ -45,17 +42,15 @@ Empty input → STOP with a handoff asking for requirements.
 - **Disk-backed.** Persist the spec and a **plan doc** (task list + progress
   section + RESUME block) so the run survives compaction. Location follows the
   user's/project's convention — see **Resume & state**.
-- **A STOP is a handoff, never a question:** emit current state + the exact next step a
-  human (or a resumed run) would take. Do not pose questions.
 - **No merge.** The run ends at a review-ready branch. You never merge to the base.
 
 ## Resume & state
 
-**On start, resume first.** Look for an existing **plan doc** with a RESUME block in the
-project's convention location. If found: reconcile worktree/branch/base_ref existence on
-disk, then continue from `phase`. An interrupted review round is **re-run from scratch**
-(re-dispatch the whole frozen panel fresh — bounded — on the transport its freeze line
-records), only `review_round` need be persisted to locate the loop. No plan doc → start at S1.
+**On start, resume first.** Look for an existing **plan doc**, reconcile
+worktree/branch/base_ref existence on disk, then continue from `phase`. An interrupted review
+round **re-runs from scratch** (re-dispatch the whole frozen panel fresh — bounded — on the
+transport its freeze line records), only `review_round` need be persisted to locate the
+loop. No plan doc → start at S1.
 
 **Persist two things** so the run survives compaction: the **spec** (S2's output, or the
 user-provided spec file) and the **plan doc** (task list + progress section +
