@@ -120,7 +120,7 @@ re-reviewed lenses.
 - **Panel freeze:** `S7 panel: core=[correctness,requirement-fidelity,doc] +optional=[code-quality] transport=Workflow` (append `->Task` if the fallback fires).
 - **Task done:** `S5 task 3 done: <commit sha>`.
 - **Review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; fix dispatched`.
-- **Decision** (council or solo, incl. a resolved FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
+- **Decision** (council or solo): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 <!-- progress-log-format:end -->
 
 ## Pipeline (S1–S9)
@@ -152,9 +152,10 @@ re-reviewed lenses.
   - The task list is the plan doc's last section; the progress section, RESUME block and
     any verification notes go above it (a brief runs to the next Task heading).
 - **S5 — produce.** Code → per S4 task, in order from the first not `done`, dispatch one
-  fresh producer subagent on its `### Task N` brief: tests first, then the code; run only
-  the checks its change affects; commit with the brief's message; log the task `done`.
-  Non-code → producer subagents. The orchestrator never edits the work product itself.
+  fresh producer subagent on the task list header and its `### Task N` brief: tests first,
+  then the code; run only the checks its change affects; commit with the brief's message;
+  log the task `done`. Non-code → producer subagents. The orchestrator never edits the
+  work product itself.
 - **S6 — verify.** Run the target repo's own checks (those its CLAUDE.md, README or CI
   name) **inline via `Bash`**; none named → the checks its build/test manifests define
   (`package.json` `test`, Makefile, pre-commit, …); none at all → say so in the S9 report.

@@ -593,8 +593,8 @@ class SkillWorktreePinTests(unittest.TestCase):
     def test_build_s5_fresh_producer_per_task_without_review(self):
         with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
-        s5 = text[text.index("- **S5 — produce.**"):text.index("- **S6 — verify.**")]
-        self.assertIn("one\n  fresh producer subagent on its `### Task N` brief", s5)
+        s5 = " ".join(text[text.index("- **S5 — produce.**"):text.index("- **S6 — verify.**")].split())
+        self.assertIn("one fresh producer subagent on the task list header and its `### Task N` brief", s5)
         self.assertIn("checks its change affects", s5)
         self.assertIn("log the task `done`", s5)
         self.assertNotIn("review", s5)
@@ -607,12 +607,12 @@ class SkillWorktreePinTests(unittest.TestCase):
         for skill in ("build", "light-build"):
             with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
                 text = fh.read()
-            s6[skill] = text[text.index("- **S6 — verify.**"):text.index("- **S7 — work review.**")]
+            s6[skill] = " ".join(text[text.index("- **S6 — verify.**"):text.index("- **S7 — work review.**")].split())
             if skill == "build":
                 self.assertNotIn("skills/light-build", text)
         self.assertEqual(s6["build"], s6["light-build"])
         self.assertIn("inline via `Bash`", s6["build"])
-        self.assertIn("Claim a\n  result only from this run's output", s6["build"])
+        self.assertIn("Claim a result only from this run's output", s6["build"])
         for doc in ("skills/build/SKILL.md", "README.md", "CLAUDE.md"):
             with open(os.path.join(REPO, doc), encoding="utf-8") as fh:
                 self.assertNotIn("verification-before-completion", fh.read(), doc)
