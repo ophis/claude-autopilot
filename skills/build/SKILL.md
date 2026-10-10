@@ -143,17 +143,18 @@ re-reviewed lenses.
   contradiction → Safety stop 4.
 - **S4 — task list.** Write the task list yourself (invoke no planning skill): a code-free
   task list into the plan doc's implementation-plan section:
-  - Header: spec path; Global Constraints (exact values, the verify command).
+  - Header: spec path; Global Constraints (exact values, S6's verify command).
   - Per task, a `### Task N: <name>` heading (its S5 producer reads its brief by it) with:
     Files; Consumes/Produces (exact names/signatures crossing tasks); tests to write
-    first, incl. edge cases; commit message.
+    first, incl. edge cases; the checks it runs (only those its change affects, never a
+    full suite: S6 runs those once); commit message.
   - The task list is the plan doc's last section; the progress section, RESUME block and
     any verification notes go above it (a brief runs to the next Task heading).
 - **S5 — produce.** Code → per S4 task, in order from the first not `done`, dispatch one
   fresh producer subagent on the task list header and its `### Task N` brief: tests first,
-  then the code; run only the checks its change affects; commit with the brief's message;
-  log the task `done`. Non-code → producer subagents. The orchestrator never edits the
-  work product itself.
+  then the code; run only the checks its brief names (never the verify command); commit
+  with the brief's message; log the task `done`. Non-code → producer subagents. The
+  orchestrator never edits the work product itself.
 - **S6 — verify.** Run the target repo's own checks (those its CLAUDE.md, README or CI
   name) **inline via `Bash`**; none named → the checks its build/test manifests define
   (`package.json` `test`, Makefile, pre-commit, …); none at all → say so in the S9 report.

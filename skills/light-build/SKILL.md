@@ -146,15 +146,17 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
   task list into the state file — S4 always materializes the state file. The task list is
   the state file's last section; the RESUME block goes above it (a brief runs to the next
   `### Task N` heading):
-  - Header: Global Constraints (exact values, the verify command).
+  - Header: Global Constraints (exact values, S6's verify command).
   - Per task, a `### Task N: <name>` heading (its S5 producer reads its brief by it) with:
     Files; Consumes/Produces (exact names/signatures crossing tasks); tests to write
-    first, incl. edge cases; commit message.
+    first, incl. edge cases; the checks it runs (only those its change affects, never a
+    full suite: S6 runs those once); commit message.
   - A small change is one task.
 - **S5 — produce.** Per S4 task, in order from the first not `done`, dispatch one
   fresh producer subagent via plain `Task` on the requirement, the task list header and
-  its `### Task N` brief: tests first, then the code; run only the checks its change
-  affects; commit with the brief's message; log the task `done` in the state file.
+  its `### Task N` brief: tests first, then the code; run only the checks its brief
+  names (never the verify command); commit with the brief's message; log the task `done`
+  in the state file.
   `FORK:` → the **S5 FORK mechanism**. A producer may commit its work; the S8 squash
   folds its commits. The orchestrator never edits the work product itself.
 - **S6 — verify.** Run the target repo's own checks (those its CLAUDE.md, README or CI
