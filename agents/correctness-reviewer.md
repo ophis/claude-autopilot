@@ -40,7 +40,6 @@ the code is internally correct, not whether it matches the requirement or spec
 - **Cite evidence.** Anchor every finding to `file:line`. Specific beats vague.
 - **Flag genuine blockers, not preferences.** A blocker produces wrong or unsafe
   behavior; preferences go in NON-BLOCKING.
-- **Load no superpowers skills.**
 
 ## Correctness checklist
 

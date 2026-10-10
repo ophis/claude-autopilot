@@ -20,12 +20,9 @@ Autonomous build run. Drive the pipeline end to end: dispatch and judge.
 
 Empty input → STOP.
 
-## Preflight (dependencies)
+## Preflight
 
 - **Load config:** `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`.
-- Before S1, confirm **superpowers** plugin is available. If **not** available, STOP with a
-  handoff: superpowers required, install via `/plugin install superpowers@claude-plugins-official`,
-  then re-run `/autopilot:build`.
 
 ## Operating disciplines
 
@@ -37,8 +34,7 @@ Empty input → STOP.
 - **Worktree-pinned dispatch.** Give every subagent absolute worktree path + branch and
   have it act only there — absolute paths / `git -C <worktree>`, never inherited cwd — and
   **before any write assert** `git -C <worktree> branch --show-current` is the run branch;
-  **never** main/master. Producers dispatched via subagent-driven-development
-  inherit this through their task context.
+  **never** main/master.
 - **No merge.** The run ends at a review-ready branch.
 
 ## Resume & state
@@ -114,13 +110,14 @@ CLAUDE.md and existing repo patterns.
 ## Progress log format
 
 The plan doc's progress section is a short-entry audit log, not a transcript: one entry per
-panel freeze, review round and decision, in the shapes below (`S3` rounds use the `S7`
-shapes), plus the final residual NON-BLOCKING items. The per-lens blocker gists prime
+panel freeze, S5 task done, review round and decision, in the shapes below (`S3` rounds use
+the `S7` shapes), plus the final residual NON-BLOCKING items. The per-lens blocker gists prime
 re-reviewed lenses.
 
 - **Panel freeze:** `S7 panel: core=[correctness,requirement-fidelity,doc] +optional=[code-quality] transport=Workflow` (append `->Task` if the fallback fires).
+- **Task done:** `S5 task 3 done: <commit sha>`.
 - **Review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; fix dispatched`.
-- **Decision** (council or solo, incl. a resolved FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
+- **Decision** (council or solo): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 <!-- progress-log-format:end -->
 
 ## Pipeline (S1–S9)
@@ -138,26 +135,30 @@ re-reviewed lenses.
     - `git worktree add <path> -b <prefix>-<slug> HEAD`
     - `EnterWorktree({path: <path>})`
   - Create the **plan doc** (with RESUME + progress section) at location per the project's convention. Record `worktree`, `branch`, and `base_ref` (HEAD) in the RESUME block.
-- **S2 — brainstorm. (Skipped in spec-file mode)** Use `superpowers:brainstorming` on
-  `$ARGUMENTS` → write the spec into the spec doc.
+- **S2 — spec. (Skipped in spec-file mode)** Write the spec into the spec doc per
+  `${CLAUDE_SKILL_DIR}/spec.md`; read the affected code first. A genuine fork → the expert
+  council (**Deciding at decision points**); never ask the user.
 - **S3 — spec review. (Skipped in spec-file mode)** Run the S3 review loop (see **Review
   rounds**) over the spec. **Fixes:** the orchestrator edits the spec doc directly. Root
   contradiction → Safety stop 4.
-- **S4 — task list.** Do NOT invoke `superpowers:writing-plans`. Write a code-free task
-  list into the plan doc's implementation-plan section:
+- **S4 — task list.** Write the task list yourself (invoke no planning skill): a code-free
+  task list into the plan doc's implementation-plan section:
   - Header: spec path; Global Constraints (exact values, the verify command).
-  - Per task, a `### Task N: <name>` heading (SDD's `task-brief` extracts by it) with:
+  - Per task, a `### Task N: <name>` heading (its S5 producer reads its brief by it) with:
     Files; Consumes/Produces (exact names/signatures crossing tasks); tests to write
     first, incl. edge cases; commit message.
   - The task list is the plan doc's last section; the progress section, RESUME block and
-    any verification notes go above it (`task-brief` reads to the next Task heading).
-- **S5 — produce.** Produce the work product. Code →
-  `superpowers:subagent-driven-development`: keep its per-task reviews (early-catch), SKIP
-  its final whole-implementation review — S7 is the authoritative whole-diff gate. Non-code
-  → producer subagents via the same dispatch pattern. The orchestrator never edits the work
-  product itself.
-- **S6 — verify.** Use `superpowers:verification-before-completion`: run the discovered
-  checks. Never weaken, skip, or delete a check.
+    any verification notes go above it (a brief runs to the next Task heading).
+- **S5 — produce.** Code → per S4 task, in order from the first not `done`, dispatch one
+  fresh producer subagent on the task list header and its `### Task N` brief: tests first,
+  then the code; run only the checks its change affects; commit with the brief's message;
+  log the task `done`. Non-code → producer subagents. The orchestrator never edits the
+  work product itself.
+- **S6 — verify.** Run the target repo's own checks (those its CLAUDE.md, README or CI
+  name) **inline via `Bash`**; none named → the checks its build/test manifests define
+  (`package.json` `test`, Makefile, pre-commit, …); none at all → say so in the S9 report.
+  **Never weaken, skip, or delete a check.** Idempotent — re-running is safe. Claim a
+  result only from this run's output (exit code, failure count).
 - **S7 — work review.** Run the S7 review loop (see **Review rounds**) over the work.
   **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the deduped
   open blockers (with item IDs) + cited files only; later fixes continue it via `SendMessage`

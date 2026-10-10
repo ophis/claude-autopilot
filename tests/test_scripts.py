@@ -304,7 +304,6 @@ GOOD_BODY = """\
 - **Read-only.** Tools allowlist is Read, Grep, Glob, Bash.
 - **Inputs by reference.** The orchestrator passes you the worktree path.
 - **Cite evidence.** Anchor every finding to file:line.
-- **Load no superpowers skills.**
 
 ## Verdict grammar (strict)
 
@@ -342,8 +341,7 @@ description: >-
 
 # Reviewer contract (authoring template)
 
-Body with Read-only, Inputs by reference, Cite evidence, and
-Load no superpowers skills — but no selector metadata.
+Body with Read-only, Inputs by reference, and Cite evidence — but no selector metadata.
 """
 
 
@@ -445,7 +443,6 @@ class LintRosterTests(unittest.TestCase):
 ## Contract
 
 - **Read-only.** Inputs by reference. Cite evidence.
-- **Load no superpowers skills.**
 """
         self._reviewer("r1", body=body)
         proc = run_lint(self.agents)
@@ -459,7 +456,6 @@ class LintRosterTests(unittest.TestCase):
 ## Contract
 
 - **Read-only.** Inputs by reference. Cite evidence.
-- **Load no superpowers skills.**
 
 ## Verdict grammar
 
@@ -476,13 +472,13 @@ Some trailing section that wrongly follows the verdict block.
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("last", proc.stdout.lower())
 
-    def test_missing_load_no_superpowers_marker(self):
+    def test_missing_contract_marker(self):
         body = """\
 # r1
 
 ## Contract
 
-- **Read-only.** Inputs by reference. Cite evidence.
+- **Read-only.** Inputs by reference.
 
 ## Verdict grammar
 
@@ -493,7 +489,7 @@ NON-BLOCKING: none
         self._reviewer("r1", body=body)
         proc = run_lint(self.agents)
         self.assertNotEqual(proc.returncode, 0)
-        self.assertIn("Load no superpowers skills", proc.stdout)
+        self.assertIn("Cite evidence", proc.stdout)
 
     def test_name_mismatch(self):
         # name in frontmatter is "r1" but the file is "other.md".
@@ -539,8 +535,7 @@ phase: work
 tier: core
 ---
 
-Body with Read-only, Inputs by reference, Cite evidence,
-Load no superpowers skills.
+Body with Read-only, Inputs by reference, Cite evidence.
 """
         # Declares phase => classified as a reviewer, fails on missing keys.
         self._template(text=text)
@@ -590,6 +585,58 @@ class SkillWorktreePinTests(unittest.TestCase):
             self.assertIn("git worktree add <path> <branch>", s1, skill)
             self.assertIn("collision with another requirement's", s1, skill)
 
+    def test_build_s5_fresh_producer_per_task_without_review(self):
+        with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        s5 = " ".join(text[text.index("- **S5 — produce.**"):text.index("- **S6 — verify.**")].split())
+        self.assertIn("one fresh producer subagent on the task list header and its `### Task N` brief", s5)
+        self.assertIn("checks its change affects", s5)
+        self.assertIn("log the task `done`", s5)
+        self.assertNotIn("review", s5)
+        for doc in ("skills/build/SKILL.md", "README.md", "CLAUDE.md"):
+            with open(os.path.join(REPO, doc), encoding="utf-8") as fh:
+                self.assertNotIn("subagent-driven", fh.read(), doc)
+
+    def test_build_has_no_dependency_preflight_and_plans_itself(self):
+        with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        preflight = text[text.index("## Preflight"):text.index("## Operating disciplines")]
+        self.assertEqual(preflight.count("\n- "), 1)
+        self.assertIn("autopilot-config.py", preflight)
+        self.assertIn("invoke no planning skill", " ".join(text.split()))
+
+    def test_build_s2_follows_its_spec_guide(self):
+        with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        s2 = text[text.index("- **S2 — spec."):text.index("- **S3 — spec review.")]
+        self.assertIn("`${CLAUDE_SKILL_DIR}/spec.md`", s2)
+        tracked = subprocess.run(["git", "-C", REPO, "ls-files", "skills/build/spec.md"],
+                                 capture_output=True, text=True, check=True).stdout.split()
+        self.assertEqual(tracked, ["skills/build/spec.md"])
+
+    def test_plugin_never_mentions_superpowers(self):
+        files = subprocess.run(["git", "-C", REPO, "ls-files"], capture_output=True,
+                               text=True, check=True).stdout.split()
+        for f in files:
+            if f.startswith("tests/"):
+                continue
+            with open(os.path.join(REPO, f), encoding="utf-8", errors="ignore") as fh:
+                self.assertNotIn("superpowers", fh.read().lower(), f)
+
+    def test_build_s6_matches_light_build_s6_inline_checks(self):
+        s6 = {}
+        for skill in ("build", "light-build"):
+            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
+                text = fh.read()
+            s6[skill] = " ".join(text[text.index("- **S6 — verify.**"):text.index("- **S7 — work review.**")].split())
+            if skill == "build":
+                self.assertNotIn("skills/light-build", text)
+        self.assertEqual(s6["build"], s6["light-build"])
+        self.assertIn("inline via `Bash`", s6["build"])
+        self.assertIn("Claim a result only from this run's output", s6["build"])
+        for doc in ("skills/build/SKILL.md", "README.md", "CLAUDE.md"):
+            with open(os.path.join(REPO, doc), encoding="utf-8") as fh:
+                self.assertNotIn("verification-before-completion", fh.read(), doc)
 
 class ReviewRoundScriptTests(unittest.TestCase):
     """Static contract + syntax gate for workflows/review-round.js.

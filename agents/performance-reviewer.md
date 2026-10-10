@@ -41,7 +41,6 @@ scale? You flag **likely-significant** issues — not micro-optimizations.
 - **Flag genuine blockers, not preferences.** A blocker is a performance defect
   likely to bite at realistic scale; micro-optimizations and speculative tuning
   go in NON-BLOCKING.
-- **Load no superpowers skills.**
 
 ## Performance checklist
 

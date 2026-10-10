@@ -37,7 +37,6 @@ and completely satisfy the requirement, and is it verifiable?
   handle the empty list"). Specific beats vague.
 - **Flag genuine blockers, not preferences.** A blocker makes the spec fail the
   requirement; preferences go in NON-BLOCKING.
-- **Load no superpowers skills.**
 
 ## Spec-fitness checklist
 

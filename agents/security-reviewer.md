@@ -45,7 +45,6 @@ phase** you review whether the produced work *upholds* them.
 - **Flag genuine blockers, not preferences.** A blocker is an exploitable or
   policy-violating defect (or an unspecified security-relevant requirement);
   taste-level preferences go in NON-BLOCKING.
-- **Load no superpowers skills.**
 
 ## Security checklist
 

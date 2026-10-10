@@ -44,7 +44,6 @@ structure actually produced in the diff.
 - **Flag genuine blockers, not preferences.** A blocker is a structural decision
   that will bite (boundary that doesn't hold, coupling that blocks change);
   taste-level preferences go in NON-BLOCKING.
-- **Load no superpowers skills.**
 
 ## Architecture checklist
 
