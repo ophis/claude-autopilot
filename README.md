@@ -105,7 +105,7 @@ and it drives, end to end and without asking you questions:
 - **S3 — Spec review:** Ralph loop over the spec until the panel passes.
 - **S4 — Task list:** a code-free task list (files, cross-task interfaces, tests first, commit message) + the verify command.
 - **S5 — Produce:** one fresh producer per task, in order; each runs only the checks its change affects; no per-task review (S7 is the gate).
-- **S6 — Verify:** run the target repo's own checks inline (light-build's S6).
+- **S6 — Verify:** run the target repo's own checks inline.
 - **S7 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency.
 - **S8 — Squash:** idempotent squash to one clean commit.
 - **S9 — Finish:** report + integration menu. **Never merges.**

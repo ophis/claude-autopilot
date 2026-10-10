@@ -155,8 +155,11 @@ re-reviewed lenses.
   fresh producer subagent on its `### Task N` brief: tests first, then the code; run only
   the checks its change affects; commit with the brief's message; log the task `done`.
   Non-code → producer subagents. The orchestrator never edits the work product itself.
-- **S6 — verify.** Run "S6 — verify" in `${CLAUDE_PLUGIN_ROOT}/skills/light-build/SKILL.md`
-  (shared by both skills).
+- **S6 — verify.** Run the target repo's own checks (those its CLAUDE.md, README or CI
+  name) **inline via `Bash`**; none named → the checks its build/test manifests define
+  (`package.json` `test`, Makefile, pre-commit, …); none at all → say so in the S9 report.
+  **Never weaken, skip, or delete a check.** Idempotent — re-running is safe. Claim a
+  result only from this run's output (exit code, failure count).
 - **S7 — work review.** Run the S7 review loop (see **Review rounds**) over the work.
   **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the deduped
   open blockers (with item IDs) + cited files only; later fixes continue it via `SendMessage`
