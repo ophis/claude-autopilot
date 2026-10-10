@@ -594,12 +594,10 @@ class SkillWorktreePinTests(unittest.TestCase):
         with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
         s5 = text[text.index("- **S5 — produce.**"):text.index("- **S6 — verify.**")]
-        self.assertIn("ONE fresh producer subagent", s5)
-        self.assertIn("No per-task", s5)
+        self.assertIn("one\n  fresh producer subagent on its `### Task N` brief", s5)
         self.assertIn("checks its change affects", s5)
-        self.assertIn("skills/light-build/SKILL.md", s5)
-        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
-            self.assertIn("## The S5 FORK mechanism", fh.read())
+        self.assertIn("log the task `done`", s5)
+        self.assertNotIn("review", s5)
         for doc in ("skills/build/SKILL.md", "README.md", "CLAUDE.md"):
             with open(os.path.join(REPO, doc), encoding="utf-8") as fh:
                 self.assertNotIn("subagent-driven", fh.read(), doc)

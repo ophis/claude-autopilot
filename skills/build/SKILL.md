@@ -151,16 +151,10 @@ re-reviewed lenses.
     first, incl. edge cases; commit message.
   - The task list is the plan doc's last section; the progress section, RESUME block and
     any verification notes go above it (a brief runs to the next Task heading).
-- **S5 — produce.** Produce the work product. Code → per S4 task, in order from the first
-  with no `done` entry (see **Progress log format**), dispatch ONE fresh producer subagent
-  via `Task`, primed by reference with the plan doc path + its `### Task N` heading (it reads
-  that section) and the spec doc. It writes the brief's tests first, implements, runs only
-  the checks its change affects (e.g. the test modules for the files it touched; the full
-  discovered checks run once, in S6), and commits with the brief's message. No per-task
-  review: the S7 full panel is the gate. A genuine fork → `FORK:`, handled per "The S5 FORK
-  mechanism" in `${CLAUDE_PLUGIN_ROOT}/skills/light-build/SKILL.md`. Log the task done
-  before dispatching the next. Non-code → producer subagents via the same dispatch pattern.
-  The orchestrator never edits the work product itself.
+- **S5 — produce.** Code → per S4 task, in order from the first not `done`, dispatch one
+  fresh producer subagent on its `### Task N` brief: tests first, then the code; run only
+  the checks its change affects; commit with the brief's message; log the task `done`.
+  Non-code → producer subagents. The orchestrator never edits the work product itself.
 - **S6 — verify.** Run "S6 — verify" in `${CLAUDE_PLUGIN_ROOT}/skills/light-build/SKILL.md`
   (shared by both skills).
 - **S7 — work review.** Run the S7 review loop (see **Review rounds**) over the work.
