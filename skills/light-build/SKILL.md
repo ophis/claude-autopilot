@@ -1,6 +1,6 @@
 ---
 name: light-build
-description: "Self-contained, autonomous, low-ceremony build harness: create an isolated worktree, produce the work, verify, and run a capped correctness + requirement-fidelity + doc review to a single review-ready branch (never merges). Has no plugin dependency — runs with nothing else installed. For simple tasks, or as a lighter-than-build option when you want autonomy + expert-council-at-forks without the spec/review rigor — for that rigor use build. Pass the requirement text."
+description: "Self-contained, autonomous, low-ceremony build harness: create an isolated worktree, write an S4 task list, produce the work with a fresh producer per task, verify, and run a capped correctness + requirement-fidelity + doc review to a single review-ready branch (never merges). Has no plugin dependency — runs with nothing else installed. For simple tasks, or as a lighter-than-build option when you want autonomy + expert-council-at-forks without the spec/review rigor — for that rigor use build. Pass the requirement text."
 argument-hint: "<requirements>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, SendMessage, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite
 ---
@@ -36,17 +36,15 @@ disk, then continue from `phase`. An interrupted S7 review round re-runs with th
 frozen panel, on the phase's transport; only `review_round` need be persisted to locate the
 loop. **No state file → start at S1.**
 
-**Persist lazily, by exception.** A straight-through run writes **no file at all** — hold the
-requirement, worktree/branch/base_ref, phase, and decisions in context. **Materialize a
-minimal state file the first time the run crosses a compaction-risk boundary** — whichever is
-first: a council / `FORK` resolved, S7 returns a FAIL and a fix round begins, or the producer
-reports multi-step work across several dispatches. The file holds **only** the verbatim
-requirement + a one-line RESUME block (and, for multi-step S5, a terse 1-line-per-task list)
-— **never an audit trail**:
+**The state file** (shape defined in **S4 — task list**, which always materializes
+it) holds **only** the verbatim requirement + a one-line RESUME block + the task
+list — **never an audit trail**:
 
 ```
-RESUME: phase=<S1|S5|S6|S7|S8|S9> worktree=<path> branch=<name> base_ref=<sha> review_round=<n>
+RESUME: phase=<S1|S4|S5|S6|S7|S8|S9> worktree=<path> branch=<name> base_ref=<sha> review_round=<n>
 ```
+
+Advance RESUME's `phase=` with the run.
 
 **Location follows the user's / project's convention** — honor CLAUDE.md and existing repo
 patterns.
@@ -125,14 +123,14 @@ S7 is the **sole correctness gate**.
 Track these for the S9 report, which surfaces them plus the residual NON-BLOCKING items:
 
 - **Panel freeze:** `S7 panel: pinned=[correctness,requirement-fidelity,doc] transport=Workflow` (append `->Task` if the fallback fires).
+- **Each completed S5 task** (from the state file's done marks): `S5 task <N> done: <commit sha>` — feeds the S9 report.
 - **Each review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; fix dispatched`.
 - **Each decision** (council or solo, incl. a resolved S5 FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 
-## Pipeline (S1, S5–S9)
+## Pipeline (S1, S4–S9)
 
 Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
-**S1 → S5 → S6 → S7 → S8 → S9** — light skips S2 (spec), S3 (spec review), S4
-(plan).
+**S1 → S4 → S5 → S6 → S7 → S8 → S9** — light skips S2 (spec), S3 (spec review).
 
 - **S1 — worktree.**
   - If already in an isolated worktree (not on `main`/`master`), reuse it — do not nest another. `base_ref` is current local HEAD.
@@ -144,10 +142,21 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
     - `git worktree add <path> -b <prefix>-<slug> HEAD`
     - `EnterWorktree({path: <path>})`
   - Hold `worktree`, `branch`, `base_ref` (HEAD) in context.
-- **S5 — produce.** Produce the work product by dispatching a **producer subagent
-  via plain `Task`** (by reference, bounded prompt) — no per-task review. `FORK:` → the
-  **S5 FORK mechanism**. A producer may commit its work; the S8 squash folds its commits.
-  The orchestrator never edits the work product itself.
+- **S4 — task list.** Write the task list yourself (invoke no planning skill): a code-free
+  task list into the state file — S4 always materializes the state file. The task list is
+  the state file's last section; the RESUME block goes above it (a brief runs to the next
+  `### Task N` heading):
+  - Header: Global Constraints (exact values, the verify command).
+  - Per task, a `### Task N: <name>` heading (its S5 producer reads its brief by it) with:
+    Files; Consumes/Produces (exact names/signatures crossing tasks); tests to write
+    first, incl. edge cases; commit message.
+  - A small change is one task.
+- **S5 — produce.** Per S4 task, in order from the first not `done`, dispatch one
+  fresh producer subagent via plain `Task` on the requirement, the task list header and
+  its `### Task N` brief: tests first, then the code; run only the checks its change
+  affects; commit with the brief's message; log the task `done` in the state file.
+  `FORK:` → the **S5 FORK mechanism**. A producer may commit its work; the S8 squash
+  folds its commits. The orchestrator never edits the work product itself.
 - **S6 — verify.** Run the target repo's own checks (those its CLAUDE.md, README or CI
   name) **inline via `Bash`**; none named → the checks its build/test manifests define
   (`package.json` `test`, Makefile, pre-commit, …); none at all → say so in the S9 report.
@@ -155,7 +164,7 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
   result only from this run's output (exit code, failure count).
 - **S7 — work review.** Run the **S7 review** above over the work.
 - **S8 — squash.** Idempotent squash to one commit **via `git` (`Bash`)** — **skip
-  if already exactly 1 ahead of `base_ref`**. The state file, if any, is committed or
+  if already exactly 1 ahead of `base_ref`**. The state file is committed or
   ignored per the project's convention — do not force either.
 - **S9 — finish.** Inline: report review history, decisions, deferred non-blockers
   (stop-reason first if the run stopped); offer integration options as an informational

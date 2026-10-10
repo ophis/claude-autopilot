@@ -42,16 +42,17 @@ The two surfaces — `skills/build/SKILL.md` and `skills/light-build/SKILL.md` �
 **orchestrator prompts**, not code. They are **skills** (model-invocable, so composable as a
 step inside a larger skill/workflow); users still type `/autopilot:build` /
 `/autopilot:light-build`. `light-build` is the low-ceremony surface: a harness
-(S1 → S5 → S6 → S7 → S8 → S9) with no spec doc, no spec review, a lazy by-exception state
-model (no mandatory plan doc), and a pinned cap-1 S7 (correctness + requirement-fidelity +
-doc). It does not gate scope — surface choice is the user's responsibility. When invoked, the
-*main-session Claude becomes a thin orchestrator*: it dispatches subagents and judges
-their structured output, and never edits the work product itself. Understanding the
-system means reading those two skill files plus `agents/` and `scripts/` together:
+(S1 → S4 → S5 → S6 → S7 → S8 → S9) with no spec doc and no spec review. S4 always
+materializes a state file holding the task list; S7 is a pinned cap-1 panel
+(correctness + requirement-fidelity + doc). It does not gate scope — surface choice is
+the user's responsibility. When invoked, the *main-session Claude becomes a thin
+orchestrator*: it dispatches subagents and judges their structured output, and never
+edits the work product itself. Understanding the system means reading those two skill
+files plus `agents/` and `scripts/` together:
 
 - **Shared spine.** `build` runs a single **S1–S9** pipeline: S1 worktree → S2 spec →
   S3 spec-review → S4 task list → S5 produce → S6 verify → S7 work-review → S8 squash → S9 finish.
-  `light-build` skips S2–S4 (same number = same step).
+  `light-build` skips S2, S3 (same number = same step).
   **It never merges** — the deliverable is a review-ready branch.
 
 - **Ralph convergence loops (S3, S7).** review → fix → re-review until the frozen
@@ -104,7 +105,8 @@ system means reading those two skill files plus `agents/` and `scripts/` togethe
 
 - **No plugin dependencies.** Both surfaces use only native tools, the plugin's own
   scripts, or inline logic; neither invokes another plugin's skill or preflights for one.
-  build S4 says "invoke no planning skill" so an installed one isn't pulled into S4.
+  build and light-build S4 both say "invoke no planning skill" so an installed one
+  isn't pulled into S4.
 
 ## Conventions & gotchas (non-obvious, learned the hard way)
 

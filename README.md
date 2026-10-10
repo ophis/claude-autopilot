@@ -5,13 +5,13 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.12.7** — the build surface is now a **skill** (`skills/build`):
+> Status: **v0.12.8** — the build surface is now a **skill** (`skills/build`):
 > model-invocable and composable as a step inside a larger
 > skill/workflow, while `/autopilot:build` still works for users.
 > A second surface, **`skills/light-build`** (`/autopilot:light-build`), is
 > the low-ceremony path: autonomy + expert-council-at-forks with no
-> spec doc and no spec review — just produce → verify → a single capped correctness +
-> requirement-fidelity review. **light-build does not gate scope** —
+> spec doc and no spec review — an S4 task list, then produce → verify → a single
+> capped correctness + requirement-fidelity review. **light-build does not gate scope** —
 > choosing the right surface is your call (see its section below for when it fits).
 > The **named review roster** is complete for both phases in `agents/`, and the
 > **selection stage** (`scripts/select-panel.py`) wires the roster into the S3/S7
@@ -26,7 +26,7 @@ The git repo is **both the marketplace and the plugin**:
 ```
 claude-autopilot/                 # git repo = marketplace + plugin
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 0.12.7)
+│   ├── plugin.json               # name: autopilot (version 0.12.8)
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # skill; /autopilot:build       still works
@@ -73,7 +73,7 @@ This repo is its own single-repo marketplace, so add it and install:
 also browse and install via the interactive `/plugin` menu (Marketplaces → add →
 install).
 
-**Updating:** this plugin uses explicit semver (currently `0.12.7`). A release bumps
+**Updating:** this plugin uses explicit semver (currently `0.12.8`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```
@@ -128,23 +128,25 @@ each reach `VERDICT: PASS`; the test actually runs and passes; the run ends at a
 
 ## `/autopilot:light-build <requirements>`
 
-The low-ceremony path. It keeps autopilot's autonomy and
-**expert-council-at-forks** but drops the rigor: no spec doc (S2), no spec review,
-no S4 task list. **The requirement IS the spec.** It is **dual-use** — for simple tasks,
+The low-ceremony path. It keeps autopilot's autonomy,
+**expert-council-at-forks**, and an S4 task list (orchestrator-written, code-free;
+one fresh producer per task) — but drops the rigor: no spec doc (S2), no spec review.
+**The requirement IS the spec.** It is **dual-use** — for simple tasks,
 and as a lighter alternative to `build` when you want the autonomous interaction model
 without the ceremony. It is a skill (model-invocable / composable), emits the same final
 `autopilot-result` block, and `/autopilot:light-build` is preserved for users.
 
-- **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch (native `EnterWorktree`). **Lazy state:** no spec doc, and no file by default — a minimal state file (the requirement recorded verbatim + a one-line RESUME block) is materialized only at the first compaction-risk boundary; a simple single-shot run writes nothing.
-- **S5 — Produce:** dispatch a producer subagent via plain `Task`. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
+- **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch (native `EnterWorktree`). **State:** no spec doc — the state file is materialized at S4 (see **S4 — Task list**).
+- **S4 — Task list:** the orchestrator writes a code-free task list (Global Constraints + per-task `### Task N` briefs: files, Consumes/Produces, tests first, commit message) into the state file — S4 always materializes it. S5 dispatches one fresh producer per task, in order.
+- **S5 — Produce:** dispatch one fresh producer per S4 task, in order from the first not `done`, via plain `Task`. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
 - **S6 — Verify:** run the discovered checks inline.
 - **S7 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc`, `requirement-fidelity` checking the work against the requirement text — **capped at 1** review+fix round. This is the sole correctness gate.
 - **S8 — Squash → S9 — Finish:** one clean commit + report. **Never merges.**
 
 **No scope gate.** light-build is a harness, not a gatekeeper — it runs whatever it is
 given. **When it fits:** simple tasks, or any work where you want autonomy + forks-resolved-
-by-experts and are comfortable with a single capped review as the only gate (no spec, no
-spec review). Choosing the surface is your responsibility.
+by-experts and are comfortable with a single capped review as the only gate (no spec
+doc, no spec review — just an S4 task list). Choosing the surface is your responsibility.
 
 ```
 /autopilot:light-build add a --json flag to the status command
