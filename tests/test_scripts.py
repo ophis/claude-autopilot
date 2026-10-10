@@ -597,6 +597,30 @@ class SkillWorktreePinTests(unittest.TestCase):
             with open(os.path.join(REPO, doc), encoding="utf-8") as fh:
                 self.assertNotIn("subagent-driven", fh.read(), doc)
 
+    def test_light_build_s5_fresh_producer_per_task_without_review(self):
+        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        s5 = " ".join(text[text.index("- **S5 — produce.**"):text.index("- **S6 — verify.**")].split())
+        self.assertIn("one fresh producer subagent", s5)
+        self.assertIn("task list header", s5)
+        self.assertIn("`### Task N` brief", s5)
+        self.assertIn("checks its change affects", s5)
+        self.assertIn("log the task `done`", s5)
+        self.assertNotIn("review", s5)
+
+    def test_light_build_s4_task_list_in_state_file(self):
+        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        s4 = " ".join(text[text.index("- **S4 — task list.**"):text.index("- **S5 — produce.**")].split())
+        self.assertIn("Global Constraints", s4)
+        self.assertIn("### Task N", s4)
+        self.assertIn("always materializes the state file", s4)
+
+    def test_light_build_pipeline_legend_includes_s4(self):
+        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertIn("S1 → S4 → S5 → S6 → S7 → S8 → S9", text)
+
     def test_build_has_no_dependency_preflight_and_plans_itself(self):
         with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
