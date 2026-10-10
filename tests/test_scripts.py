@@ -304,7 +304,6 @@ GOOD_BODY = """\
 - **Read-only.** Tools allowlist is Read, Grep, Glob, Bash.
 - **Inputs by reference.** The orchestrator passes you the worktree path.
 - **Cite evidence.** Anchor every finding to file:line.
-- **Load no skills from other plugins.**
 
 ## Verdict grammar (strict)
 
@@ -342,8 +341,7 @@ description: >-
 
 # Reviewer contract (authoring template)
 
-Body with Read-only, Inputs by reference, Cite evidence, and
-Load no skills from other plugins — but no selector metadata.
+Body with Read-only, Inputs by reference, and Cite evidence — but no selector metadata.
 """
 
 
@@ -445,7 +443,6 @@ class LintRosterTests(unittest.TestCase):
 ## Contract
 
 - **Read-only.** Inputs by reference. Cite evidence.
-- **Load no skills from other plugins.**
 """
         self._reviewer("r1", body=body)
         proc = run_lint(self.agents)
@@ -459,7 +456,6 @@ class LintRosterTests(unittest.TestCase):
 ## Contract
 
 - **Read-only.** Inputs by reference. Cite evidence.
-- **Load no skills from other plugins.**
 
 ## Verdict grammar
 
@@ -476,13 +472,13 @@ Some trailing section that wrongly follows the verdict block.
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("last", proc.stdout.lower())
 
-    def test_missing_load_no_other_plugin_skills_marker(self):
+    def test_missing_contract_marker(self):
         body = """\
 # r1
 
 ## Contract
 
-- **Read-only.** Inputs by reference. Cite evidence.
+- **Read-only.** Inputs by reference.
 
 ## Verdict grammar
 
@@ -493,7 +489,7 @@ NON-BLOCKING: none
         self._reviewer("r1", body=body)
         proc = run_lint(self.agents)
         self.assertNotEqual(proc.returncode, 0)
-        self.assertIn("Load no skills from other plugins", proc.stdout)
+        self.assertIn("Cite evidence", proc.stdout)
 
     def test_name_mismatch(self):
         # name in frontmatter is "r1" but the file is "other.md".
@@ -539,8 +535,7 @@ phase: work
 tier: core
 ---
 
-Body with Read-only, Inputs by reference, Cite evidence,
-Load no skills from other plugins.
+Body with Read-only, Inputs by reference, Cite evidence.
 """
         # Declares phase => classified as a reviewer, fails on missing keys.
         self._template(text=text)
@@ -609,6 +604,13 @@ class SkillWorktreePinTests(unittest.TestCase):
         self.assertEqual(preflight.count("\n- "), 1)
         self.assertIn("autopilot-config.py", preflight)
         self.assertIn("invoke no planning skill", " ".join(text.split()))
+
+    def test_build_s2_follows_its_spec_guide(self):
+        with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        s2 = text[text.index("- **S2 — spec."):text.index("- **S3 — spec review.")]
+        self.assertIn("`${CLAUDE_SKILL_DIR}/spec.md`", s2)
+        self.assertTrue(os.path.isfile(os.path.join(SKILLS, "build", "spec.md")))
 
     def test_plugin_never_mentions_superpowers(self):
         files = subprocess.run(["git", "-C", REPO, "ls-files"], capture_output=True,

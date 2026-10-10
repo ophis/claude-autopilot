@@ -30,6 +30,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # skill; /autopilot:build       still works
+│   ├── build/spec.md             # spec-writing guide for build S2
 │   └── light-build/SKILL.md      # skill; /autopilot:light-build  — low-ceremony
 ├── scripts/
 │   ├── _frontmatter.py           # shared frontmatter reader (imported by select-panel.py + lint-roster.py)

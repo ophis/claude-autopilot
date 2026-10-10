@@ -135,9 +135,8 @@ re-reviewed lenses.
     - `git worktree add <path> -b <prefix>-<slug> HEAD`
     - `EnterWorktree({path: <path>})`
   - Create the **plan doc** (with RESUME + progress section) at location per the project's convention. Record `worktree`, `branch`, and `base_ref` (HEAD) in the RESUME block.
-- **S2 — spec. (Skipped in spec-file mode)** Read the affected code first. Write the spec
-  into the spec doc: goal; scope and non-goals; design (components, interfaces, data
-  shapes); edge cases and error handling; testing approach. A genuine fork → the expert
+- **S2 — spec. (Skipped in spec-file mode)** Write the spec into the spec doc per
+  `${CLAUDE_SKILL_DIR}/spec.md`; read the affected code first. A genuine fork → the expert
   council (**Deciding at decision points**); never ask the user.
 - **S3 — spec review. (Skipped in spec-file mode)** Run the S3 review loop (see **Review
   rounds**) over the spec. **Fixes:** the orchestrator edits the spec doc directly. Root

@@ -42,7 +42,6 @@ be?
 - **Flag genuine blockers, not preferences.** A blocker materially impedes
   maintenance (e.g. a comment that actively misleads); pure verbosity/style and
   taste-level preferences go in NON-BLOCKING.
-- **Load no skills from other plugins.**
 
 ## Code-quality checklist
 
