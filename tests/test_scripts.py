@@ -590,6 +590,20 @@ class SkillWorktreePinTests(unittest.TestCase):
             self.assertIn("git worktree add <path> <branch>", s1, skill)
             self.assertIn("collision with another requirement's", s1, skill)
 
+    def test_build_s5_fresh_producer_per_task_without_review(self):
+        with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        s5 = text[text.index("- **S5 — produce.**"):text.index("- **S6 — verify.**")]
+        self.assertIn("ONE fresh producer subagent", s5)
+        self.assertIn("No per-task", s5)
+        self.assertIn("checks its change affects", s5)
+        self.assertIn("skills/light-build/SKILL.md", s5)
+        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
+            self.assertIn("## The S5 FORK mechanism", fh.read())
+        for doc in ("skills/build/SKILL.md", "README.md", "CLAUDE.md"):
+            with open(os.path.join(REPO, doc), encoding="utf-8") as fh:
+                self.assertNotIn("subagent-driven", fh.read(), doc)
+
 
 class ReviewRoundScriptTests(unittest.TestCase):
     """Static contract + syntax gate for workflows/review-round.js.

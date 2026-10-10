@@ -5,7 +5,7 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v0.12.6** — the build surface is now a **skill** (`skills/build`):
+> Status: **v0.12.7** — the build surface is now a **skill** (`skills/build`):
 > model-invocable and composable as a step inside a larger
 > skill/workflow, while `/autopilot:build` still works for users.
 > A second surface, **`skills/light-build`** (`/autopilot:light-build`), is
@@ -26,7 +26,7 @@ The git repo is **both the marketplace and the plugin**:
 ```
 claude-autopilot/                 # git repo = marketplace + plugin
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 0.12.6)
+│   ├── plugin.json               # name: autopilot (version 0.12.7)
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # skill; /autopilot:build       still works
@@ -60,8 +60,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 ### 1. Install the dependency: superpowers (required)
 
 The **build** surface orchestrates skills from the **superpowers**
-plugin (brainstorming, subagent-driven-development,
-verification-before-completion). Claude Code has **no plugin dependency / auto-install
+plugin (brainstorming, verification-before-completion). Claude Code has **no plugin dependency / auto-install
 mechanism**, so you must install superpowers yourself first:
 
 ```
@@ -88,7 +87,7 @@ This repo is its own single-repo marketplace, so add it and install:
 also browse and install via the interactive `/plugin` menu (Marketplaces → add →
 install).
 
-**Updating:** this plugin uses explicit semver (currently `0.12.6`). A release bumps
+**Updating:** this plugin uses explicit semver (currently `0.12.7`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```
@@ -106,7 +105,7 @@ and it drives, end to end and without asking you questions:
 - **S2 — Brainstorm:** turn requirements into the spec (expert council at decision points).
 - **S3 — Spec review:** Ralph loop over the spec until the panel passes.
 - **S4 — Task list:** a code-free task list (files, cross-task interfaces, tests first, commit message) + the verify command.
-- **S5 — Produce:** implement (subagent-driven for code).
+- **S5 — Produce:** one fresh producer per task, in order; each runs only the checks its change affects; no per-task review (S7 is the gate).
 - **S6 — Verify:** run the discovered checks.
 - **S7 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency.
 - **S8 — Squash:** idempotent squash to one clean commit.
