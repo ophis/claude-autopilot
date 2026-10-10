@@ -151,7 +151,8 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
 - **S6 — verify.** Run the target repo's own checks (those its CLAUDE.md, README or CI
   name) **inline via `Bash`**; none named → the checks its build/test manifests define
   (`package.json` `test`, Makefile, pre-commit, …); none at all → say so in the S9 report.
-  **Never weaken, skip, or delete a check.** Idempotent — re-running is safe.
+  **Never weaken, skip, or delete a check.** Idempotent — re-running is safe. Claim a
+  result only from this run's output (exit code, failure count).
 - **S7 — work review.** Run the **S7 review** above over the work.
 - **S8 — squash.** Idempotent squash to one commit **via `git` (`Bash`)** — **skip
   if already exactly 1 ahead of `base_ref`**. The state file, if any, is committed or

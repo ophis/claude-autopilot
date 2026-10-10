@@ -104,8 +104,8 @@ system means reading those two skill files plus `agents/` and `scripts/` togethe
   The progress section records each S5 task done (a resume continues from the next), the
   review transport, and per-lens blocker gists that prime re-reviewed lenses.
 
-- **Built on `superpowers`.** `build` orchestrates superpowers
-  skills (brainstorming, verification-before-completion). (Worktree creation is raw
+- **Built on `superpowers`.** `build` uses the superpowers
+  brainstorming skill (S2). (Worktree creation is raw
   `git worktree` + the native `EnterWorktree`, not a superpowers skill.) For `build` it is a **hard dependency** —
   it preflights for it and hands off install instructions if missing. `light-build` is
   the exception: it is self-contained, invokes no `superpowers:*` skill, and has no

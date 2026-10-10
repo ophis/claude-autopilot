@@ -604,6 +604,20 @@ class SkillWorktreePinTests(unittest.TestCase):
             with open(os.path.join(REPO, doc), encoding="utf-8") as fh:
                 self.assertNotIn("subagent-driven", fh.read(), doc)
 
+    def test_build_s6_shares_light_build_s6_inline_checks(self):
+        with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        s6 = text[text.index("- **S6 — verify.**"):text.index("- **S7 — work review.**")]
+        self.assertIn('"S6 — verify" in `${CLAUDE_PLUGIN_ROOT}/skills/light-build/SKILL.md`', s6)
+        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
+            light = fh.read()
+        light_s6 = light[light.index("- **S6 — verify.**"):light.index("- **S7 — work review.**")]
+        self.assertIn("inline via `Bash`", light_s6)
+        self.assertIn("Claim a\n  result only from this run's output", light_s6)
+        for doc in ("skills/build/SKILL.md", "README.md", "CLAUDE.md"):
+            with open(os.path.join(REPO, doc), encoding="utf-8") as fh:
+                self.assertNotIn("verification-before-completion", fh.read(), doc)
+
 
 class ReviewRoundScriptTests(unittest.TestCase):
     """Static contract + syntax gate for workflows/review-round.js.

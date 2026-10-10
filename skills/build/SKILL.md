@@ -161,8 +161,8 @@ re-reviewed lenses.
   mechanism" in `${CLAUDE_PLUGIN_ROOT}/skills/light-build/SKILL.md`. Log the task done
   before dispatching the next. Non-code → producer subagents via the same dispatch pattern.
   The orchestrator never edits the work product itself.
-- **S6 — verify.** Use `superpowers:verification-before-completion`: run the discovered
-  checks. Never weaken, skip, or delete a check.
+- **S6 — verify.** Run "S6 — verify" in `${CLAUDE_PLUGIN_ROOT}/skills/light-build/SKILL.md`
+  (shared by both skills).
 - **S7 — work review.** Run the S7 review loop (see **Review rounds**) over the work.
   **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the deduped
   open blockers (with item IDs) + cited files only; later fixes continue it via `SendMessage`
