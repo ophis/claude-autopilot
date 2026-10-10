@@ -6,7 +6,7 @@ __pycache__/
 *.pyc
 
 # Design + per-build dev docs — kept local, not committed to the published plugin
-SPEC.md
+/SPEC.md
 dev-docs/
 
 # Local autopilot worktrees (created by EnterWorktree / git worktree add)

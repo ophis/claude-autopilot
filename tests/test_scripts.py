@@ -610,7 +610,9 @@ class SkillWorktreePinTests(unittest.TestCase):
             text = fh.read()
         s2 = text[text.index("- **S2 — spec."):text.index("- **S3 — spec review.")]
         self.assertIn("`${CLAUDE_SKILL_DIR}/spec.md`", s2)
-        self.assertTrue(os.path.isfile(os.path.join(SKILLS, "build", "spec.md")))
+        tracked = subprocess.run(["git", "-C", REPO, "ls-files", "skills/build/spec.md"],
+                                 capture_output=True, text=True, check=True).stdout.split()
+        self.assertEqual(tracked, ["skills/build/spec.md"])
 
     def test_plugin_never_mentions_superpowers(self):
         files = subprocess.run(["git", "-C", REPO, "ls-files"], capture_output=True,
