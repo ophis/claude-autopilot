@@ -590,7 +590,7 @@ class SkillWorktreePinTests(unittest.TestCase):
             text = fh.read()
         s5 = " ".join(text[text.index("- **S5 — produce.**"):text.index("- **S6 — verify.**")].split())
         self.assertIn("one fresh producer subagent on the task list header and its `### Task N` brief", s5)
-        self.assertIn("checks its change affects", s5)
+        self.assertIn("only the checks its brief names (never the verify command)", s5)
         self.assertIn("log the task `done`", s5)
         self.assertNotIn("review", s5)
         for doc in ("skills/build/SKILL.md", "README.md", "CLAUDE.md"):
@@ -604,7 +604,7 @@ class SkillWorktreePinTests(unittest.TestCase):
         self.assertIn("one fresh producer subagent", s5)
         self.assertIn("task list header", s5)
         self.assertIn("`### Task N` brief", s5)
-        self.assertIn("checks its change affects", s5)
+        self.assertIn("only the checks its brief names (never the verify command)", s5)
         self.assertIn("log the task `done`", s5)
         self.assertNotIn("review", s5)
 
@@ -615,6 +615,7 @@ class SkillWorktreePinTests(unittest.TestCase):
         self.assertIn("Global Constraints", s4)
         self.assertIn("### Task N", s4)
         self.assertIn("always materializes the state file", s4)
+        self.assertIn("the checks it runs (only those its change affects, never a full suite", s4)
 
     def test_light_build_pipeline_legend_includes_s4(self):
         with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:

@@ -90,8 +90,8 @@ and it drives, end to end and without asking you questions:
 - **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch (`<prefix>` = the ticket ID when the work is for one single ticket, e.g. `TASK-123`, else `autopilot`); create the plan doc (progress + RESUME).
 - **S2 — Spec:** write the spec from the requirement and the affected code (expert council at decision points).
 - **S3 — Spec review:** Ralph loop over the spec until the panel passes.
-- **S4 — Task list:** a code-free task list (files, cross-task interfaces, tests first, commit message) + the verify command.
-- **S5 — Produce:** one fresh producer per task, in order; each runs only the checks its change affects; no per-task review (S7 is the gate).
+- **S4 — Task list:** a code-free task list (files, cross-task interfaces, tests first, the checks each task runs, commit message) + S6's verify command.
+- **S5 — Produce:** one fresh producer per task, in order; each runs only the checks its brief names, never a full suite (S6 runs those once); no per-task review (S7 is the gate).
 - **S6 — Verify:** run the target repo's own checks inline.
 - **S7 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency.
 - **S8 — Squash:** idempotent squash to one clean commit.
