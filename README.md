@@ -9,7 +9,7 @@ with one explicit command.
 > model-invocable and composable as a step inside a larger
 > skill/workflow, while `/autopilot:build` still works for users.
 > A second surface, **`skills/light-build`** (`/autopilot:light-build`), is
-> the **superpowers-free**, low-ceremony path: autonomy + expert-council-at-forks with no
+> the low-ceremony path: autonomy + expert-council-at-forks with no
 > spec doc and no spec review — just produce → verify → a single capped correctness +
 > requirement-fidelity review. **light-build does not gate scope** —
 > choosing the right surface is your call (see its section below for when it fits).
@@ -30,7 +30,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # skill; /autopilot:build       still works
-│   └── light-build/SKILL.md      # skill; /autopilot:light-build  — superpowers-free, low-ceremony
+│   └── light-build/SKILL.md      # skill; /autopilot:light-build  — low-ceremony
 ├── scripts/
 │   ├── _frontmatter.py           # shared frontmatter reader (imported by select-panel.py + lint-roster.py)
 │   ├── autopilot-config.py       # reads/initializes ${CLAUDE_PLUGIN_DATA}/config.json
@@ -57,22 +57,8 @@ claude-autopilot/                 # git repo = marketplace + plugin
 
 ## Installation
 
-### 1. Install the dependency: superpowers (required)
-
-The **build** surface uses the **superpowers** plugin's brainstorming skill (S2). Claude Code has **no plugin dependency / auto-install
-mechanism**, so you must install superpowers yourself first:
-
-```
-/plugin install superpowers@claude-plugins-official
-```
-
-(`planning-with-files` is optional.) `build` also **preflight-checks** for
-superpowers and, if it's missing, stops and hands you these instructions rather than failing
-midway. **`light-build` is the exception — it is superpowers-free** (every phase uses a
-native tool, the plugin's own script, or inline logic) and runs even if superpowers is not
-installed; it has no preflight.
-
-### 2. Install Claude Autopilot
+No other plugin is required: every phase of both surfaces uses a native tool, the
+plugin's own script, or inline logic.
 
 This repo is its own single-repo marketplace, so add it and install:
 
@@ -101,7 +87,7 @@ larger skill/workflow; `/autopilot:build` is preserved for users. Hand it a requ
 and it drives, end to end and without asking you questions:
 
 - **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch (`<prefix>` = the ticket ID when the work is for one single ticket, e.g. `TASK-123`, else `autopilot`); create the plan doc (progress + RESUME).
-- **S2 — Brainstorm:** turn requirements into the spec (expert council at decision points).
+- **S2 — Spec:** write the spec from the requirement and the affected code (expert council at decision points).
 - **S3 — Spec review:** Ralph loop over the spec until the panel passes.
 - **S4 — Task list:** a code-free task list (files, cross-task interfaces, tests first, commit message) + the verify command.
 - **S5 — Produce:** one fresh producer per task, in order; each runs only the checks its change affects; no per-task review (S7 is the gate).
@@ -110,7 +96,7 @@ and it drives, end to end and without asking you questions:
 - **S8 — Squash:** idempotent squash to one clean commit.
 - **S9 — Finish:** report + integration menu. **Never merges.**
 
-You can also hand `/autopilot:build` a path to an existing spec file instead of free-text requirements — it then skips the brainstorm + spec-review (S2/S3) and plans straight from your spec (`S1 → S4`; e.g. `/autopilot:build path/to/spec.md`).
+You can also hand `/autopilot:build` a path to an existing spec file instead of free-text requirements — it then skips the spec + spec-review (S2/S3) and plans straight from your spec (`S1 → S4`; e.g. `/autopilot:build path/to/spec.md`).
 
 At a genuine decision point it convenes a small **expert council** (ad-hoc sub-agents)
 to deliberate, then decides and records — it does not ask you. It stops only to hand off on a
@@ -141,16 +127,12 @@ each reach `VERDICT: PASS`; the test actually runs and passes; the run ends at a
 
 ## `/autopilot:light-build <requirements>`
 
-The **superpowers-free**, low-ceremony path. It keeps autopilot's autonomy and
-**expert-council-at-forks** but drops the rigor: no spec doc, no brainstorm, no spec review,
+The low-ceremony path. It keeps autopilot's autonomy and
+**expert-council-at-forks** but drops the rigor: no spec doc (S2), no spec review,
 no S4 task list. **The requirement IS the spec.** It is **dual-use** — for simple tasks,
 and as a lighter alternative to `build` when you want the autonomous interaction model
 without the ceremony. It is a skill (model-invocable / composable), emits the same final
 `autopilot-result` block, and `/autopilot:light-build` is preserved for users.
-
-Its defining trait is **self-containment**: every phase uses a native tool, the plugin's
-own script, or inline logic — it invokes **no `superpowers:*` skill** and runs even if
-superpowers is not installed.
 
 - **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch (native `EnterWorktree`). **Lazy state:** no spec doc, and no file by default — a minimal state file (the requirement recorded verbatim + a one-line RESUME block) is materialized only at the first compaction-risk boundary; a simple single-shot run writes nothing.
 - **S5 — Produce:** dispatch a producer subagent via plain `Task`. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.

@@ -131,7 +131,7 @@ Track these for the S9 report, which surfaces them plus the residual NON-BLOCKIN
 ## Pipeline (S1, S5–S9)
 
 Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
-**S1 → S5 → S6 → S7 → S8 → S9** — light skips S2 (brainstorm), S3 (spec review), S4
+**S1 → S5 → S6 → S7 → S8 → S9** — light skips S2 (spec), S3 (spec review), S4
 (plan).
 
 - **S1 — worktree.**

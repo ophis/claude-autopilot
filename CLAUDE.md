@@ -41,17 +41,15 @@ so they're not importable — the CLI is the contract).
 The two surfaces — `skills/build/SKILL.md` and `skills/light-build/SKILL.md` — are
 **orchestrator prompts**, not code. They are **skills** (model-invocable, so composable as a
 step inside a larger skill/workflow); users still type `/autopilot:build` /
-`/autopilot:light-build`. `light-build` is the **superpowers-free** surface: a
-self-contained, low-ceremony harness (S1 → S5 → S6 → S7 → S8 → S9) with no spec doc, no
-spec review, a lazy by-exception state model (no mandatory plan doc), and a pinned cap-1 S7 (correctness + requirement-fidelity + doc);
-every phase uses a native tool, the plugin's own script, or inline logic, so it invokes no
-`superpowers:*` skill and has no superpowers preflight. `light-build` does not
-gate scope — surface choice is the user's responsibility. When invoked, the
+`/autopilot:light-build`. `light-build` is the low-ceremony surface: a harness
+(S1 → S5 → S6 → S7 → S8 → S9) with no spec doc, no spec review, a lazy by-exception state
+model (no mandatory plan doc), and a pinned cap-1 S7 (correctness + requirement-fidelity +
+doc). It does not gate scope — surface choice is the user's responsibility. When invoked, the
 *main-session Claude becomes a thin orchestrator*: it dispatches subagents and judges
 their structured output, and never edits the work product itself. Understanding the
 system means reading those two skill files plus `agents/` and `scripts/` together:
 
-- **Shared spine.** `build` runs a single **S1–S9** pipeline: S1 worktree → S2 brainstorm →
+- **Shared spine.** `build` runs a single **S1–S9** pipeline: S1 worktree → S2 spec →
   S3 spec-review → S4 task list → S5 produce → S6 verify → S7 work-review → S8 squash → S9 finish.
   `light-build` skips S2–S4 (same number = same step).
   **It never merges** — the deliverable is a review-ready branch.
@@ -104,13 +102,9 @@ system means reading those two skill files plus `agents/` and `scripts/` togethe
   The progress section records each S5 task done (a resume continues from the next), the
   review transport, and per-lens blocker gists that prime re-reviewed lenses.
 
-- **Built on `superpowers`.** `build` uses the superpowers
-  brainstorming skill (S2). (Worktree creation is raw
-  `git worktree` + the native `EnterWorktree`, not a superpowers skill.) For `build` it is a **hard dependency** —
-  it preflights for it and hands off install instructions if missing. `light-build` is
-  the exception: it is self-contained, invokes no `superpowers:*` skill, and has no
-  superpowers preflight. There is no plugin auto-dependency mechanism, so dependencies
-  are documented in `README.md`, not declared.
+- **No plugin dependencies.** Both surfaces use only native tools, the plugin's own
+  scripts, or inline logic; neither invokes another plugin's skill or preflights for one.
+  build S4 says "invoke no planning skill" so an installed one isn't pulled into S4.
 
 ## Conventions & gotchas (non-obvious, learned the hard way)
 

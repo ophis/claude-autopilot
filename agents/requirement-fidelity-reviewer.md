@@ -45,7 +45,7 @@ or added (no drift, no scope creep).
 - **Flag genuine blockers, not preferences.** A blocker is a requirement item
   unmet, the wrong problem solved, a spec'd item missing, or unspecified/divergent
   behavior added without record; preferences go in NON-BLOCKING.
-- **Load no superpowers skills.**
+- **Load no skills from other plugins.**
 
 ## Fidelity checklist (a chain, not two buckets)
 

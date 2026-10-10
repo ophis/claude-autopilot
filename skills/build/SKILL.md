@@ -20,12 +20,9 @@ Autonomous build run. Drive the pipeline end to end: dispatch and judge.
 
 Empty input → STOP.
 
-## Preflight (dependencies)
+## Preflight
 
 - **Load config:** `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`.
-- Before S1, confirm **superpowers** plugin is available. If **not** available, STOP with a
-  handoff: superpowers required, install via `/plugin install superpowers@claude-plugins-official`,
-  then re-run `/autopilot:build`.
 
 ## Operating disciplines
 
@@ -138,13 +135,15 @@ re-reviewed lenses.
     - `git worktree add <path> -b <prefix>-<slug> HEAD`
     - `EnterWorktree({path: <path>})`
   - Create the **plan doc** (with RESUME + progress section) at location per the project's convention. Record `worktree`, `branch`, and `base_ref` (HEAD) in the RESUME block.
-- **S2 — brainstorm. (Skipped in spec-file mode)** Use `superpowers:brainstorming` on
-  `$ARGUMENTS` → write the spec into the spec doc.
+- **S2 — spec. (Skipped in spec-file mode)** Read the affected code first. Write the spec
+  into the spec doc: goal; scope and non-goals; design (components, interfaces, data
+  shapes); edge cases and error handling; testing approach. A genuine fork → the expert
+  council (**Deciding at decision points**); never ask the user.
 - **S3 — spec review. (Skipped in spec-file mode)** Run the S3 review loop (see **Review
   rounds**) over the spec. **Fixes:** the orchestrator edits the spec doc directly. Root
   contradiction → Safety stop 4.
-- **S4 — task list.** Do NOT invoke `superpowers:writing-plans`. Write a code-free task
-  list into the plan doc's implementation-plan section:
+- **S4 — task list.** Write the task list yourself (invoke no planning skill): a code-free
+  task list into the plan doc's implementation-plan section:
   - Header: spec path; Global Constraints (exact values, the verify command).
   - Per task, a `### Task N: <name>` heading (its S5 producer reads its brief by it) with:
     Files; Consumes/Produces (exact names/signatures crossing tasks); tests to write

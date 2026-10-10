@@ -34,7 +34,7 @@ CONTRACT_MARKERS = (
     "Read-only",
     "Inputs by reference",
     "Cite evidence",
-    "Load no superpowers skills",
+    "Load no skills from other plugins",
 )
 VERDICT_MARKERS = ("VERDICT:", "BLOCKING:", "NON-BLOCKING:")
 SELECTOR_KEYS = ("phase", "tier", "lens", "applies_to")

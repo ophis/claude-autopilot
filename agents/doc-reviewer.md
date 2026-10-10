@@ -44,7 +44,7 @@ Discovery is **change-anchored**, not a repo-wide doc audit.
 - **Cite evidence.** Anchor every finding to `file:line`. Specific beats vague.
 - **Flag genuine blockers, not preferences.** A stale/contradictory/missing doc
   is a blocker; a concision finding is normally NON-BLOCKING (see severity).
-- **Load no superpowers skills.**
+- **Load no skills from other plugins.**
 
 ## Documentation review
 

@@ -42,7 +42,7 @@ would actually fail if the code broke?
 - **Flag genuine blockers, not preferences.** A blocker leaves new/changed
   behavior untested or asserted by a misleading test; preferences go in
   NON-BLOCKING.
-- **Load no superpowers skills.**
+- **Load no skills from other plugins.**
 
 ## Test checklist
 

@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "autopilot",
   "displayName": "Claude Autopilot",
-  "description": "Autonomous end-to-end feature pipeline: worktree, brainstorm, spec + review loop, plan, subagent implementation, tests, code-review loop, docs, squash — driven by named expert review teams and Ralph convergence loops.",
+  "description": "Autonomous end-to-end feature pipeline: worktree, spec + review loop, plan, subagent implementation, tests, code-review loop, docs, squash — driven by named expert review teams and Ralph convergence loops.",
   "version": "0.12.7",
   "author": {
     "name": "Yinze Wang",

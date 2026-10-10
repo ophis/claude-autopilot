@@ -39,8 +39,8 @@ canonical source; it is never dispatched on its own.
 - **Flag genuine blockers, not preferences.** A blocker is something that, left
   unfixed, makes the artifact fail the requirement. Style nits and "I'd have done
   it differently" belong in NON-BLOCKING, if anywhere.
-- **Load no superpowers skills.** Do not invoke any `superpowers:*` skill. Your
-  context is exactly this contract + your lens + any focus directive.
+- **Load no skills from other plugins.** Your context is exactly this contract + your
+  lens + any focus directive.
 
 ## Verdict grammar (strict)
 
