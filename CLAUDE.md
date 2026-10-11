@@ -147,7 +147,7 @@ python3 scripts/lint-roster.py
 ```
 
 It enforces A3 for every reviewer: valid frontmatter (`lens`/`phase`/`tier`/
-`applies_to` + `maxTurns`), a read-only `tools` allowlist (`Read, Grep, Glob, Bash`),
+`applies_to` + `maxTurns`), a `tools` allowlist (`Read, Grep, Glob, Bash`),
 the ordinary reviewers' inlined contract or the verification reviewer's dedicated
 execution contract, and the strict verdict block — so a malformed reviewer
 fails loudly at authoring time instead of being silently mis-routed by the selector. It

@@ -706,6 +706,8 @@ class SkillWorktreePinTests(unittest.TestCase):
             self.assertIn("autopilot:verification-reviewer", text, skill)
             self.assertIn("reviewed_sha=<HEAD>", text, skill)
             self.assertIn("HEAD still equals", flat, skill)
+            self.assertIn("HEAD^{tree}", text, skill)
+            self.assertIn("<reviewed_sha>^{tree}", text, skill)
             self.assertIn("Wait for every verdict", text, skill)
             self.assertIn("raw BLOCKING items before adding item IDs", flat, skill)
             self.assertIn("VERIFICATION_UNAVAILABLE:", text, skill)

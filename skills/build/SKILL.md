@@ -54,12 +54,16 @@ RESUME: phase=<S1|S2|S3|S4|S5|S6|S7|S8> worktree=<path> branch=<name> base_ref=<
 
 **Keep RESUME current:** rewrite `phase=` at every phase transition and `review_round=`
 each loop iteration. **Location follows the user's / project's convention** — honor
-CLAUDE.md and existing repo patterns.
-For legacy S1–S9 plans, restart old S6/S7 at new S6; map old S8→S7 and S9→S8.
+CLAUDE.md and existing repo patterns. Before S6, commit tracked plan edits and name an
+ignored run note there; from S6 onward, keep mutable RESUME, panel verdicts, and
+verification evidence in that note (an ignored plan doc may serve as the note).
+On resume, read the note first; rerun S6 unless it has an all-PASS panel and verification results for
+the current tree.
+For legacy S1–S9 plans, restart old S6–S9 at new S6, retaining task progress.
 
-In the plan doc progress section, keep the full verify command and latest reviewed
-SHA, command results (exit codes, failure counts, diagnostics). Evidence expires when
-HEAD changes; resume an interrupted S6 round with its whole frozen panel.
+Keep the full verify command in the plan doc progress section. The run note records
+reviewed SHA/tree, commands, exit codes, failure counts, and diagnostics; an
+interrupted S6 round reruns with its whole frozen panel.
 
 ## Deciding at decision points (expert council)
 
@@ -79,13 +83,14 @@ HEAD changes; resume an interrupted S6 round with its whole frozen panel.
   --base <base_ref>` (S6) → a `selected` list of `{agent, subagent_type, tier, matched}`.
   The panel = ALL `core` agents (mandatory) + the `optional` agents you judge relevant (may
   drop marginal ones). S6 includes core `autopilot:verification-reviewer`; S3 does not.
-- **Freeze & log** the panel to the **plan doc** progress section (see **Progress log
-  format**); reuse it every round of that phase.
+- **Freeze & log** the panel to the plan doc progress section (S6: run note if tracked;
+  see **Progress log format**); reuse it every round of that phase.
 - **Dispatch the whole round together** — never one at a time, re-reviews included. Before
   each S6 round, require a clean committed source worktree (`git -C <worktree> status --porcelain`
   empty), set `reviewed_sha=<HEAD>` from `git -C <worktree> rev-parse HEAD`, and keep
   source unchanged until every verdict returns. Check HEAD still equals `reviewed_sha`
-  and status is still empty before judging.
+  and status is still empty before judging. Write verdicts and evidence to the run
+  note afterward, keeping tracked files unchanged until S7.
   Every S6 member gets the same fixed revision: ordinary reviewers read source HEAD;
   the verification reviewer clones reviewed_sha into its isolated checkout. Each
   member is `autopilot:<name>` and gets ONLY a run-input prompt — "PHASE=<spec|work>.
@@ -125,7 +130,7 @@ HEAD changes; resume an interrupted S6 round with its whole frozen panel.
 <!-- progress-log-format:start -->
 ## Progress log format
 
-The plan doc's progress section is a short-entry audit log, not a transcript: one entry per
+The plan doc's progress section (S6: ignored run note if tracked) is a short-entry audit log, not a transcript: one entry per
 panel freeze, S5 task done, review round and decision, in the shapes below (`S3` rounds use
 the `S6` shapes), plus the final residual NON-BLOCKING items. The per-lens blocker gists prime
 re-reviewed lenses.
@@ -187,7 +192,9 @@ re-reviewed lenses.
   one retry is a safety stop.
 - **S7 — squash.** Idempotent squash to one commit (skip if already exactly 1
   ahead of `base_ref`). Working notes (spec/plan/progress) are committed or ignored per the
-  project's convention — do not force either.
+  project's convention — do not force either. Require a clean worktree and matching
+  `git rev-parse HEAD^{tree}` / `git rev-parse <reviewed_sha>^{tree}` before S8; if
+  trees differ, return to S6.
 - **S8 — finish.** Inline (no skill): report
   review history and final verification evidence (reviewed SHA, commands, exit codes,
   failure counts and useful diagnostics), decisions, deferred non-blockers
