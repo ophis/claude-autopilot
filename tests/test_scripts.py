@@ -226,6 +226,23 @@ class SelectPanelTests(unittest.TestCase):
                           os.path.join(self.agents, "does-not-exist"))
         self.assertNotEqual(proc.returncode, 0)
 
+    def test_live_verification_reviewer_is_mandatory_for_work_only(self):
+        repo, base = make_git_repo([])
+        work = run_select("--phase", "work", "--worktree", repo,
+                          "--base", base)
+        self.assertEqual(work.returncode, 0, work.stderr)
+        selected = {e["agent"]: e for e in json.loads(work.stdout)["selected"]}
+        self.assertEqual(selected["verification-reviewer"], {
+            "agent": "verification-reviewer",
+            "subagent_type": "autopilot:verification-reviewer",
+            "tier": "core",
+            "matched": "core",
+        })
+        spec = run_select("--phase", "spec")
+        self.assertEqual(spec.returncode, 0, spec.stderr)
+        self.assertNotIn("verification-reviewer",
+                         {e["agent"] for e in json.loads(spec.stdout)["selected"]})
+
 
 class AutopilotConfigTests(unittest.TestCase):
     DEFAULTS = {"ralphLoop": {"maxIterations": {"spec-phase": 3, "implementation-phase": 3}}}
@@ -304,6 +321,7 @@ GOOD_BODY = """\
 - **Read-only.** Tools allowlist is Read, Grep, Glob, Bash.
 - **Inputs by reference.** The orchestrator passes you the worktree path.
 - **Cite evidence.** Anchor every finding to file:line.
+- **No test runs.** Never run a full suite, build, or verify command.
 
 ## Verdict grammar (strict)
 
@@ -376,6 +394,27 @@ class LintRosterTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("OK r1", proc.stdout)
         self.assertIn("OK reviewer-contract", proc.stdout)
+
+    def test_ordinary_reviewer_must_forbid_full_suite(self):
+        self._reviewer("r1", body=GOOD_BODY.format(name="r1").replace(
+            "- **No test runs.** Never run a full suite, build, or verify command.\n", ""))
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("No test runs", proc.stdout)
+
+    def test_verification_reviewer_uses_distinct_execution_contract(self):
+        with open(os.path.join(REPO, "agents", "verification-reviewer.md"),
+                  encoding="utf-8") as fh:
+            verifier = fh.read()
+        self._reviewer("verification-reviewer", reviewer=verifier)
+        proc = run_lint(self.agents)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        for marker in ("Isolated checkout", "Command evidence",
+                       "VERIFICATION_UNAVAILABLE:"):
+            self._reviewer("verification-reviewer", reviewer=verifier.replace(marker, ""))
+            proc = run_lint(self.agents)
+            self.assertNotEqual(proc.returncode, 0, marker + "\n" + proc.stdout)
+            self.assertIn(marker, proc.stdout)
 
     def test_no_agents_found_fails(self):
         proc = run_lint(self.agents)

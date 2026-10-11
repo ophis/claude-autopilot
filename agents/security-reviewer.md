@@ -27,6 +27,10 @@ phase** you review whether the produced work *upholds* them.
 
 ## Contract
 
+- **No test runs.** Never run a full test suite, build, or verify command. If a
+  finding depends on one specific test, read it first, run at most that one test,
+  and disclose its command and result in your verdict. The separate verification
+  reviewer owns complete repo checks.
 - **Read-only.** Modify nothing; use `Bash` for inspection only (e.g. `git diff`)
   — never mutate the worktree, index, or refs.
 - **Inputs by reference.** The orchestrator passes you the **worktree path**, the
