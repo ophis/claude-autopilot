@@ -769,11 +769,13 @@ class SkillWorktreePinTests(unittest.TestCase):
         self.assertEqual(readme.count("inlined into ordinary reviewers"), 2)
         self.assertIn("dedicated execution contract", readme)
 
-    def test_build_resume_lists_only_valid_phases(self):
+    def test_resume_phase_regexes_cover_only_valid_stages(self):
         with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
-            text = fh.read()
-        self.assertIn("RESUME: phase=<S1|S2|S3|S4|S5|S6|S7|S8>", text)
-        self.assertNotIn("phase=<S1..S8>", text)
+            build = fh.read()
+        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
+            light = fh.read()
+        self.assertIn("RESUME: phase=<S[1-8]>", build)
+        self.assertIn("RESUME: phase=<S[14-8]>", light)
 
 class ReviewRoundScriptTests(unittest.TestCase):
     """Static contract + syntax gate for workflows/review-round.js.

@@ -40,7 +40,7 @@ loop. **No state file → start at S1.**
 above RESUME, then the task list:
 
 ```
-RESUME: phase=<S1|S4|S5|S6|S7|S8> worktree=<path> branch=<name> base_ref=<sha> review_round=<n>
+RESUME: phase=<S[14-8]> worktree=<path> branch=<name> base_ref=<sha> review_round=<n>
 ```
 
 Advance RESUME's `phase=` with the run. Before S6, commit tracked state edits and name

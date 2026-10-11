@@ -49,7 +49,7 @@ user-provided spec file) and the **plan doc** (task list + progress section +
 RESUME block):
 
 ```
-RESUME: phase=<S1|S2|S3|S4|S5|S6|S7|S8> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> spec_file=<path>
+RESUME: phase=<S[1-8]> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> spec_file=<path>
 ```
 
 **Keep RESUME current:** rewrite `phase=` at every phase transition and `review_round=`
