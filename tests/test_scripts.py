@@ -235,8 +235,8 @@ class SelectPanelTests(unittest.TestCase):
                           os.path.join(self.agents, "does-not-exist"))
         self.assertNotEqual(proc.returncode, 0)
 
-    def test_live_verification_reviewer_is_mandatory_for_work_only(self):
-        repo, base = make_git_repo([])
+    def test_live_verification_reviewer_is_optional_for_work_only(self):
+        repo, base = make_git_repo(["README.md"])
         work = run_select("--phase", "work", "--worktree", repo,
                           "--base", base)
         self.assertEqual(work.returncode, 0, work.stderr)
@@ -244,8 +244,8 @@ class SelectPanelTests(unittest.TestCase):
         self.assertEqual(selected["verification-reviewer"], {
             "agent": "verification-reviewer",
             "subagent_type": "autopilot:verification-reviewer",
-            "tier": "core",
-            "matched": "core",
+            "tier": "optional",
+            "matched": ["**"],
         })
         spec = run_select("--phase", "spec")
         self.assertEqual(spec.returncode, 0, spec.stderr)
@@ -691,9 +691,14 @@ class SkillWorktreePinTests(unittest.TestCase):
             build = fh.read()
         with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
             light = fh.read()
-        self.assertIn("every core lens", build)
+        self.assertIn("every core lens and any verifier", build)
         self.assertIn("every round, including after a PASS", light)
-        self.assertIn("four cores, no optionals", light)
+        self.assertIn("three cores; add `autopilot:verification-reviewer`", " ".join(light.split()))
+        for text in (build, light):
+            flat = " ".join(text.split())
+            self.assertIn("only when the repo has no CI running its full checks or the "
+                          "requirement asks for local verification", flat)
+            self.assertIn("`verification=CI` or `verification=none`", flat)
         self.assertIn("progress section", build)
         self.assertIn("above RESUME", light)
         self.assertIn("legacy S1–S9", build + light)

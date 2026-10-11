@@ -5,13 +5,13 @@ shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
 
-> Status: **v1.0.0** — the build surface is now a **skill** (`skills/build`):
+> Status: **v1.1.0** — the build surface is now a **skill** (`skills/build`):
 > model-invocable and composable as a step inside a larger
 > skill/workflow, while `/autopilot:build` still works for users.
 > A second surface, **`skills/light-build`** (`/autopilot:light-build`), is
 > the low-ceremony path: autonomy + expert-council-at-forks with no
 > spec doc and no spec review — an S4 task list, then produce → one capped core
-> review with mandatory full verification. **light-build does not gate scope** —
+> review, with full verification when relevant. **light-build does not gate scope** —
 > choosing the right surface is your call (see its section below for when it fits).
 > The **named review roster** is complete for both phases in `agents/`, and the
 > **selection stage** (`skills/build/scripts/select-panel.py`) wires the roster into the S3/S6
@@ -26,7 +26,7 @@ The git repo is **both the marketplace and the plugin**:
 ```
 claude-autopilot/                 # git repo = marketplace + plugin
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 1.0.0)
+│   ├── plugin.json               # name: autopilot (version 1.1.0)
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # skill; /autopilot:build       still works
@@ -49,7 +49,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 │   ├── test-reviewer.md          # work / optional (code)
 │   ├── performance-reviewer.md   # work / optional (code)
 │   ├── security-reviewer.md      # both / optional — conditional, dual-phase
-│   └── verification-reviewer.md  # work / core — full checks in frozen worktree
+│   └── verification-reviewer.md  # work / optional — full checks in frozen worktree
 ├── tests/
 │   └── test_scripts.py           # stdlib unittest for the helper scripts
 ├── README.md
@@ -73,7 +73,7 @@ In Claude Code, this repo is its own single-repo marketplace, so add it and inst
 also browse and install via the interactive `/plugin` menu (Marketplaces → add →
 install).
 
-**Updating:** this plugin uses explicit semver (currently `1.0.0`). A release bumps
+**Updating:** this plugin uses explicit semver (currently `1.1.0`). A release bumps
 `version` in both `plugin.json` and `marketplace.json`; users then refresh with:
 
 ```
@@ -102,7 +102,7 @@ and it drives, end to end and without asking you questions:
 - **S3 — Spec review:** Ralph loop over the spec until the panel passes.
 - **S4 — Task list:** a code-free task list (files, cross-task interfaces, tests first, the checks each task runs, commit message); keep the full verify command in the plan progress section, outside producer briefs.
 - **S5 — Produce:** one fresh producer per task, in order; each runs only checks covering its changed files, never a full suite; no per-task review (S6 is the gate).
-- **S6 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency and the mandatory core `verification-reviewer` runs the full target checks against the same fixed revision as the other reviewers. An unavailable environment stops safely after one retry; genuine check failures enter the fix loop.
+- **S6 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency and the optional `verification-reviewer` runs the full target checks against the same fixed revision as the other reviewers, only when the repo has no CI running them or the requirement asks for local verification. An unavailable environment stops safely after one retry; genuine check failures enter the fix loop.
 - **S7 — Squash:** idempotent squash to one clean commit.
 - **S8 — Finish:** report + integration menu. **Never merges.**
 
@@ -151,7 +151,7 @@ without the ceremony. It is a skill (model-invocable / composable), emits the sa
 - **S1 — Worktree:** create a worktree and branch following the [skill's S1 conventions](skills/light-build/SKILL.md). **State:** no spec doc — the state file is materialized at S4 (see **S4 — Task list**).
 - **S4 — Task list:** the orchestrator writes a code-free task list (Global Constraints + per-task `### Task N` briefs: files, Consumes/Produces, tests first, commit message) into the state file — S4 always materializes it. S5 dispatches one fresh producer per task, in order.
 - **S5 — Produce:** dispatch one fresh producer per S4 task, in order from the first not `done`, via native host dispatch. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
-- **S6 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc` + mandatory `verification`, with full checks run in the frozen source worktree at the reviewed SHA, the same revision as other reviewers — **capped at 1** fix/re-review cycle after the initial Round 1 (at most Round 2). The verifier runs every round; other passed lenses carry their PASS. This is the sole correctness gate.
+- **S6 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc`, plus `verification` under build's S6 rule (full checks in the frozen source worktree at the reviewed SHA, the same revision as other reviewers) — **capped at 1** fix/re-review cycle after the initial Round 1 (at most Round 2). A verifier runs every round; other passed lenses carry their PASS. This is the sole correctness gate.
 - **S7 — Squash → S8 — Finish:** one clean commit + report. **Never merges.**
 
 **No scope gate.** light-build is a harness, not a gatekeeper — it runs whatever it is
@@ -183,8 +183,8 @@ that returns the strict `VERDICT / BLOCKING / NON-BLOCKING`
 contract, so a review is reproducible and a lens is attributable — unlike anonymous
 ad-hoc reviewers chosen anew each time. `phase` is when a lens runs — `spec` (S3
 spec-review), `work` (S6 work-review), or `both`. Ordinary reviewers are read-only
-and never run a full suite; the verification reviewer runs it in the frozen source
-worktree at the reviewed SHA.
+and never run a full suite; the optional verification reviewer runs it in the frozen
+source worktree at the reviewed SHA.
 
 | File | Lens | Phase | Tier |
 | --- | --- | --- | --- |
@@ -194,7 +194,7 @@ worktree at the reviewed SHA.
 | `agents/correctness-reviewer.md` | Intent/logic, edge & boundary cases, error paths | work | core |
 | `agents/requirement-fidelity-reviewer.md` | Work realizes the requirement & spec — right thing built, no missing items, no drift/scope creep | work | core |
 | `agents/doc-reviewer.md` | Docs **repo-wide** still accurate after the change (not just touched files); edits concise / not bloated | work | core |
-| `agents/verification-reviewer.md` | Full target checks with commands, exit codes, failure counts and diagnostics | work | core |
+| `agents/verification-reviewer.md` | Full target checks with commands, exit codes, failure counts and diagnostics | work | optional (S6 rule) |
 | `agents/code-quality-reviewer.md` | Readability, naming, duplication, dead code, needless complexity, comment quality | work | optional |
 | `agents/test-reviewer.md` | Tests meaningful & assert the spec; coverage of new/changed code | work | optional |
 | `agents/performance-reviewer.md` | Complexity, N+1, allocation, resource leaks, hotspots | work | optional |
@@ -207,12 +207,13 @@ missing items, no drift or scope creep), `correctness` (built bug-free);
 
 The **floor** that always runs is the phase's `core` lenses — spec phase:
 spec-fitness + architecture; work phase: correctness +
-requirement-fidelity + doc-reviewer + verification-reviewer — so every review is
+requirement-fidelity + doc-reviewer — so every review is
 non-empty for any deliverable. `optional` lenses are **conditional**: they run only
 when the spec/diff matches their `applies_to`, auditably skipped otherwise. The
 `code-quality`/`performance` pack matches code-source files, `test` also matches
 test files/dirs; `security` matches auth,
 input-handling, network, file/DB I/O, dependency, or crypto signals;
+`verification` matches any diff, then runs only under the S6 rule;
 `architecture` is core in the spec phase but a structural-signal-gated optional in
 the work phase — it runs in S6 only when the diff changes file topology
 (`@structural`: any added/deleted/renamed/copied file).
@@ -234,7 +235,7 @@ The skills select Workflow when available or native agent dispatch, loading comp
 canonical reviewer files for generic agents and respecting
 concurrency capacity. Re-reviewed lenses start fresh with prior items (ID + blocker
 gist) and, in S6, the fix diff. S6 re-reviews failed lenses plus every core lens
-(light-build: failed lenses plus the verification reviewer every round); S3
+and any verifier (light-build: failed lenses plus any verifier every round); S3
 re-reviews the full panel. The S6 fixer is continued by its id (Claude: `SendMessage`)
 and runs only checks covering its changed files.
 Rounds are batched, and convergence comes only from the reviewers' own verdicts.

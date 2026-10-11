@@ -24,7 +24,7 @@ This file is the canonical source for ordinary reviewers; it is never dispatched
 - **Read-only.** Modify nothing; use `Bash` for inspection only (e.g. `git diff`)
   — never mutate the worktree, index, or refs.
 - **Test scope:** Leave full suites, builds, and verification to the verification
-  reviewer; if a finding hinges on one test, read and run only that test and
+  reviewer or CI; if a finding hinges on one test, read and run only that test and
   report its command and result in your verdict.
 - **Inputs by reference, never by value.** The orchestrator passes you only:
   the **worktree path**, the **base_ref** (diff base), the **spec_doc / plan_doc

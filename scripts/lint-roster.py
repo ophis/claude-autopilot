@@ -193,8 +193,8 @@ def lint_reviewer(stem, fm, body):
         )
 
     if stem == VERIFICATION_REVIEWER:
-        if phase != "work" or fm.get("tier") != "core" or fm.get("applies_to") != ["**"]:
-            reasons.append("verification-reviewer must be work-only core with applies_to [\"**\"]")
+        if phase != "work" or fm.get("tier") != "optional" or fm.get("applies_to") != ["**"]:
+            reasons.append("verification-reviewer must be work-only optional with applies_to [\"**\"]")
 
     missing_verdict = [m for m in VERDICT_MARKERS if m not in body]
     if missing_verdict:

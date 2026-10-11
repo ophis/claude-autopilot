@@ -1,6 +1,6 @@
 ---
 name: build
-description: "Use to build a new work product from a requirement, end to end: create an isolated worktree, write and review a spec, write a task list, implement, and review-loop with verification to a single review-ready branch (never merges). Pass the requirement text, or a path to an existing spec file."
+description: "Use to build a new work product from a requirement, end to end: create an isolated worktree, write and review a spec, write a task list, implement, and review-loop to a single review-ready branch (never merges). Pass the requirement text, or a path to an existing spec file."
 argument-hint: "<requirements|spec-file-path>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Agent, Task, SendMessage, Workflow, Skill, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite, ScheduleWakeup
 ---
@@ -69,9 +69,9 @@ RESUME: phase=<S[1-8]> worktree=<path> branch=<name> base_ref=<sha> review_round
 **Keep RESUME current:** rewrite `phase=` at every phase transition and `review_round=`
 each loop iteration. **Location follows the user's / project's convention** — honor
 AGENTS.md / CLAUDE.md and existing repo patterns. From S6, persist RESUME, the frozen panel and
-verdicts, reviewed SHA/tree, and exact commands and results (exit codes, failure counts, diagnostics)
-in an ignored run note; reuse an ignored plan, or link the note from a tracked plan before
-committing it for review. Resume S7/S8 only with all-PASS evidence for the current tree;
+verdicts, reviewed SHA/tree, and the verifier's exact commands and results (exit codes, failure
+counts, diagnostics) in an ignored run note; reuse an ignored plan, or link the note from a
+tracked plan before committing it for review. Resume S7/S8 only with all-PASS evidence for the current tree;
 otherwise restart S6. For legacy S1–S9 plans, restart old S6–S9 at S6, keeping task progress.
 
 ## Deciding at decision points (expert council)
@@ -92,7 +92,8 @@ otherwise restart S6. For legacy S1–S9 plans, restart old S6–S9 at S6, keepi
   --phase spec --spec-file <spec doc>` (S3) / `... --phase work --worktree <worktree>
   --base <base_ref>` (S6) → a `selected` list of `{agent, subagent_type, tier, matched}`.
   The panel = ALL `core` agents (mandatory) + the `optional` agents you judge relevant (may
-  drop marginal ones). S6 includes core `autopilot:verification-reviewer`; S3 does not.
+  drop marginal ones). S6 keeps optional `autopilot:verification-reviewer` only when the
+  repo has no CI running its full checks or the requirement asks for local verification.
 - **Freeze & log** the panel to the plan doc progress section (S6: run note if tracked;
   see **Progress log format**); reuse it every round of that phase.
 - **Dispatch the whole round together**, never one at a time (the re-review too).
@@ -104,7 +105,7 @@ otherwise restart S6. For legacy S1–S9 plans, restart old S6–S9 at S6, keepi
   and status remains empty before judging (dirty only with paths the verifier reports
   as leaked → judge normally; the fix removes them). Ordinary reviewers read source
   HEAD; the verification reviewer runs full checks in the frozen source worktree every
-  round. Ordinary reviewers leave full checks to it. Each
+  round it is on the panel. Ordinary reviewers leave full checks to it or CI. Each
   member gets a run-input prompt — "PHASE=<spec|work>.
   Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…, requirement=…, focus=…,
   reviewed_sha=<HEAD> (S6 only). Output ONLY the verdict, no extra prose."
@@ -132,7 +133,7 @@ change a phase's cap for this run only when the invoking requirement says so.
 - **Round 1** (`r1`) = full frozen panel. Fix/re-reviews are Round 2 (`r2`) and
   Round 3 (`r3`); the initial review counts toward the cap.
 - **Re-review:** S3 = the full panel on the whole spec. S6 = the lenses that failed last
-  round plus every core lens; the rest carry their PASS.
+  round plus every core lens and any verifier; the rest carry their PASS.
 - **Advance** when every lens is PASS with no open BLOCKING (S3→S4, S6→S7). Cap hit →
   Safety stop 2. Never override a reviewer's verdict — never downgrade a blocker or mark an
   item INVALID yourself.
@@ -145,7 +146,7 @@ panel freeze, S5 task done, review round and decision, in the shapes below (`S3`
 the `S6` shapes), plus the final residual NON-BLOCKING items. The per-lens blocker gists prime
 re-reviewed lenses.
 
-- **Panel freeze:** `S6 panel: core=[correctness,requirement-fidelity,doc,verification] +optional=[code-quality] transport=Workflow` (append `->Task` or `-><actual native tool>` if the fallback fires).
+- **Panel freeze:** `S6 panel: core=[correctness,requirement-fidelity,doc] +optional=[code-quality,verification] transport=Workflow` (append `->Task` or `-><actual native tool>` if the fallback fires; without the verifier, `verification=CI` or `verification=none`).
 - **Task done:** `S5 task 3 done: <commit sha>`.
 - **Review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S6 r1 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fix dispatched`.
 - **Decision** (council or solo): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
@@ -181,7 +182,7 @@ re-reviewed lenses.
   - Per task, a `### Task N: <name>` heading (its S5 producer reads its brief by it) with:
     Files; Consumes/Produces (exact names/signatures crossing tasks); tests to write
     first, incl. edge cases; the checks it runs (only those its change affects, never a
-    full suite: the S6 verification reviewer runs that); commit message.
+    full suite: the S6 verification reviewer or CI runs that); commit message.
   - The task list is the plan doc's last section; the progress section, RESUME block and
     any verification notes go above it (a brief runs to the next Task heading).
 - **S5 — produce.** Code → per S4 task, in order from the first not `done`, dispatch one
@@ -203,7 +204,8 @@ re-reviewed lenses.
   `git rev-parse HEAD^{tree}` / `git rev-parse <reviewed_sha>^{tree}` before S8; if
   trees differ, return to S6.
 - **S8 — finish.** Inline (no skill): report review history, final verification evidence
-  from the run note, decisions, deferred non-blockers (stop-reason first if stopped);
+  (the verifier's from the run note, else the freeze's `CI` or `none`), decisions, deferred
+  non-blockers (stop-reason first if stopped);
   offer integration options as an informational report menu, NOT a question.
 
 ## Safety stops (handoffs, not questions)

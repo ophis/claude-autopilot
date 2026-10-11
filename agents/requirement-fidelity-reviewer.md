@@ -29,7 +29,7 @@ or added (no drift, no scope creep).
 ## Contract
 
 - **Test scope:** Leave full suites, builds, and verification to the verification
-  reviewer; if a finding hinges on one test, read and run only that test and
+  reviewer or CI; if a finding hinges on one test, read and run only that test and
   report its command and result in your verdict.
 - **Read-only.** Modify nothing; use `Bash` for inspection only (e.g. `git diff`)
   — never mutate the worktree, index, or refs.
