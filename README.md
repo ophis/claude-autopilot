@@ -99,7 +99,7 @@ A skill, so it is model-invocable now — call it directly, or compose it as a s
 larger skill/workflow; `/autopilot:build` is preserved for users. Hand it a requirement
 and it drives, end to end and without asking you questions:
 
-- **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch (`<prefix>` = the ticket ID when the work is for one single ticket, e.g. `TASK-123`, else `autopilot`); create the plan doc (progress + RESUME).
+- **S1 — Worktree:** create a worktree and branch using the [host runtime](skills/host-runtime.md) naming conventions (`<prefix>` = the ticket ID when the work is for one single ticket, e.g. `TASK-123`, else `autopilot`); create the plan doc (progress + RESUME).
 - **S2 — Spec:** write the spec from the requirement and the affected code (expert council at decision points).
 - **S3 — Spec review:** Ralph loop over the spec until the panel passes.
 - **S4 — Task list:** a code-free task list (files, cross-task interfaces, tests first, the checks each task runs, commit message); keep the full verify command in the plan progress section, outside producer briefs.
@@ -155,7 +155,7 @@ and as a lighter alternative to `build` when you want the autonomous interaction
 without the ceremony. It is a skill (model-invocable / composable), emits the same final
 `autopilot-result` block, and `/autopilot:light-build` is preserved for users.
 
-- **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch through the host runtime. **State:** no spec doc — the state file is materialized at S4 (see **S4 — Task list**).
+- **S1 — Worktree:** create a worktree and branch using the [host runtime](skills/host-runtime.md) naming conventions. **State:** no spec doc — the state file is materialized at S4 (see **S4 — Task list**).
 - **S4 — Task list:** the orchestrator writes a code-free task list (Global Constraints + per-task `### Task N` briefs: files, Consumes/Produces, tests first, commit message) into the state file — S4 always materializes it. S5 dispatches one fresh producer per task, in order.
 - **S5 — Produce:** dispatch one fresh producer per S4 task, in order from the first not `done`, via native host dispatch. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
 - **S6 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc` + mandatory `verification`, with full checks run in an isolated checkout against the same revision as other reviewers — **capped at 1** review+fix round. The verifier runs every round; other passed lenses carry their PASS. This is the sole correctness gate.
@@ -177,7 +177,8 @@ cycle.
 
 Because it is a skill, `build` can be invoked **by name** from another
 skill or workflow, not just typed by a user. A nested run is self-contained: it
-creates its **own** `<prefix>-<slug>` worktree + branch and persists its own
+creates its **own** worktree + branch using the [host runtime](skills/host-runtime.md)
+naming conventions and persists its own
 spec/plan docs (RESUME state is per-run namespaced, so nested runs don't stomp each
 other). The pipeline **never merges**, so the calling workflow owns integration of the
 returned branch — it reads the outcome from the final `autopilot-result` block
