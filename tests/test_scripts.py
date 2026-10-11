@@ -226,6 +226,23 @@ class SelectPanelTests(unittest.TestCase):
                           os.path.join(self.agents, "does-not-exist"))
         self.assertNotEqual(proc.returncode, 0)
 
+    def test_live_verification_reviewer_is_mandatory_for_work_only(self):
+        repo, base = make_git_repo([])
+        work = run_select("--phase", "work", "--worktree", repo,
+                          "--base", base)
+        self.assertEqual(work.returncode, 0, work.stderr)
+        selected = {e["agent"]: e for e in json.loads(work.stdout)["selected"]}
+        self.assertEqual(selected["verification-reviewer"], {
+            "agent": "verification-reviewer",
+            "subagent_type": "autopilot:verification-reviewer",
+            "tier": "core",
+            "matched": "core",
+        })
+        spec = run_select("--phase", "spec")
+        self.assertEqual(spec.returncode, 0, spec.stderr)
+        self.assertNotIn("verification-reviewer",
+                         {e["agent"] for e in json.loads(spec.stdout)["selected"]})
+
 
 class AutopilotConfigTests(unittest.TestCase):
     DEFAULTS = {"ralphLoop": {"maxIterations": {"spec-phase": 3, "implementation-phase": 3}}}
@@ -304,6 +321,9 @@ GOOD_BODY = """\
 - **Read-only.** Tools allowlist is Read, Grep, Glob, Bash.
 - **Inputs by reference.** The orchestrator passes you the worktree path.
 - **Cite evidence.** Anchor every finding to file:line.
+- **Test scope:** Leave full suites, builds, and verification to the verification
+  reviewer; if a finding hinges on one test, read and run only that test and
+  report its command and result in your verdict.
 
 ## Verdict grammar (strict)
 
@@ -376,6 +396,29 @@ class LintRosterTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("OK r1", proc.stdout)
         self.assertIn("OK reviewer-contract", proc.stdout)
+
+    def test_ordinary_reviewer_must_forbid_full_suite(self):
+        self._reviewer("r1", body=GOOD_BODY.format(name="r1").replace(
+            "- **Test scope:** Leave full suites, builds, and verification to the verification\n"
+            "  reviewer; if a finding hinges on one test, read and run only that test and\n"
+            "  report its command and result in your verdict.\n", ""))
+        proc = run_lint(self.agents)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("Test scope", proc.stdout)
+
+    def test_verification_reviewer_uses_distinct_execution_contract(self):
+        with open(os.path.join(REPO, "agents", "verification-reviewer.md"),
+                  encoding="utf-8") as fh:
+            verifier = fh.read()
+        self._reviewer("verification-reviewer", reviewer=verifier)
+        proc = run_lint(self.agents)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        for marker in ("Isolated checkout", "Command evidence",
+                       "VERIFICATION_UNAVAILABLE:"):
+            self._reviewer("verification-reviewer", reviewer=verifier.replace(marker, ""))
+            proc = run_lint(self.agents)
+            self.assertNotEqual(proc.returncode, 0, marker + "\n" + proc.stdout)
+            self.assertIn(marker, proc.stdout)
 
     def test_no_agents_found_fails(self):
         proc = run_lint(self.agents)
@@ -588,9 +631,10 @@ class SkillWorktreePinTests(unittest.TestCase):
     def test_build_s5_fresh_producer_per_task_without_review(self):
         with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
-        s5 = " ".join(text[text.index("- **S5 — produce.**"):text.index("- **S6 — verify.**")].split())
+        s5 = " ".join(text[text.index("- **S5 — produce.**"):text.index("- **S6 — work review.**")].split())
         self.assertIn("one fresh producer subagent on the task list header and its `### Task N` brief", s5)
-        self.assertIn("only the checks its brief names (never the verify command)", s5)
+        self.assertIn("only the checks its brief names that cover its changed files", s5)
+        self.assertIn("never the full verify command or full suite", s5)
         self.assertIn("log the task `done`", s5)
         self.assertNotIn("review", s5)
         for doc in ("skills/build/SKILL.md", "README.md", "CLAUDE.md"):
@@ -600,11 +644,12 @@ class SkillWorktreePinTests(unittest.TestCase):
     def test_light_build_s5_fresh_producer_per_task_without_review(self):
         with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
-        s5 = " ".join(text[text.index("- **S5 — produce.**"):text.index("- **S6 — verify.**")].split())
+        s5 = " ".join(text[text.index("- **S5 — produce.**"):text.index("- **S6 — work review.**")].split())
         self.assertIn("one fresh producer subagent", s5)
         self.assertIn("task list header", s5)
         self.assertIn("`### Task N` brief", s5)
-        self.assertIn("only the checks its brief names (never the verify command)", s5)
+        self.assertIn("only the checks its brief names that cover its changed files", s5)
+        self.assertIn("never the full verify command or full suite", s5)
         self.assertIn("log the task `done`", s5)
         self.assertNotIn("review", s5)
 
@@ -620,7 +665,7 @@ class SkillWorktreePinTests(unittest.TestCase):
     def test_light_build_pipeline_legend_includes_s4(self):
         with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
-        self.assertIn("S1 → S4 → S5 → S6 → S7 → S8 → S9", text)
+        self.assertIn("S1 → S4 → S5 → S6 → S7 → S8", text)
 
     def test_build_has_no_dependency_preflight_and_plans_itself(self):
         with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
@@ -648,20 +693,90 @@ class SkillWorktreePinTests(unittest.TestCase):
             with open(os.path.join(REPO, f), encoding="utf-8", errors="ignore") as fh:
                 self.assertNotIn("superpowers", fh.read().lower(), f)
 
-    def test_build_s6_matches_light_build_s6_inline_checks(self):
-        s6 = {}
+    def test_s6_work_review_includes_verification_without_standalone_verify(self):
         for skill in ("build", "light-build"):
             with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
                 text = fh.read()
-            s6[skill] = " ".join(text[text.index("- **S6 — verify.**"):text.index("- **S7 — work review.**")].split())
-            if skill == "build":
-                self.assertNotIn("skills/light-build", text)
-        self.assertEqual(s6["build"], s6["light-build"])
-        self.assertIn("inline via `Bash`", s6["build"])
-        self.assertIn("Claim a result only from this run's output", s6["build"])
-        for doc in ("skills/build/SKILL.md", "README.md", "CLAUDE.md"):
-            with open(os.path.join(REPO, doc), encoding="utf-8") as fh:
-                self.assertNotIn("verification-before-completion", fh.read(), doc)
+            flat = " ".join(text.split())
+            self.assertNotIn("- **S6 — verify.**", text, skill)
+            self.assertIn("- **S6 — work review.**", text, skill)
+            self.assertIn("- **S7 — squash.**", text, skill)
+            self.assertIn("- **S8 — finish.**", text, skill)
+            self.assertNotIn("- **S9 —", text, skill)
+            self.assertIn("autopilot:verification-reviewer", text, skill)
+            self.assertIn("reviewed_sha=<HEAD>", text, skill)
+            self.assertIn("HEAD still equals", flat, skill)
+            self.assertIn("HEAD^{tree}", text, skill)
+            self.assertIn("<reviewed_sha>^{tree}", text, skill)
+            self.assertIn("Wait for every verdict", text, skill)
+            self.assertIn("raw BLOCKING items before adding item IDs", flat, skill)
+            self.assertIn("VERIFICATION_UNAVAILABLE:", text, skill)
+            self.assertIn("only checks covering the files it changes", flat, skill)
+            self.assertIn("never the full verify command or full suite", flat, skill)
+            self.assertIn("verify command outside the task-list header", flat, skill)
+            self.assertIn("exit code", text, skill)
+        with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
+            build = fh.read()
+        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
+            light = fh.read()
+        self.assertIn("every core lens", build)
+        self.assertIn("every round, including after a PASS", light)
+        self.assertIn("four cores, no optionals", light)
+        self.assertIn("progress section", build)
+        self.assertIn("above RESUME", light)
+        self.assertIn("legacy S1–S9", build + light)
+        with open(os.path.join(REPO, "README.md"), encoding="utf-8") as fh:
+            self.assertNotIn("S6 — Verify", fh.read())
+
+    def test_s6_dispatch_uses_clean_committed_source_and_fixed_revision(self):
+        for skill in ("build", "light-build"):
+            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
+                text = " ".join(fh.read().split())
+            marker = ("Dispatch the whole round together" if skill == "build"
+                      else "Dispatch** each round's members together")
+            dispatch = text[text.index(marker):text.index("Wait for every verdict")]
+            self.assertIn("git -C <worktree> status --porcelain", dispatch, skill)
+            self.assertIn("clean committed source worktree", dispatch, skill)
+            self.assertIn("ordinary reviewers read source head", dispatch.lower(), skill)
+            self.assertIn("verification reviewer clones reviewed_sha", dispatch, skill)
+
+    def test_s6_fix_commits_and_rechecks_source_before_rereview(self):
+        for skill in ("build", "light-build"):
+            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
+                text = " ".join(fh.read().split())
+            s6 = text[text.index("S6 — work review."):text.index("S7 — squash.")]
+            self.assertIn("fix producer must commit", s6, skill)
+            self.assertIn("before re-review under the dispatch rules above", s6, skill)
+            dispatch = text[text.index("- **Dispatch"):text.index("- **Wait for every verdict")]
+            self.assertIn("git -C <worktree> status --porcelain", dispatch, skill)
+            self.assertIn("git -C <worktree> rev-parse HEAD", dispatch, skill)
+
+    def test_reviewer_template_exempts_verification_contract(self):
+        with open(os.path.join(REPO, "agents", "reviewer-contract.md"), encoding="utf-8") as fh:
+            template = fh.read()
+        with open(os.path.join(REPO, "CLAUDE.md"), encoding="utf-8") as fh:
+            guide = fh.read()
+        self.assertIn("ordinary reviewers", template)
+        self.assertIn("verification-reviewer.md", template)
+        self.assertIn("dedicated execution contract", template)
+        self.assertIn("ordinary reviewers", guide)
+        self.assertIn("verification-reviewer.md", guide)
+        self.assertIn("dedicated execution contract", guide)
+
+    def test_readme_limits_shared_contract_to_ordinary_reviewers(self):
+        with open(os.path.join(REPO, "README.md"), encoding="utf-8") as fh:
+            readme = fh.read()
+        self.assertNotIn("inlined into each reviewer", readme)
+        self.assertEqual(readme.count("inlined into ordinary reviewers"), 2)
+        self.assertIn("dedicated execution contract", readme)
+
+    def test_resume_phase_regexes_cover_only_valid_stages(self):
+        with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
+            build = fh.read()
+        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
+            light = fh.read()
+        self.assertIn("RESUME: phase=<S[1-8]>", build)
+        self.assertIn("RESUME: phase=<S[14-8]>", light)
 
 class ReviewRoundScriptTests(unittest.TestCase):
     """Static contract + syntax gate for workflows/review-round.js.

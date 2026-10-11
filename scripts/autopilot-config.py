@@ -16,7 +16,7 @@ DEFAULTS = {
     # driver); a user config still carrying it merges through harmlessly.
     "ralphLoop": {
         # Per-phase round cap: spec-phase = S3 spec review,
-        # implementation-phase = S7 work review.
+        # implementation-phase = S6 work review.
         "maxIterations": {"spec-phase": 3, "implementation-phase": 3},
     }
 }

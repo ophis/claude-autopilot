@@ -34,6 +34,13 @@ CONTRACT_MARKERS = (
     "Read-only",
     "Inputs by reference",
     "Cite evidence",
+    "Test scope",
+)
+VERIFICATION_REVIEWER = "verification-reviewer"
+VERIFICATION_MARKERS = (
+    "Isolated checkout",
+    "Command evidence",
+    "VERIFICATION_UNAVAILABLE:",
 )
 VERDICT_MARKERS = ("VERDICT:", "BLOCKING:", "NON-BLOCKING:")
 SELECTOR_KEYS = ("phase", "tier", "lens", "applies_to")
@@ -175,11 +182,16 @@ def lint_reviewer(stem, fm, body):
                 % "; ".join(detail)
             )
 
-    missing_markers = [m for m in CONTRACT_MARKERS if m not in body]
+    markers = ("Inputs by reference", *VERIFICATION_MARKERS) if stem == VERIFICATION_REVIEWER else CONTRACT_MARKERS
+    missing_markers = [m for m in markers if m not in body]
     if missing_markers:
         reasons.append(
             "body missing contract marker(s): " + ", ".join(missing_markers)
         )
+
+    if stem == VERIFICATION_REVIEWER:
+        if phase != "work" or fm.get("tier") != "core" or fm.get("applies_to") != ["**"]:
+            reasons.append("verification-reviewer must be work-only core with applies_to [\"**\"]")
 
     missing_verdict = [m for m in VERDICT_MARKERS if m not in body]
     if missing_verdict:

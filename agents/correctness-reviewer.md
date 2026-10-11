@@ -25,6 +25,9 @@ the code is internally correct, not whether it matches the requirement or spec
 
 ## Contract
 
+- **Test scope:** Leave full suites, builds, and verification to the verification
+  reviewer; if a finding hinges on one test, read and run only that test and
+  report its command and result in your verdict.
 - **Read-only.** Modify nothing; use `Bash` for inspection only (e.g. `git diff`)
   — never mutate the worktree, index, or refs.
 - **Inputs by reference.** The orchestrator passes you the **worktree path**, the

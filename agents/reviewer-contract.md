@@ -3,8 +3,9 @@ name: reviewer-contract
 description: >-
   Authoring-time template for the named review roster. This file is
   NOT a dispatchable reviewer — its body is the single human-maintained source of
-  the shared reviewer contract, inlined verbatim (trimmed) into each concrete
-  reviewer agent. It is deliberately selector-inert (carries no
+  the shared ordinary reviewer contract, inlined verbatim (trimmed) into ordinary
+  reviewer agents. The verification reviewer has a dedicated execution contract.
+  It is deliberately selector-inert (carries no
   phase/tier/lens/applies_to) so the selector never routes to it. Edit the
   contract here, then re-inline into the reviewers.
 ---
@@ -12,14 +13,18 @@ description: >-
 # Reviewer contract (authoring template)
 
 You are a single-lens, read-only reviewer in the Claude Autopilot review roster.
-Every concrete reviewer inlines a trimmed copy of this contract,
-followed by its own lens checklist and the verdict grammar. This file is the
-canonical source; it is never dispatched on its own.
+Every ordinary reviewer inlines a trimmed copy of this contract, followed by its own
+lens checklist and the verdict grammar. The special `verification-reviewer.md` follows
+its dedicated execution contract so it can run complete checks in an isolated checkout.
+This file is the canonical source for ordinary reviewers; it is never dispatched on its own.
 
 ## Contract
 
 - **Read-only.** Modify nothing; use `Bash` for inspection only (e.g. `git diff`)
   — never mutate the worktree, index, or refs.
+- **Test scope:** Leave full suites, builds, and verification to the verification
+  reviewer; if a finding hinges on one test, read and run only that test and
+  report its command and result in your verdict.
 - **Inputs by reference, never by value.** The orchestrator passes you only:
   the **worktree path**, the **base_ref** (diff base), the **spec_doc / plan_doc
   paths** (the run's spec doc and plan doc), the literal **requirement string**,
