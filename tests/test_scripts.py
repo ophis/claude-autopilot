@@ -683,7 +683,7 @@ class SkillWorktreePinTests(unittest.TestCase):
             self.assertLess(resolve, reuse, skill)
             self.assertLess(reuse, s1.index("Else create worktree"), skill)
             self.assertIn("same resolved branch for worktree reuse and resume", s1, skill)
-            self.assertIn("worktree/branch conventions in `skills/host-runtime.md`", s1, skill)
+            self.assertIn("Follow repo worktree/branch conventions", s1, skill)
             self.assertNotIn("`<prefix>-<slug>` branch", s1, skill)
             self.assertIn("git worktree add <path> <branch>", s1, skill)
             self.assertIn("collision with another requirement's", s1, skill)
@@ -739,7 +739,7 @@ class SkillWorktreePinTests(unittest.TestCase):
         with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
         s2 = text[text.index("- **S2 — spec."):text.index("- **S3 — spec review.")]
-        self.assertIn("`<skill_dir>/spec.md`", s2)
+        self.assertIn("[spec.md](spec.md)", s2)
         tracked = subprocess.run(["git", "-C", REPO, "ls-files", "skills/build/spec.md"],
                                  capture_output=True, text=True, check=True).stdout.split()
         self.assertEqual(tracked, ["skills/build/spec.md"])

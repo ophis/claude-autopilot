@@ -9,12 +9,10 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, SendMessage, Workflow,
 
 Autonomous build run. Drive the pipeline end to end: dispatch and judge.
 
-Before any phase, read [Host runtime](../host-runtime.md) and apply its mappings
-for startup, paths, dispatch, review transport, and approvals throughout this skill.
-
 ## Your input
 
-`input` is the single source of intent:
+`input` is Claude Code's substituted `$ARGUMENTS` or Codex's invoking user request /
+explicit caller input; an unresolved placeholder is absent. It is the single source of intent:
 
 - **Requirements mode (default):** free-text requirements → full pipeline.
 - **Spec-file mode:** if `input` is the path of an **existing spec file**, **skip S2
@@ -25,7 +23,11 @@ Empty input → STOP.
 
 ## Preflight
 
-- **Load config:** run `<plugin_root>/scripts/autopilot-config.py` through the host adapter. It prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`.
+- **Load config:** run the [helper](../../scripts/autopilot-config.py) as
+  `python3 "../../scripts/autopilot-config.py" --host <claude|codex>`. Pass
+  `--data-dir "<path>"` when explicitly configured or Claude supplies a substituted
+  plugin data path; the helper owns host defaults. It prints the effective
+  config, including `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`.
 
 ## Operating disciplines
 
@@ -34,6 +36,13 @@ Empty input → STOP.
 - **Thin orchestrator.** Dispatch by reference and judge structured output. Never hoard
   whole files, diffs, or logs in main thread; read only bounded slices when you must
   inspect something yourself.
+- **Resources.** Resolve bundled paths relative to this invoked SKILL.md; use absolute
+  paths in tools and worker briefs. Read applicable AGENTS.md / CLAUDE.md in the target
+  repo/worktree and pass their paths and constraints to workers.
+- **Native agents.** Use exposed spawn, continue and wait tools with documented arguments.
+  Request fresh context when supported, supplying the brief and applicable constraints.
+  Queue at available concurrency capacity and collect all completed outputs before
+  judging or fixing; status alone is no verdict.
 - **Worktree-pinned dispatch.** Give every subagent absolute worktree path + branch and
   have it act only there — absolute paths / `git -C <worktree>`, never inherited cwd — and
   **before any write assert** `git -C <worktree> branch --show-current` is the run branch;
@@ -44,7 +53,7 @@ Empty input → STOP.
 
 **On start, resume first.** Look for an existing **plan doc**, reconcile
 worktree/branch/base_ref existence on disk, then continue from `phase`. An interrupted review
-round re-runs with the whole frozen panel, on its recorded transport. No plan doc → start at S1.
+round re-runs with the whole frozen panel, on its recorded transport and round number. No plan doc → start at S1.
 
 **Persist** for compaction: the **spec** (S2's output, or the
 user-provided spec file) and the **plan doc** (task list + progress section +
@@ -75,28 +84,42 @@ otherwise restart S6. For legacy S1–S9 plans, restart old S6–S9 at S6, keepi
 
 ## Review rounds (S3 & S6)
 
-- **Select & compose.** Run `python3 "<plugin_root>/scripts/select-panel.py"
+- **Select & compose.** Run the [selector](../../scripts/select-panel.py) as
+  `python3 "../../scripts/select-panel.py"
   --phase spec --spec-file <spec doc>` (S3) / `... --phase work --worktree <worktree>
   --base <base_ref>` (S6) → a `selected` list of `{agent, subagent_type, tier, matched}`.
   The panel = ALL `core` agents (mandatory) + the `optional` agents you judge relevant (may
   drop marginal ones). S6 includes core `autopilot:verification-reviewer`; S3 does not.
 - **Freeze & log** the panel to the plan doc progress section (S6: run note if tracked;
   see **Progress log format**); reuse it every round of that phase.
-- **Dispatch the whole round together** through the host adapter, re-reviews included.
+- **Dispatch the whole round together** through the available transport, re-reviews included.
   For every S6 round, require a clean committed source worktree (`git -C <worktree>
   status --porcelain` empty); set `reviewed_sha=<HEAD>` with `git -C <worktree> rev-parse HEAD`.
   Keep it unchanged until all verdicts return; check HEAD still equals `reviewed_sha`
   and status remains empty before judging. Ordinary reviewers read source HEAD; the
   verification reviewer clones reviewed_sha into its isolated checkout and runs full
   checks every round. Ordinary reviewers leave full checks to it. Each
-  member uses canonical `autopilot:<name>` instructions plus a run-input prompt — "PHASE=<spec|work>.
+  member gets a run-input prompt — "PHASE=<spec|work>.
   Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…, requirement=…, focus=…,
   reviewed_sha=<HEAD> (S6 only). Output ONLY the verdict, no extra prose."
   A re-reviewed lens's prompt adds its prior items (`<lens>#<n> "<gist>"`, from the
   persisted gists); S6 also adds the fix diff `git -C <worktree> diff <pre-fix HEAD>..HEAD` (record HEAD
   before each fix).
-  - **Transport:** use the host adapter’s Workflow/native dispatch and verdict rules;
-    freeze the actual transport with the panel.
+  - **Reviewer instructions:** use named `autopilot:<name>` when available; otherwise
+    require the fresh generic agent to read the complete canonical file
+    `../../agents/<name>.md`, including its verdict grammar; preserve its tool/test
+    boundaries (verification: isolated checkout) when mapping tools. Claude
+    preserves declared model, effort and tools via supported options (otherwise reload or
+    Safety stop 3); Codex inherits the session model unless explicitly configured with a
+    supported override, never a Claude model alias.
+  - **Transport:** when exposed, use `Workflow({name: "autopilot:autopilot-review-round",
+    args: {phase, members: [{agent, subagent_type, prompt}]}})`; output is
+    `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}]}` in member
+    order. Never pass `resumeFromRunId`. Retry a synthetic member once natively in the same
+    round; still no verdict → FAIL. Absent/failed Workflow → native dispatch of the same
+    members/prompts
+    for this phase. Freeze/log the actual tool and fallback with the panel. PASS requires
+    no BLOCKING; missing/unparseable verdict → FAIL.
 - **Wait for every verdict** — never poll or judge early. Inspect the verifier's raw
   BLOCKING items before adding item IDs: `VERIFICATION_UNAVAILABLE:` (after its one
   retry) triggers Safety stop 3. Otherwise ONE fix over all blockers, then ONE re-review.
@@ -137,14 +160,14 @@ re-reviewed lenses.
   - Else resolve the requirement's host-specific `<branch>` before lookup or creation; use this same resolved branch for worktree reuse and resume:
     - `<prefix>` = the ticket ID when the work is for one single ticket (e.g. Linear `TASK-123`), else `autopilot`.
     - `<slug>` = `input` lowercased, non-alphanumerics → hyphens, collapsed to <=40 chars; with a ticket prefix, a short feature description instead (not the ticket ID again).
-    - Resolve `<path>` and `<branch>` through the worktree/branch conventions in `skills/host-runtime.md`; ensure the worktree directory is gitignored.
+    - Follow repo worktree/branch conventions; fallback: Claude `.claude/worktrees/<prefix>-<slug>` / `<prefix>-<slug>`, Codex `.codex/worktrees/<prefix>-<slug>` / `codex/<prefix>-<slug>`. Ensure the worktree directory is gitignored.
     - If this requirement's resolved `<branch>` exists from a prior run, reuse it with its commits — do not create a numbered one: enter its worktree (`git worktree list`; if none, `git worktree add <path> <branch>`), `base_ref` = `git merge-base HEAD <branch>`; a plan doc there → resume from it.
     - Else create worktree on local HEAD, then enter:
       - On collision with another requirement's worktree/branch: retry with a uniquified slug (`-2`, …) and resolve `<path>` and `<branch>` again.
-      - Create and enter through the host adapter (git fallback: `git worktree add <path> -b <branch> HEAD`); use the absolute worktree directory for commands.
+      - Use an exposed host worktree tool only if it honors the exact local HEAD base and resolved branch; otherwise `git worktree add <path> -b <branch> HEAD`. Use the absolute worktree directory for commands and workers.
   - Create the **plan doc** (with RESUME + progress section) at location per the project's convention. Record `worktree`, `branch`, and `base_ref` (HEAD) in the RESUME block.
 - **S2 — spec. (Skipped in spec-file mode)** Write the spec into the spec doc per
-  `<skill_dir>/spec.md`; read the affected code first. A genuine fork → the expert
+  [spec.md](spec.md); read the affected code first. A genuine fork → the expert
   council (**Deciding at decision points**); never ask the user.
 - **S3 — spec review. (Skipped in spec-file mode)** Run the S3 review loop (see **Review
   rounds**) over the spec. **Fixes:** the orchestrator edits the spec doc directly. Root
@@ -167,7 +190,7 @@ re-reviewed lenses.
   orchestrator never edits the work product itself.
 - **S6 — work review.** Run the review loop above; genuine check failures block.
   **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the deduped
-  open blockers (with item IDs) + cited files only; later fixes continue it via the host continuation operation
+  open blockers (with item IDs) + cited files only; later fixes continue it via native continuation with its recorded ID that starts it when idle
   (unknown ID / error → fresh producer, whose ID replaces the recorded one). Docs are part
   of S6. Each fix producer runs only checks covering the files it changes; the fix producer
   must commit all product changes before re-review under the dispatch rules above.
@@ -185,9 +208,11 @@ re-reviewed lenses.
 Stop and hand off (state + exact next step) only on the cases below.
 1. **Destructive op requiring host approval without existing authorization.**
    Before force-push, history rewrite beyond this branch, or rm/reset of uncommitted
-   work, apply the host adapter’s approval rules.
+   work, follow the current host’s approval rules, honoring existing user authorization.
+   Report a denied action and its reason.
 2. **Non-convergence at cap** — a Ralph loop hits `cap` (with the classification).
-3. **Non-review phase failure** — one retry, then STOP.
+3. **Non-review phase failure / missing required capability** — one retry, then STOP
+   with the failure or missing capability and exact next step; never replace a required worker yourself.
 4. **Root-contradiction** — the core requirement asks for two things that cannot both be
    true: quote the two clauses; record the handoff in the plan doc. Mere vagueness is
    decided, not stopped.

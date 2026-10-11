@@ -70,8 +70,8 @@ files plus `agents/` and `scripts/` together:
   `applies_to`) so the selector can route it with no code change. `reviewer-contract.md`
   is an authoring-time template (selector-inert: no `phase`) inlined into ordinary reviewers;
   `verification-reviewer.md` follows its dedicated execution contract.
-  Host dispatch, paths and approvals are mapped in `skills/host-runtime.md`, loaded
-  by both skills. Claude reviewers run as `autopilot:<name>` with configured models;
+  Both skills handle host dispatch, paths and approvals at the relevant steps.
+  Claude reviewers run as `autopilot:<name>` with configured models;
   Codex inherits the host model and gives generic agents the canonical reviewer files.
   **Each round** uses the plugin workflow when exposed, otherwise native dispatch; a re-reviewed lens
   is a fresh member primed with its prior items (+ the fix diff in S6). If that call fails,
