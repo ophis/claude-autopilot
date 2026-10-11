@@ -91,9 +91,12 @@ S7 is the **sole correctness gate**.
   four cores, no optionals. Freeze it in
   context (see **Working-note shapes**); reuse it every round.
 - **Dispatch** each round's members together, never one at a time (the re-review too).
-  Before each round capture `reviewed_sha=<HEAD>` and verify the source worktree HEAD
-  equals it. Do not mutate the source until all verdicts return, then check HEAD still
-  equals `reviewed_sha` before judging. Every member's run-input prompt, built once:
+  Before each round, require a clean committed source worktree: `git -C <worktree> status --porcelain`
+  must be empty. Capture `reviewed_sha=<HEAD>` from `git -C <worktree> rev-parse HEAD`
+  and verify source HEAD equals it. Do not mutate the source until all verdicts return;
+  then check HEAD still equals `reviewed_sha` and the source remains clean before judging.
+  Ordinary reviewers read source HEAD; the verification reviewer clones reviewed_sha
+  into its isolated checkout. Every member's run-input prompt, built once:
   "PHASE=work. Inputs: worktree=…, base_ref=…, state_file=…, requirement=…, focus=…,
   reviewed_sha=<HEAD>. Output ONLY the verdict, no extra prose." (absolute paths;
   ordinary reviewers read the source worktree, never main; the verification reviewer
@@ -182,7 +185,10 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
   verification reviewer runs complete checks in parallel with the ordinary reviewers;
   genuine failed checks enter the existing fix loop. Each fix producer runs only checks
   covering the files it changes, never the full verify command or full suite; the
-  verification reviewer repeats full checks on every S7 round. A
+  fix producer must commit all product changes. After the fix, require empty
+  `git -C <worktree> status --porcelain` and confirm `git -C <worktree> rev-parse HEAD`
+  is the new committed SHA before re-review. The verification reviewer repeats full
+  checks on every S7 round. A
   `VERIFICATION_UNAVAILABLE:` result after the reviewer's retry is a safety stop.
 - **S8 — squash.** Idempotent squash to one commit **via `git` (`Bash`)** — **skip
   if already exactly 1 ahead of `base_ref`**. The state file is committed or

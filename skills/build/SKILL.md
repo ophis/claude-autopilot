@@ -49,7 +49,7 @@ user-provided spec file) and the **plan doc** (task list + progress section +
 RESUME block):
 
 ```
-RESUME: phase=<S1..S9> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> spec_file=<path>
+RESUME: phase=<S1|S2|S3|S4|S5|S7|S8|S9> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> spec_file=<path>
 ```
 
 **Keep RESUME current:** rewrite `phase=` at every phase transition and `review_round=`
@@ -83,15 +83,18 @@ frozen panel; never carry verification evidence to a different SHA.
 - **Freeze & log** the panel to the **plan doc** progress section (see **Progress log
   format**); reuse it every round of that phase.
 - **Dispatch the whole round together** — never one at a time, re-reviews included. Before
-  each S7 round, capture `reviewed_sha=<HEAD>` and verify the source worktree HEAD equals
-  it; do not mutate the source until all verdicts return, then verify HEAD still equals
-  `reviewed_sha` before judging. Every S7 member gets the same fixed revision. Each
+  each S7 round, require a clean committed source worktree: `git -C <worktree> status --porcelain`
+  must be empty. Capture `reviewed_sha=<HEAD>` from `git -C <worktree> rev-parse HEAD`
+  and verify source HEAD equals it. Do not mutate the source until all verdicts return;
+  then verify HEAD still equals `reviewed_sha` and the source remains clean before judging.
+  Every S7 member gets the same fixed revision: ordinary reviewers read source HEAD;
+  the verification reviewer clones reviewed_sha into its isolated checkout. Each
   member is `autopilot:<name>` and gets ONLY a run-input prompt — "PHASE=<spec|work>.
   Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…, requirement=…, focus=…,
   reviewed_sha=<HEAD> (S7 only). Output
-  ONLY the verdict, no extra prose." (absolute paths; reviewers read the worktree, never
-  main). The verification reviewer reads the plan doc by reference for the full verify
-  command and runs in its own isolated checkout. Ordinary reviewers do not run the full
+  ONLY the verdict, no extra prose." (absolute paths; ordinary reviewers read the source
+  worktree, never main). The verification reviewer reads the plan doc by reference for
+  the full verify command and runs in its own isolated checkout. Ordinary reviewers do not run the full
   verify command or test suite. A re-reviewed lens's prompt adds its prior items (`<lens>#<n> "<gist>"`, from the
   persisted gists); S7 also adds the fix diff `git -C <worktree> diff <pre-fix HEAD>..HEAD` (record HEAD
   before each fix).
@@ -180,8 +183,11 @@ re-reviewed lenses.
   open blockers (with item IDs) + cited files only; later fixes continue it via `SendMessage`
   (unknown ID / error → fresh producer, whose ID replaces the recorded one). Docs are part
   of S7. Each fix producer runs only checks covering the files it changes, never the
-  full verify command or full suite; the verification reviewer repeats full checks on
-  every S7 round. A `VERIFICATION_UNAVAILABLE:` result after the reviewer's one retry
+  full verify command or full suite; the fix producer must commit all product changes.
+  After the fix, require empty `git -C <worktree> status --porcelain` and confirm
+  `git -C <worktree> rev-parse HEAD` is the new committed SHA before re-review.
+  The verification reviewer repeats full checks on every S7 round. A
+  `VERIFICATION_UNAVAILABLE:` result after the reviewer's one retry
   is a safety stop, not a code-fix task.
 - **S8 — squash.** Idempotent squash to one commit (skip if already exactly 1
   ahead of `base_ref`). Working notes (spec/plan/progress) are committed or ignored per the

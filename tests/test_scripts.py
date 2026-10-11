@@ -719,6 +719,46 @@ class SkillWorktreePinTests(unittest.TestCase):
         with open(os.path.join(REPO, "README.md"), encoding="utf-8") as fh:
             self.assertNotIn("S6 — Verify", fh.read())
 
+    def test_s7_dispatch_uses_clean_committed_source_and_fixed_revision(self):
+        for skill in ("build", "light-build"):
+            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
+                text = " ".join(fh.read().split())
+            marker = ("Dispatch the whole round together" if skill == "build"
+                      else "Dispatch** each round's members together")
+            dispatch = text[text.index(marker):text.index("Wait for every verdict")]
+            self.assertIn("git -C <worktree> status --porcelain", dispatch, skill)
+            self.assertIn("clean committed source worktree", dispatch, skill)
+            self.assertIn("ordinary reviewers read source head", dispatch.lower(), skill)
+            self.assertIn("verification reviewer clones reviewed_sha", dispatch, skill)
+
+    def test_s7_fix_commits_and_rechecks_source_before_rereview(self):
+        for skill in ("build", "light-build"):
+            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
+                text = " ".join(fh.read().split())
+            s7 = text[text.index("S7 — work review."):text.index("S8 — squash.")]
+            self.assertIn("fix producer must commit", s7, skill)
+            self.assertIn("git -C <worktree> status --porcelain", s7, skill)
+            self.assertIn("git -C <worktree> rev-parse HEAD", s7, skill)
+            self.assertIn("before re-review", s7, skill)
+
+    def test_reviewer_template_exempts_verification_contract(self):
+        with open(os.path.join(REPO, "agents", "reviewer-contract.md"), encoding="utf-8") as fh:
+            template = fh.read()
+        with open(os.path.join(REPO, "CLAUDE.md"), encoding="utf-8") as fh:
+            guide = fh.read()
+        self.assertIn("ordinary reviewers", template)
+        self.assertIn("verification-reviewer.md", template)
+        self.assertIn("dedicated execution contract", template)
+        self.assertIn("ordinary reviewers", guide)
+        self.assertIn("verification-reviewer.md", guide)
+        self.assertIn("dedicated execution contract", guide)
+
+    def test_build_resume_lists_only_valid_phases(self):
+        with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertIn("RESUME: phase=<S1|S2|S3|S4|S5|S7|S8|S9>", text)
+        self.assertNotIn("phase=<S1..S9>", text)
+
 class ReviewRoundScriptTests(unittest.TestCase):
     """Static contract + syntax gate for workflows/review-round.js.
 

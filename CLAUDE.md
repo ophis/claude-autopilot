@@ -67,7 +67,8 @@ files plus `agents/` and `scripts/` together:
   reviewer runs the complete checks in an isolated checkout of the reviewed SHA. Each
   agent has **self-describing** frontmatter (`lens` / `phase` / `tier` /
   `applies_to`) so the selector can route it with no code change. `reviewer-contract.md`
-  is an authoring-time template (selector-inert: no `phase`) inlined into each reviewer.
+  is an authoring-time template (selector-inert: no `phase`) inlined into ordinary reviewers;
+  `verification-reviewer.md` follows its dedicated execution contract.
   Reviewers run as `autopilot:<name>`, each at its own `model` + `tools`
   allowlist. **Each round** is one call to the plugin workflow (below) — a re-reviewed lens
   is a fresh member primed with its prior items (+ the fix diff in S7). If that call fails,
@@ -147,6 +148,7 @@ python3 scripts/lint-roster.py
 
 It enforces A3 for every reviewer: valid frontmatter (`lens`/`phase`/`tier`/
 `applies_to` + `maxTurns`), a read-only `tools` allowlist (`Read, Grep, Glob, Bash`),
-the inlined reviewer contract, and the strict verdict block — so a malformed reviewer
+the ordinary reviewers' inlined contract or the verification reviewer's dedicated
+execution contract, and the strict verdict block — so a malformed reviewer
 fails loudly at authoring time instead of being silently mis-routed by the selector. It
 is an authoring/CI check, **not** a step in the `/autopilot:build` pipeline.
