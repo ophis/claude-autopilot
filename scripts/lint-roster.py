@@ -34,7 +34,7 @@ CONTRACT_MARKERS = (
     "Read-only",
     "Inputs by reference",
     "Cite evidence",
-    "No test runs",
+    "Test scope",
 )
 VERIFICATION_REVIEWER = "verification-reviewer"
 VERIFICATION_MARKERS = (

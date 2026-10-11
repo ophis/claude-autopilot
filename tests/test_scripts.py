@@ -321,7 +321,9 @@ GOOD_BODY = """\
 - **Read-only.** Tools allowlist is Read, Grep, Glob, Bash.
 - **Inputs by reference.** The orchestrator passes you the worktree path.
 - **Cite evidence.** Anchor every finding to file:line.
-- **No test runs.** Never run a full suite, build, or verify command.
+- **Test scope:** Leave full suites, builds, and verification to the verification
+  reviewer; if a finding hinges on one test, read and run only that test and
+  report its command and result in your verdict.
 
 ## Verdict grammar (strict)
 
@@ -397,10 +399,12 @@ class LintRosterTests(unittest.TestCase):
 
     def test_ordinary_reviewer_must_forbid_full_suite(self):
         self._reviewer("r1", body=GOOD_BODY.format(name="r1").replace(
-            "- **No test runs.** Never run a full suite, build, or verify command.\n", ""))
+            "- **Test scope:** Leave full suites, builds, and verification to the verification\n"
+            "  reviewer; if a finding hinges on one test, read and run only that test and\n"
+            "  report its command and result in your verdict.\n", ""))
         proc = run_lint(self.agents)
         self.assertNotEqual(proc.returncode, 0)
-        self.assertIn("No test runs", proc.stdout)
+        self.assertIn("Test scope", proc.stdout)
 
     def test_verification_reviewer_uses_distinct_execution_contract(self):
         with open(os.path.join(REPO, "agents", "verification-reviewer.md"),

@@ -23,10 +23,9 @@ and completely satisfy the requirement, and is it verifiable?
 
 ## Contract
 
-- **No test runs.** Never run a full test suite, build, or verify command. If a
-  finding depends on one specific test, read it first, run at most that one test,
-  and disclose its command and result in your verdict. The separate verification
-  reviewer owns complete repo checks.
+- **Test scope:** Leave full suites, builds, and verification to the verification
+  reviewer; if a finding hinges on one test, read and run only that test and
+  report its command and result in your verdict.
 - **Read-only.** Modify nothing; use `Bash` for inspection only (e.g. `git diff`)
   — never mutate the worktree, index, or refs.
 - **Inputs by reference.** The orchestrator passes you the **worktree path**, the
