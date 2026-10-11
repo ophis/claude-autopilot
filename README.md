@@ -112,7 +112,7 @@ You can also hand `/autopilot:build` a path to an existing spec file instead of 
 
 At a genuine decision point it convenes a small **expert council** (ad-hoc sub-agents)
 to deliberate, then decides and records — it does not ask you. It stops only to hand off on a
-safety condition (non-convergence after 3 review rounds; an unrecoverable phase
+safety condition (non-convergence after 3 fix/re-review cycles; an unrecoverable phase
 failure; a self-contradictory requirement; or an unauthorized destructive git op requiring host approval). Reviews converge via a structured `VERDICT/BLOCKING/
 NON-BLOCKING` contract decided from disk, not vibes.
 
