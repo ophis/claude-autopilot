@@ -1,6 +1,6 @@
 ---
 name: build
-description: "Use to build a new work product from a requirement, end to end: create an isolated worktree, write and review a spec, write a task list, implement, and review-loop with mandatory verification to a single review-ready branch (never merges). Pass the requirement text, or a path to an existing spec file."
+description: "Use to build a new work product from a requirement, end to end: create an isolated worktree, write and review a spec, write a task list, implement, and review-loop with verification to a single review-ready branch (never merges). Pass the requirement text, or a path to an existing spec file."
 argument-hint: "<requirements|spec-file-path>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, SendMessage, Workflow, Skill, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite, ScheduleWakeup
 ---
@@ -41,10 +41,9 @@ Empty input → STOP.
 
 **On start, resume first.** Look for an existing **plan doc**, reconcile
 worktree/branch/base_ref existence on disk, then continue from `phase`. An interrupted review
-round re-runs with the whole frozen panel, on the transport its freeze line records; only
-`review_round` need be persisted to locate the loop. No plan doc → start at S1.
+round re-runs with the whole frozen panel, on its recorded transport. No plan doc → start at S1.
 
-**Persist two things** so the run survives compaction: the **spec** (S2's output, or the
+**Persist** for compaction: the **spec** (S2's output, or the
 user-provided spec file) and the **plan doc** (task list + progress section +
 RESUME block):
 
@@ -54,16 +53,11 @@ RESUME: phase=<S[1-8]> worktree=<path> branch=<name> base_ref=<sha> review_round
 
 **Keep RESUME current:** rewrite `phase=` at every phase transition and `review_round=`
 each loop iteration. **Location follows the user's / project's convention** — honor
-CLAUDE.md and existing repo patterns. Before S6, commit tracked plan edits and name an
-ignored run note there; from S6 onward, keep mutable RESUME, panel verdicts, and
-verification evidence in that note (an ignored plan doc may serve as the note).
-On resume, continue the recorded phase; for S7/S8, rerun S6 unless the note has an
-all-PASS panel and verification results for the current tree.
-For legacy S1–S9 plans, restart old S6–S9 at new S6, retaining task progress.
-
-Keep the full verify command in the plan doc progress section. The run note records
-reviewed SHA/tree, commands, exit codes, failure counts, and diagnostics; an
-interrupted S6 round reruns with its whole frozen panel.
+CLAUDE.md and existing repo patterns. From S6, persist RESUME, the frozen panel and
+verdicts, reviewed SHA/tree, and command results (exit codes, failure counts, diagnostics)
+in an ignored run note; reuse an ignored plan, or link the note from a tracked plan before
+committing it for review. Resume S7/S8 only with all-PASS evidence for the current tree;
+otherwise restart S6. For legacy S1–S9 plans, restart old S6–S9 at S6, keeping task progress.
 
 ## Deciding at decision points (expert council)
 
@@ -85,20 +79,17 @@ interrupted S6 round reruns with its whole frozen panel.
   drop marginal ones). S6 includes core `autopilot:verification-reviewer`; S3 does not.
 - **Freeze & log** the panel to the plan doc progress section (S6: run note if tracked;
   see **Progress log format**); reuse it every round of that phase.
-- **Dispatch the whole round together** — never one at a time, re-reviews included. Before
-  each S6 round, require a clean committed source worktree (`git -C <worktree> status --porcelain`
-  empty), set `reviewed_sha=<HEAD>` from `git -C <worktree> rev-parse HEAD`, and keep
-  source unchanged until every verdict returns. Check HEAD still equals `reviewed_sha`
-  and status is still empty before judging. Write verdicts and evidence to the run
-  note afterward, keeping tracked files unchanged until S7.
-  Every S6 member gets the same fixed revision: ordinary reviewers read source HEAD;
-  the verification reviewer clones reviewed_sha into its isolated checkout. Each
+- **Dispatch the whole round together** — never one at a time, re-reviews included.
+  For every S6 round, require a clean committed source worktree (`git -C <worktree>
+  status --porcelain` empty); set `reviewed_sha=<HEAD>` with `git -C <worktree> rev-parse HEAD`.
+  Keep it unchanged until all verdicts return; check HEAD still equals `reviewed_sha`
+  and status remains empty before judging. Ordinary reviewers read source HEAD; the
+  verification reviewer clones reviewed_sha into its isolated checkout and runs full
+  checks every round. Ordinary reviewers leave full checks to it. Each
   member is `autopilot:<name>` and gets ONLY a run-input prompt — "PHASE=<spec|work>.
   Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…, requirement=…, focus=…,
-  reviewed_sha=<HEAD> (S6 only). Output ONLY the verdict, no extra prose." (absolute
-  paths; ordinary reviewers read the source worktree, never main). The verification
-  reviewer reads the plan doc's full verify command; ordinary reviewers leave full
-  checks to it. A re-reviewed lens's prompt adds its prior items (`<lens>#<n> "<gist>"`, from the
+  reviewed_sha=<HEAD> (S6 only). Output ONLY the verdict, no extra prose."
+  A re-reviewed lens's prompt adds its prior items (`<lens>#<n> "<gist>"`, from the
   persisted gists); S6 also adds the fix diff `git -C <worktree> diff <pre-fix HEAD>..HEAD` (record HEAD
   before each fix).
   - **Workflow (default):** one call per round —
@@ -109,18 +100,16 @@ interrupted S6 round reruns with its whole frozen panel.
   - **Task (fallback):** if the `Workflow` call fails, dispatch the same members fresh as
     one parallel `Task` batch with the same prompts, and stay on Task for the phase (freeze
     line `->Task`). PASS only with no BLOCKING; no or unparseable verdict → FAIL.
-- **Wait for every verdict** — never poll or judge early. After every verdict is in,
-  inspect the verification reviewer's raw BLOCKING items before adding item IDs;
-  `VERIFICATION_UNAVAILABLE:` at the start of an item triggers Safety stop 3;
-  do not dispatch a code fixer for an unavailable environment or tool. Otherwise make
-  ONE fix over all open blockers, then ONE re-review round.
+- **Wait for every verdict** — never poll or judge early. Inspect the verifier's raw
+  BLOCKING items before adding item IDs: `VERIFICATION_UNAVAILABLE:` (after its one
+  retry) triggers Safety stop 3. Otherwise ONE fix over all blockers, then ONE re-review.
 - **Item IDs:** before deduping for the fixer, label each item `<lens>#<n>` — numbered per
   lens across the phase, never reused; a repeated OPEN item keeps its ID (reviewers prefix it).
 
 **Ralph loop:** review → fix → re-review until the frozen panel all-PASSes, capped by
 `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` (default 3, from config).
 
-- **Round 0** = full frozen panel; all-PASS short-circuits.
+- **Round 0** = full frozen panel.
 - **Re-review:** S3 = the full panel on the whole spec. S6 = the lenses that failed last
   round plus every core lens; the rest carry their PASS.
 - **Advance** when every lens is PASS with no open BLOCKING (S3→S4, S6→S7). Cap hit →
@@ -137,7 +126,7 @@ re-reviewed lenses.
 
 - **Panel freeze:** `S6 panel: core=[correctness,requirement-fidelity,doc,verification] +optional=[code-quality] transport=Workflow` (append `->Task` if the fallback fires).
 - **Task done:** `S5 task 3 done: <commit sha>`.
-- **Review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S6 r0 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fix dispatched`. Record useful verification diagnostics when a command fails.
+- **Review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S6 r0 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fix dispatched`.
 - **Decision** (council or solo): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 <!-- progress-log-format:end -->
 
@@ -165,8 +154,7 @@ re-reviewed lenses.
 - **S4 — task list.** Write the task list yourself (invoke no planning skill): a code-free
   task list into the plan doc's implementation-plan section:
   - Header: spec path; Global Constraints (exact values producers need). Put the full
-    verify command outside the task-list header, in the plan doc progress section,
-    so the verification reviewer can read it by `plan_doc` reference.
+    verify command outside the task-list header, in the plan doc progress section.
   - Per task, a `### Task N: <name>` heading (its S5 producer reads its brief by it) with:
     Files; Consumes/Produces (exact names/signatures crossing tasks); tests to write
     first, incl. edge cases; the checks it runs (only those its change affects, never a
@@ -179,27 +167,20 @@ re-reviewed lenses.
   the full verify command or full suite); commit
   with the brief's message; log the task `done`. Non-code → producer subagents. The
   orchestrator never edits the work product itself.
-- **S6 — work review.** Run the review loop above; complete checks run in parallel
-  through the mandatory verification reviewer, and genuine failures block.
+- **S6 — work review.** Run the review loop above; genuine check failures block.
   **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the deduped
   open blockers (with item IDs) + cited files only; later fixes continue it via `SendMessage`
   (unknown ID / error → fresh producer, whose ID replaces the recorded one). Docs are part
-  of S6. Each fix producer runs only checks covering the files it changes; the fix
-  producer must commit all product changes.
-  After the fix, require empty `git -C <worktree> status --porcelain` and confirm
-  `git -C <worktree> rev-parse HEAD` is the new committed SHA before re-review.
-  The verifier repeats full checks each round; `VERIFICATION_UNAVAILABLE:` after its
-  one retry is a safety stop.
+  of S6. Each fix producer runs only checks covering the files it changes; the fix producer
+  must commit all product changes before re-review under the dispatch rules above.
 - **S7 — squash.** Idempotent squash to one commit (skip if already exactly 1
   ahead of `base_ref`). Working notes (spec/plan/progress) are committed or ignored per the
   project's convention — do not force either. Require a clean worktree and matching
   `git rev-parse HEAD^{tree}` / `git rev-parse <reviewed_sha>^{tree}` before S8; if
   trees differ, return to S6.
-- **S8 — finish.** Inline (no skill): report
-  review history and final verification evidence (reviewed SHA, commands, exit codes,
-  failure counts and useful diagnostics), decisions, deferred non-blockers
-  (stop-reason first if the run stopped);
-  offer integration options as an informational report menu, NOT a question. NO merge.
+- **S8 — finish.** Inline (no skill): report review history, final verification evidence
+  from the run note, decisions, deferred non-blockers (stop-reason first if stopped);
+  offer integration options as an informational report menu, NOT a question.
 
 ## Safety stops (handoffs, not questions)
 

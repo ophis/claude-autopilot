@@ -105,10 +105,10 @@ files plus `agents/` and `scripts/` together:
   (`phase=… worktree=… branch=… base_ref=… review_round=…`) lets a run survive
   compaction and resume from the current phase; an interrupted review round re-runs whole.
   The progress section records each S5 task done (a resume continues from the next), the
-  review transport, and per-lens blocker gists that prime re-reviewed lenses. It also
-  keeps the full verify command outside producer briefs, with command, exit-code,
-  failure-count and diagnostic evidence for the final reviewed SHA. In light-build,
-  the command and concise evidence live above RESUME in the state file.
+  review transport, per-lens blocker gists, and the full verify command outside producer
+  briefs. In light-build, the command sits above RESUME in the state file. From S6, both
+  skills keep mutable RESUME, verdicts, and verification evidence in an ignored run note
+  (or an ignored plan/state file).
 
 - **No plugin dependencies.** Both surfaces use only native tools, the plugin's own
   scripts, or inline logic; neither invokes another plugin's skill or preflights for one.

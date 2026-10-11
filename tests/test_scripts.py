@@ -746,9 +746,10 @@ class SkillWorktreePinTests(unittest.TestCase):
                 text = " ".join(fh.read().split())
             s6 = text[text.index("S6 — work review."):text.index("S7 — squash.")]
             self.assertIn("fix producer must commit", s6, skill)
-            self.assertIn("git -C <worktree> status --porcelain", s6, skill)
-            self.assertIn("git -C <worktree> rev-parse HEAD", s6, skill)
-            self.assertIn("before re-review", s6, skill)
+            self.assertIn("before re-review under the dispatch rules above", s6, skill)
+            dispatch = text[text.index("- **Dispatch"):text.index("- **Wait for every verdict")]
+            self.assertIn("git -C <worktree> status --porcelain", dispatch, skill)
+            self.assertIn("git -C <worktree> rev-parse HEAD", dispatch, skill)
 
     def test_reviewer_template_exempts_verification_contract(self):
         with open(os.path.join(REPO, "agents", "reviewer-contract.md"), encoding="utf-8") as fh:

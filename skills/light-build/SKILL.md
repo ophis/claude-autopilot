@@ -1,6 +1,6 @@
 ---
 name: light-build
-description: "Self-contained, autonomous, low-ceremony build harness: create an isolated worktree, write an S4 task list, produce the work with a fresh producer per task, and run a capped correctness + requirement-fidelity + doc + mandatory verification review to a single review-ready branch (never merges). Has no plugin dependency — runs with nothing else installed. For simple tasks, or as a lighter-than-build option when you want autonomy + expert-council-at-forks without the spec/review rigor — for that rigor use build. Pass the requirement text."
+description: "Self-contained, autonomous, low-ceremony build harness: create an isolated worktree, write an S4 task list, produce the work with a fresh producer per task, and run a capped correctness + requirement-fidelity + doc + verification review to a single review-ready branch (never merges). Has no plugin dependency — runs with nothing else installed. For simple tasks, or as a lighter-than-build option when you want autonomy + expert-council-at-forks without the spec/review rigor — for that rigor use build. Pass the requirement text."
 argument-hint: "<requirements>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, SendMessage, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite
 ---
@@ -33,8 +33,7 @@ the spec.** Empty input → STOP with a handoff asking for requirements.
 **On start, resume first.** Look for an existing **state file** with a RESUME block in the
 project's convention location. If found: reconcile worktree/branch/base_ref existence on
 disk, then continue from `phase`. An interrupted S6 review round re-runs with the whole
-frozen panel, on the phase's transport; only `review_round` need be persisted to locate the
-loop. **No state file → start at S1.**
+frozen panel, on its recorded transport. **No state file → start at S1.**
 
 **The state file** (materialized in S4) holds the requirement and full verify command
 above RESUME, then the task list:
@@ -43,13 +42,11 @@ above RESUME, then the task list:
 RESUME: phase=<S[14-8]> worktree=<path> branch=<name> base_ref=<sha> review_round=<n>
 ```
 
-Advance RESUME's `phase=` with the run. Before S6, commit tracked state edits and name
-an ignored run note there; from S6 onward, keep mutable RESUME, panel verdicts,
-reviewed SHA/tree, commands, exit codes, failure counts, and diagnostics in that note
-(an ignored state file may serve as the note). Re-run an interrupted S6 round with its
-full panel. On resume, continue the recorded phase; for S7/S8, rerun S6 unless the
-note has an all-PASS panel and verification results for the current tree.
-For legacy S1–S9 state files, restart old S6–S9 at new S6, retaining task progress.
+Advance RESUME's `phase=` with the run. From S6, persist RESUME, the frozen panel and
+verdicts, reviewed SHA/tree, and command results (exit codes, failure counts, diagnostics)
+in an ignored run note; reuse an ignored state file, or link the note from a tracked state
+file before committing it for review. Resume S7/S8 only with all-PASS evidence for the current
+tree; otherwise restart S6. For legacy S1–S9 states, restart old S6–S9 at S6, keeping task progress.
 
 **Location follows the user's / project's convention** — honor CLAUDE.md and existing repo
 patterns.
@@ -84,27 +81,20 @@ this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the 
 
 ## S6 — correctness + requirement-fidelity + doc + verification review
 
-S6 is the **sole correctness gate**.
-
 - **Panel:** pin `autopilot:correctness-reviewer`, `autopilot:requirement-fidelity-reviewer`,
   `autopilot:doc-reviewer` AND `autopilot:verification-reviewer` — four cores, no optionals.
-  Freeze the panel in
-  context (see **Working-note shapes**); reuse it every round.
+  Freeze it in the run note (see **Working-note shapes**); reuse it every round.
 - **Dispatch** each round's members together, never one at a time (the re-review too).
-  Before each round, require a clean committed source worktree (`git -C <worktree> status --porcelain`
-  empty), set `reviewed_sha=<HEAD>` from `git -C <worktree> rev-parse HEAD`, and keep
-  source unchanged until every verdict returns. Check HEAD still equals `reviewed_sha`
-  and status is still empty before judging. Write verdicts and evidence to the run
-  note afterward, keeping tracked files unchanged until S7.
-  Ordinary reviewers read source HEAD; the verification reviewer clones reviewed_sha
-  into its isolated checkout. Every member's run-input prompt, built once:
+  Require a clean committed source worktree (`git -C <worktree> status --porcelain` empty);
+  set `reviewed_sha=<HEAD>` with `git -C <worktree> rev-parse HEAD`. Keep it unchanged
+  until all verdicts return; check HEAD still equals `reviewed_sha` and status remains
+  empty before judging. Ordinary reviewers read source HEAD; the verification reviewer
+  clones reviewed_sha into its isolated checkout and runs full checks every round.
+  Ordinary reviewers leave full checks to it. Each member's run-input prompt:
   "PHASE=work. Inputs: worktree=…, base_ref=…, state_file=…, requirement=…, focus=…,
-  reviewed_sha=<HEAD>. Output ONLY the verdict, no extra prose." (absolute paths;
-  ordinary reviewers read the source worktree, never main). The verification reviewer
-  reads the state file's full verify command; ordinary reviewers leave full checks to it.
-  Members: `autopilot:<name>` with ONLY that
-  prompt. A re-reviewed lens's prompt adds its prior items (`<lens>#<n> "<gist>"`, from the
-  in-context notes) + the fix diff `git -C <worktree> diff <pre-fix HEAD>..HEAD` (record the
+  reviewed_sha=<HEAD>. Output ONLY the verdict, no extra prose."
+  Members: `autopilot:<name>` with ONLY that prompt. A re-reviewed lens adds prior items
+  (`<lens>#<n> "<gist>"`, from the run note) + the fix diff `git -C <worktree> diff <pre-fix HEAD>..HEAD` (record the
   pre-fix HEAD before the fix).
   - **Workflow (default):** per round, one
     `Workflow({name: "autopilot:autopilot-review-round", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`
@@ -114,16 +104,14 @@ S6 is the **sole correctness gate**.
   - **Task (fallback):** if the `Workflow` call fails, dispatch the same members fresh as
     one parallel `Task` batch with the same prompts, and stay on Task for the phase (freeze
     note `->Task`). PASS only with no BLOCKING; no or unparseable verdict → FAIL.
-- **Wait for every verdict** — never poll or judge early. Inspect the verification
-  reviewer's raw BLOCKING items before adding item IDs; a `VERIFICATION_UNAVAILABLE:`
-  item after its one retry triggers Safety stop 3; never
-  send an unavailable tool or environment to the code fixer. Otherwise make ONE fix
-  over all open blockers, then the re-review.
+- **Wait for every verdict** — never poll or judge early. Inspect the verifier's raw
+  BLOCKING items before adding item IDs: `VERIFICATION_UNAVAILABLE:` (after its one
+  retry) triggers Safety stop 3. Otherwise ONE fix over all blockers, then the re-review.
 - **Item IDs:** before deduping for the fixer, label every BLOCKING / NON-BLOCKING item
   `<lens>#<n>` (per lens, continuing across the phase, never reused); a repeated OPEN
   item keeps its ID (reviewers prefix it) — number only new items.
 - **Loop** (orchestrator-run, cap = 1):
-  - **Round 0** = the pinned panel; all-PASS short-circuits → S6→S7.
+  - **Round 0** = the pinned panel.
   - **Fix:** the first fix is ONE fresh producer via plain `Task` primed with the deduped
     open blockers (with item IDs) + cited files only; keep its agent ID in context; later
     fixes continue it via `SendMessage` (unknown ID / error → fresh producer, whose ID
@@ -144,7 +132,7 @@ plus residual NON-BLOCKING items:
 
 - **Panel freeze:** `S6 panel: pinned=[correctness,requirement-fidelity,doc,verification] transport=Workflow` (append `->Task` if the fallback fires).
 - **Each completed S5 task** (from the state file's done marks): `S5 task <N> done: <commit sha>` — feeds the S8 report.
-- **Each review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S6 r0 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fix dispatched`. Persist the latest verification command, exit code, failure count and useful diagnostics in the run note.
+- **Each review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S6 r0 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fix dispatched`.
 - **Each decision** (council or solo, incl. a resolved S5 FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 
 ## Pipeline (S1, S4–S8)
@@ -167,8 +155,7 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
   the state file's last section; the RESUME block goes above it (a brief runs to the next
   `### Task N` heading):
   - Header: Global Constraints (exact values producers need). Put the full verify
-    command outside the task-list header, above RESUME in the state file, so the
-    verification reviewer can read it by `state_file` reference.
+    command outside the task-list header, above RESUME in the state file.
   - Per task, a `### Task N: <name>` heading (its S5 producer reads its brief by it) with:
     Files; Consumes/Produces (exact names/signatures crossing tasks); tests to write
     first, incl. edge cases; the checks it runs (only those its change affects, never a
@@ -180,23 +167,18 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
   names that cover its changed files (never the full verify command or full suite);
   commit with the brief's message; log the task `done`
   in the state file.
-  `FORK:` → the **S5 FORK mechanism**. A producer may commit its work; the S7 squash
-  folds its commits. The orchestrator never edits the work product itself.
-- **S6 — work review.** Run the review above, including parallel full checks;
-  genuine failures enter its fix loop. Each fix producer runs only checks covering
-  the files it changes; the fix producer must commit all product changes. Require empty
-  `git -C <worktree> status --porcelain` and confirm `git -C <worktree> rev-parse HEAD`
-  is the new committed SHA before re-review. The verifier repeats full checks each
-  round; `VERIFICATION_UNAVAILABLE:` after its retry is a safety stop.
+  `FORK:` → the **S5 FORK mechanism**. The orchestrator never edits the work product itself.
+- **S6 — work review.** Run the review above; genuine check failures block. Each fix
+  producer runs only checks covering the files it changes; the fix producer must commit
+  all product changes before re-review under the dispatch rules above.
 - **S7 — squash.** Idempotent squash to one commit **via `git` (`Bash`)** — **skip
   if already exactly 1 ahead of `base_ref`**. The state file is committed or
   ignored per the project's convention — do not force either. Require a clean worktree
   and matching `git rev-parse HEAD^{tree}` / `git rev-parse <reviewed_sha>^{tree}`
   before S8; if trees differ, return to S6.
-- **S8 — finish.** Inline: report review history and final verification evidence
-  (reviewed SHA, commands, exit codes, failure counts and useful diagnostics), decisions, deferred non-blockers
-  (stop-reason first if the run stopped); offer integration options as an informational
-  report menu, NOT a question. NO merge.
+- **S8 — finish.** Inline: report review history, final verification evidence from the
+  run note, decisions, deferred non-blockers (stop-reason first if stopped);
+  offer integration options as an informational report menu, NOT a question.
 
 ## Safety stops (handoffs, not questions)
 
