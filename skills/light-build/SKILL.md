@@ -88,8 +88,9 @@ this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the 
   Require a clean committed source worktree (`git -C <worktree> status --porcelain` empty);
   set `reviewed_sha=<HEAD>` with `git -C <worktree> rev-parse HEAD`. Keep it unchanged
   until all verdicts return; check HEAD still equals `reviewed_sha` and status remains
-  empty before judging. Ordinary reviewers read source HEAD; the verification reviewer
-  clones reviewed_sha into its isolated checkout and runs full checks every round.
+  empty before judging (dirty only with paths the verifier reports as leaked → judge
+  normally; the fix removes them). Ordinary reviewers read source HEAD; the verification
+  reviewer runs full checks in the frozen source worktree every round.
   Ordinary reviewers leave full checks to it. Each member's run-input prompt:
   "PHASE=work. Inputs: worktree=…, base_ref=…, state_file=…, requirement=…, focus=…,
   reviewed_sha=<HEAD>. Output ONLY the verdict, no extra prose."

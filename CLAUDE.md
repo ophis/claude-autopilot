@@ -64,7 +64,7 @@ files plus `agents/` and `scripts/` together:
 
 - **Named review roster (`agents/`).** Each reviewer has a single lens. Ordinary reviewers
   are read-only and never run the full test suite; the mandatory work-phase verification
-  reviewer runs the complete checks in an isolated checkout of the reviewed SHA. Each
+  reviewer runs the complete checks in the frozen source worktree at the reviewed SHA. Each
   agent has **self-describing** frontmatter (`lens` / `phase` / `tier` /
   `applies_to`) so the selector can route it with no code change. `reviewer-contract.md`
   is an authoring-time template (selector-inert: no `phase`) inlined into ordinary reviewers;

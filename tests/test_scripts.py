@@ -413,12 +413,22 @@ class LintRosterTests(unittest.TestCase):
         self._reviewer("verification-reviewer", reviewer=verifier)
         proc = run_lint(self.agents)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        for marker in ("Isolated checkout", "Command evidence",
+        for marker in ("Frozen worktree", "Command evidence",
                        "VERIFICATION_UNAVAILABLE:"):
             self._reviewer("verification-reviewer", reviewer=verifier.replace(marker, ""))
             proc = run_lint(self.agents)
             self.assertNotEqual(proc.returncode, 0, marker + "\n" + proc.stdout)
             self.assertIn(marker, proc.stdout)
+
+    def test_verification_reviewer_runs_in_frozen_worktree_without_clone(self):
+        with open(os.path.join(REPO, "agents", "verification-reviewer.md"),
+                  encoding="utf-8") as fh:
+            verifier = fh.read()
+        self.assertNotIn("clone", verifier.lower())
+        for banned in ("mktemp", 'rm -rf "$('):
+            self.assertNotIn(banned, verifier)
+        for required in ("rev-parse HEAD", "status --porcelain"):
+            self.assertIn(required, verifier)
 
     def test_no_agents_found_fails(self):
         proc = run_lint(self.agents)
@@ -738,7 +748,9 @@ class SkillWorktreePinTests(unittest.TestCase):
             self.assertIn("git -C <worktree> status --porcelain", dispatch, skill)
             self.assertIn("clean committed source worktree", dispatch, skill)
             self.assertIn("ordinary reviewers read source head", dispatch.lower(), skill)
-            self.assertIn("verification reviewer clones reviewed_sha", dispatch, skill)
+            self.assertIn("verification reviewer runs full checks in the frozen source worktree",
+                          dispatch, skill)
+            self.assertNotIn("clone", dispatch.lower(), skill)
 
     def test_s6_fix_commits_and_rechecks_source_before_rereview(self):
         for skill in ("build", "light-build"):
