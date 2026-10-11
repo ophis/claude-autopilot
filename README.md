@@ -40,7 +40,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 ├── workflows/
 │   └── review-round.js           # plugin workflow autopilot:autopilot-review-round — one parallel review round (the skills' default review transport)
 ├── agents/                       # named review roster (ordinary reviewers read-only)
-│   ├── reviewer-contract.md      # authoring template, inlined into each reviewer
+│   ├── reviewer-contract.md      # authoring template, inlined into ordinary reviewers
 │   ├── spec-fitness-reviewer.md  # spec / core
 │   ├── architecture-reviewer.md  # spec core / work optional (@structural)
 │   ├── correctness-reviewer.md   # work / core — purely behavioral
@@ -175,7 +175,7 @@ and never run a full suite; the verification reviewer runs it in an isolated che
 
 | File | Lens | Phase | Tier |
 | --- | --- | --- | --- |
-| `agents/reviewer-contract.md` | Authoring template inlined into each reviewer (not dispatched) | — | — |
+| `agents/reviewer-contract.md` | Authoring template inlined into ordinary reviewers (not dispatched); verification reviewer has a dedicated execution contract | — | — |
 | `agents/spec-fitness-reviewer.md` | Spec fitness, gaps, ambiguity, scope, testability | spec | core |
 | `agents/architecture-reviewer.md` | Structure, boundaries, coupling, extensibility | both | spec core / work optional (`@structural`) |
 | `agents/correctness-reviewer.md` | Intent/logic, edge & boundary cases, error paths | work | core |

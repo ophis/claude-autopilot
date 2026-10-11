@@ -753,6 +753,13 @@ class SkillWorktreePinTests(unittest.TestCase):
         self.assertIn("verification-reviewer.md", guide)
         self.assertIn("dedicated execution contract", guide)
 
+    def test_readme_limits_shared_contract_to_ordinary_reviewers(self):
+        with open(os.path.join(REPO, "README.md"), encoding="utf-8") as fh:
+            readme = fh.read()
+        self.assertNotIn("inlined into each reviewer", readme)
+        self.assertEqual(readme.count("inlined into ordinary reviewers"), 2)
+        self.assertIn("dedicated execution contract", readme)
+
     def test_build_resume_lists_only_valid_phases(self):
         with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
