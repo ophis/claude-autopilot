@@ -111,14 +111,15 @@ this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the 
     preserves declared model, effort and tools via supported options (otherwise reload or
     Safety stop 3); Codex inherits the session model unless explicitly configured with a
     supported override, never a Claude model alias.
-  - **Transport:** when exposed, use `Workflow({name: "autopilot:autopilot-review-round",
-    args: {phase, members: [{agent, subagent_type, prompt}]}})`; output is
-    `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}]}` in member
-    order. Never pass `resumeFromRunId`. Retry a synthetic member once natively in the same
-    round; still no verdict → FAIL. Absent/failed Workflow → native dispatch of the same
-    members/prompts
-    for this phase. Freeze/log the actual tool and fallback with the panel. PASS requires
-    no BLOCKING; missing/unparseable verdict → FAIL.
+  - **Workflow (default):** when exposed, per round, one
+    `Workflow({name: "autopilot:autopilot-review-round", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`
+    → `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` in member
+    order; never pass `resumeFromRunId`. Re-dispatch a `synthetic: true` member once via
+    `Task` (Claude) or the exposed native agent equivalent (Codex) with its prompt; still no verdict → FAIL.
+  - **Task (fallback):** if `Workflow` is unavailable or the call fails, dispatch the same members fresh as
+    one parallel `Task` batch (Claude) or the exposed native agent equivalent (Codex)
+    with the same prompts, and stay on that fallback for the phase (freeze
+    note `->Task` or `-><actual native tool>`). PASS only with no BLOCKING; no or unparseable verdict → FAIL.
 - **Wait for every verdict** — never poll or judge early. Inspect the verifier's raw
   BLOCKING items before adding item IDs: `VERIFICATION_UNAVAILABLE:` (after its one
   retry) triggers Safety stop 3. Otherwise ONE fix over all blockers, then the re-review.
@@ -145,7 +146,7 @@ this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the 
 Track these for S8 (S6 verdicts/evidence in the run note, other notes in context),
 plus residual NON-BLOCKING items:
 
-- **Panel freeze:** `S6 panel: pinned=[correctness,requirement-fidelity,doc,verification] transport=Workflow` (append `->Task` if the fallback fires).
+- **Panel freeze:** `S6 panel: pinned=[correctness,requirement-fidelity,doc,verification] transport=Workflow` (append `->Task` or `-><actual native tool>` if the fallback fires).
 - **Each completed S5 task** (from the state file's done marks): `S5 task <N> done: <commit sha>` — feeds the S8 report.
 - **Each review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S6 r1 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fix dispatched`.
 - **Each decision** (council or solo, incl. a resolved S5 FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.

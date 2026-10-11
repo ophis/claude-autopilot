@@ -112,14 +112,15 @@ otherwise restart S6. For legacy S1–S9 plans, restart old S6–S9 at S6, keepi
     preserves declared model, effort and tools via supported options (otherwise reload or
     Safety stop 3); Codex inherits the session model unless explicitly configured with a
     supported override, never a Claude model alias.
-  - **Transport:** when exposed, use `Workflow({name: "autopilot:autopilot-review-round",
-    args: {phase, members: [{agent, subagent_type, prompt}]}})`; output is
-    `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}]}` in member
-    order. Never pass `resumeFromRunId`. Retry a synthetic member once natively in the same
-    round; still no verdict → FAIL. Absent/failed Workflow → native dispatch of the same
-    members/prompts
-    for this phase. Freeze/log the actual tool and fallback with the panel. PASS requires
-    no BLOCKING; missing/unparseable verdict → FAIL.
+  - **Workflow (default):** when exposed, one call per round —
+    `Workflow({name: "autopilot:autopilot-review-round", args: {phase: "<spec|work>", members: [{agent, subagent_type, prompt}, …]}})`
+    → `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` in member
+    order (never pass `resumeFromRunId`). A `synthetic: true` member is re-dispatched once
+    via `Task` (Claude) or the exposed native agent equivalent (Codex) with its prompt; still no verdict → FAIL.
+  - **Task (fallback):** if `Workflow` is unavailable or the call fails, dispatch the same members fresh as
+    one parallel `Task` batch (Claude) or the exposed native agent equivalent (Codex)
+    with the same prompts, and stay on that fallback for the phase (freeze
+    line `->Task` or `-><actual native tool>`). PASS only with no BLOCKING; no or unparseable verdict → FAIL.
 - **Wait for every verdict** — never poll or judge early. Inspect the verifier's raw
   BLOCKING items before adding item IDs: `VERIFICATION_UNAVAILABLE:` (after its one
   retry) triggers Safety stop 3. Otherwise ONE fix over all blockers, then ONE re-review.
@@ -144,7 +145,7 @@ panel freeze, S5 task done, review round and decision, in the shapes below (`S3`
 the `S6` shapes), plus the final residual NON-BLOCKING items. The per-lens blocker gists prime
 re-reviewed lenses.
 
-- **Panel freeze:** `S6 panel: core=[correctness,requirement-fidelity,doc,verification] +optional=[code-quality] transport=Workflow` (append `->Task` if the fallback fires).
+- **Panel freeze:** `S6 panel: core=[correctness,requirement-fidelity,doc,verification] +optional=[code-quality] transport=Workflow` (append `->Task` or `-><actual native tool>` if the fallback fires).
 - **Task done:** `S5 task 3 done: <commit sha>`.
 - **Review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S6 r1 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fix dispatched`.
 - **Decision** (council or solo): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
