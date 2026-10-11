@@ -158,7 +158,7 @@ without the ceremony. It is a skill (model-invocable / composable), emits the sa
 - **S1 — Worktree:** create a worktree and branch using the [host runtime](skills/host-runtime.md) naming conventions. **State:** no spec doc — the state file is materialized at S4 (see **S4 — Task list**).
 - **S4 — Task list:** the orchestrator writes a code-free task list (Global Constraints + per-task `### Task N` briefs: files, Consumes/Produces, tests first, commit message) into the state file — S4 always materializes it. S5 dispatches one fresh producer per task, in order.
 - **S5 — Produce:** dispatch one fresh producer per S4 task, in order from the first not `done`, via native host dispatch. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
-- **S6 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc` + mandatory `verification`, with full checks run in an isolated checkout against the same revision as other reviewers — **capped at 1** review+fix round. The verifier runs every round; other passed lenses carry their PASS. This is the sole correctness gate.
+- **S6 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc` + mandatory `verification`, with full checks run in an isolated checkout against the same revision as other reviewers — **capped at 1** fix/re-review cycle after the initial Round 1 (at most Round 2). The verifier runs every round; other passed lenses carry their PASS. This is the sole correctness gate.
 - **S7 — Squash → S8 — Finish:** one clean commit + report. **Never merges.**
 
 **No scope gate.** light-build is a harness, not a gatekeeper — it runs whatever it is
@@ -276,7 +276,8 @@ data directory. Omitting flags retains the existing Claude behavior. Example con
 ```
 
 - **`ralphLoop.maxIterations.spec-phase` / `.implementation-phase`** — per-phase
-  round cap for the S3 spec-review / S6 work-review loop (default 3 each).
+  fix/re-review cap for the S3 spec-review / S6 work-review loop (default 3 each):
+  initial Round 1 plus up to three fix/re-reviews in Rounds 2–4.
 - **Deprecated: `ralphLoop.enabled`.** The old toggle that drove the loops via the
   optional `ralph-loop` plugin is ignored — the built-in native loop (which can
   re-dispatch only the affected lens subset on re-review rounds) is the only

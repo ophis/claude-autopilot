@@ -103,10 +103,10 @@ otherwise restart S6. For legacy S1–S9 plans, restart old S6–S9 at S6, keepi
 - **Item IDs:** before deduping for the fixer, label each item `<lens>#<n>` — numbered per
   lens across the phase, never reused; a repeated OPEN item keeps its ID (reviewers prefix it).
 
-**Ralph loop:** review → fix → re-review until the frozen panel all-PASSes, capped by
+**Ralph loop:** review → fix → re-review until the frozen panel all-PASSes; fix/re-review cycles are capped by
 `ralphLoop.maxIterations.spec-phase` / `.implementation-phase` (default 3, from config).
 
-- **Round 0** = full frozen panel.
+- **Round 1** (`r1`) = full frozen panel; consumes no fix budget. The cap allows that many subsequent fix/re-review cycles (default 3: Rounds 2–4).
 - **Re-review:** S3 = the full panel on the whole spec. S6 = the lenses that failed last
   round plus every core lens; the rest carry their PASS.
 - **Advance** when every lens is PASS with no open BLOCKING (S3→S4, S6→S7). Cap hit →
@@ -123,7 +123,7 @@ re-reviewed lenses.
 
 - **Panel freeze:** `S6 panel: core=[correctness,requirement-fidelity,doc,verification] +optional=[code-quality] transport=Workflow` (append `->Task` if the fallback fires).
 - **Task done:** `S5 task 3 done: <commit sha>`.
-- **Review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S6 r0 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fix dispatched`.
+- **Review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S6 r1 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fix dispatched`.
 - **Decision** (council or solo): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 <!-- progress-log-format:end -->
 

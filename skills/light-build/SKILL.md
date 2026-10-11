@@ -107,15 +107,15 @@ this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the 
 - **Item IDs:** before deduping for the fixer, label every BLOCKING / NON-BLOCKING item
   `<lens>#<n>` (per lens, continuing across the phase, never reused); a repeated OPEN
   item keeps its ID (reviewers prefix it) — number only new items.
-- **Loop** (orchestrator-run, cap = 1):
-  - **Round 0** = the pinned panel.
+- **Loop** (orchestrator-run, cap = 1 fix/re-review cycle):
+  - **Round 1** (`r1`) = the pinned panel; consumes no fix budget.
   - **Fix:** the first fix is ONE fresh producer via native dispatch primed with the deduped
     open blockers (with item IDs) + cited files only; keep its agent ID in context; later
     fixes continue it via the host continuation operation (unknown ID / error → fresh producer, whose ID
     replaces it). A fix-time genuine fork goes through the **S5 FORK → council**
     mechanism, not an in-loop council. Full blocker text primes the fix transiently; only
     a concise gist is logged.
-  - **Re-review** (the one round the cap allows) = failed lenses plus
+  - **Re-review** (Round 2, the one fix/re-review cycle the cap allows) = failed lenses plus
     `autopilot:verification-reviewer` every round, including after a PASS; other passed
     lenses carry their PASS.
   - **Advance** when every pinned lens is PASS with no open BLOCKING → S6→S7. Cap hit
@@ -129,7 +129,7 @@ plus residual NON-BLOCKING items:
 
 - **Panel freeze:** `S6 panel: pinned=[correctness,requirement-fidelity,doc,verification] transport=Workflow` (append `->Task` if the fallback fires).
 - **Each completed S5 task** (from the state file's done marks): `S5 task <N> done: <commit sha>` — feeds the S8 report.
-- **Each review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S6 r0 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fix dispatched`.
+- **Each review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S6 r1 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fix dispatched`.
 - **Each decision** (council or solo, incl. a resolved S5 FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 
 ## Pipeline (S1, S4–S8)

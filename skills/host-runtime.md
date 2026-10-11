@@ -59,7 +59,10 @@ omit model overrides to inherit the host model.
 
 Dispatch independent members up to exposed concurrency capacity, queue the rest, and
 collect every member of the frozen round before judging or fixing. Preserve S3/S6
-re-review membership and caps. Re-reviewers are fresh; retain the fixer ID for
+re-review membership and caps. Number each phase's initial review Round 1 (`r1`,
+`review_round=1`); each fix/re-review advances the number by one. Caps count
+fix/re-review cycles, so Round 1 consumes none. A retried or interrupted round keeps
+its recorded number. Re-reviewers are fresh; retain the fixer ID for
 continuation (unusable ID → fresh fixer with its brief and current blockers).
 
 **Review transport:** use `Workflow({name: "autopilot:autopilot-review-round", args:

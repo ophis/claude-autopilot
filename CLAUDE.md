@@ -59,8 +59,9 @@ files plus `agents/` and `scripts/` together:
   review panel all-PASSes or a per-phase cap (default 3) is hit. Convergence is decided
   **only from reviewers' own verdicts** in the strict `VERDICT / BLOCKING / NON-BLOCKING`
   grammar — never from the orchestrator's opinion. Rounds are batched (wait for every
-  verdict, one fix, one re-review); the orchestrator never overrides a verdict. Round 0
-  short-circuits if all-PASS.
+  verdict, one fix, one re-review); the orchestrator never overrides a verdict. Round 1
+  short-circuits if all-PASS and consumes no fix budget; caps count subsequent
+  fix/re-review cycles.
 
 - **Named review roster (`agents/`).** Each reviewer has a single lens. Ordinary reviewers
   are read-only and never run the full test suite; the mandatory work-phase verification
@@ -75,7 +76,7 @@ files plus `agents/` and `scripts/` together:
   **Each round** uses the plugin workflow when exposed, otherwise native dispatch; a re-reviewed lens
   is a fresh member primed with its prior items (+ the fix diff in S6). If that call fails,
   the phase falls back to a native host dispatch batch of the same members and prompts.
-  **Both surfaces** run the convergence loop natively in the orchestrator (round 0 + fix →
+  **Both surfaces** run the convergence loop natively in the orchestrator (Round 1 + fix →
   re-review until all-PASS or the per-phase cap). The orchestrator owns the loop, the fix
   (a fixer continued across rounds), and the re-review set: S3 the full panel; S6 the
   lenses that failed plus every core lens (light-build: failed lenses plus the
