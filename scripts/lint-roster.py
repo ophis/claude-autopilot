@@ -11,6 +11,9 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "skills", "build", "scripts"))
+
 from _frontmatter import iter_kv, split_frontmatter
 
 REQUIRED_KEYS = (

@@ -2,10 +2,12 @@
 name: light-build
 description: "Self-contained, autonomous, low-ceremony build harness: create an isolated worktree, write an S4 task list, produce the work with a fresh producer per task, and run a capped correctness + requirement-fidelity + doc + verification review to a single review-ready branch (never merges). Has no plugin dependency — runs with nothing else installed. For simple tasks, or as a lighter-than-build option when you want autonomy + expert-council-at-forks without the spec/review rigor — for that rigor use build. Pass the requirement text."
 argument-hint: "<requirements>"
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, SendMessage, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite
+allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Agent, Task, SendMessage, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite
 ---
 
 # Autopilot: light-build
+
+Paths are relative to this skill's directory.
 
 Autonomous light-build run. Drive the pipeline end to end: dispatch and judge; no scope
 gate. **Self-contained: name or invoke no external plugin skill; no dependency preflight.**
@@ -23,13 +25,22 @@ intent: free-text requirements. **The requirement IS the spec.** Empty input →
 - **Thin orchestrator.** Dispatch by reference and judge structured output. Never hoard
   whole files, diffs, or logs in main thread; read only bounded slices when you must
   inspect something yourself.
-- **Resources.** Resolve bundled paths relative to this invoked SKILL.md; use absolute
-  paths in tools and worker briefs. Read applicable AGENTS.md / CLAUDE.md in the target
+- **Resources.** Resolve bundled paths to absolute paths for tools and worker briefs without
+  changing the target worktree cwd. Read applicable AGENTS.md / CLAUDE.md in the target
   repo/worktree and pass their paths and constraints to workers.
 - **Native agents.** Use exposed spawn, continue and wait tools with documented arguments.
   Request fresh context when supported, supplying the brief and applicable constraints.
-  Queue at available concurrency capacity and collect all completed outputs before
-  judging or fixing; status alone is no verdict.
+  Dispatch rounds in parallel, queuing remaining members at available concurrency
+  capacity; collect every verdict before judging or fixing; status alone is no verdict.
+- **Host tools.** Claude tool forms appear in parentheses; use the session's exposed
+  equivalents elsewhere. Workflow is Claude-only; without it use the Task fallback.
+  Worktree defaults: Claude `.claude/worktrees/<prefix>-<slug>`
+  / `<prefix>-<slug>`; Codex `.codex/worktrees/<prefix>-<slug>` / `codex/<prefix>-<slug>`.
+  Claude named reviewers keep `model:` / `effort:` and tools from `../../agents/*.md`.
+  When named dispatch is unavailable, give a fresh generic reviewer the canonical
+  `../../agents/<name>.md` body plus its run-input prompt; preserve the body's
+  verdict grammar and tool/test boundaries. Codex uses these generic reviewers,
+  inheriting the session model with no `model` override to `spawn_agent`.
 - **Worktree-pinned dispatch.** Give every subagent absolute worktree path + branch and
   have it act only there — absolute paths / `git -C <worktree>`, never inherited cwd — and
   **before any write assert** `git -C <worktree> branch --show-current` is the run branch;
@@ -63,8 +74,8 @@ patterns.
 
 - At a genuine fork — two-plus viable approaches with materially different trade-offs, or a
   choice shaping architecture / data model / interface / scope, costly to reverse, or one a
-  later review might miss — **convene a council**: 2–4 ad-hoc expert personas in one independent
-  native-dispatch batch, each returning a concise position (recommendation, rationale, trade-offs,
+  later review might miss — **convene a council**: 2–4 ad-hoc expert personas in one parallel
+  subagent batch (`Task`), each returning a concise position (recommendation, rationale, trade-offs,
   dissent). You **synthesize, decide, and record** a brief decision (see **Working-note
   shapes**) — the decider, breaking ties.
 - Otherwise decide solo and record (a wrong guess is caught by review). Never fabricate
@@ -92,7 +103,9 @@ this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the 
 - **Panel:** pin `autopilot:correctness-reviewer`, `autopilot:requirement-fidelity-reviewer`,
   `autopilot:doc-reviewer` AND `autopilot:verification-reviewer` — four cores, no optionals.
   Freeze it in the run note (see **Working-note shapes**); reuse it every round.
-- **Dispatch** each round's members together through the available transport (the re-review too).
+- **Dispatch** each round's members together, never one at a time (the re-review too).
+  Dispatch every member of the round in parallel as a subagent (`autopilot:<name>` via the Agent tool),
+  each given ONLY that prompt — its run-input prompt below.
   Require a clean committed source worktree (`git -C <worktree> status --porcelain` empty);
   set `reviewed_sha=<HEAD>` with `git -C <worktree> rev-parse HEAD`. Keep it unchanged
   until all verdicts return; check HEAD still equals `reviewed_sha` and status remains
@@ -105,21 +118,13 @@ this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the 
   A re-reviewed lens adds prior items
   (`<lens>#<n> "<gist>"`, from the run note) + the fix diff `git -C <worktree> diff <pre-fix HEAD>..HEAD` (record the
   pre-fix HEAD before the fix).
-  - **Reviewer instructions:** use named `autopilot:<name>` when available; otherwise
-    require the fresh generic agent to read the complete canonical file
-    `../../agents/<name>.md`, including its verdict grammar; preserve its tool/test
-    boundaries (verification: frozen source worktree) when mapping tools. Claude
-    preserves declared model, effort and tools via supported options (otherwise reload or
-    Safety stop 3); Codex inherits the session model unless explicitly configured with a
-    supported override, never a Claude model alias.
-  - **Workflow (default):** when exposed, per round, one
+  - **Workflow (default):** per round, one
     `Workflow({name: "autopilot:autopilot-review-round", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`
     → `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` in member
-    order; never pass `resumeFromRunId`. Re-dispatch a `synthetic: true` member once via
-    `Task` (Claude) or the exposed native agent equivalent (Codex) with its prompt; still no verdict → FAIL.
+    order; never pass `resumeFromRunId`. Re-dispatch a `synthetic: true` member once as
+    a fresh subagent (`Task`) with its prompt; still no verdict → FAIL.
   - **Task (fallback):** if `Workflow` is unavailable or the call fails, dispatch the same members fresh as
-    one parallel `Task` batch (Claude) or the exposed native agent equivalent (Codex)
-    with the same prompts, and stay on that fallback for the phase (freeze
+    one parallel subagent batch (`Task`) with the same prompts, and stay on that fallback for the phase (freeze
     note `->Task` or `-><actual native tool>`). PASS only with no BLOCKING; no or unparseable verdict → FAIL.
 - **Wait for every verdict** — never poll or judge early. Inspect the verifier's raw
   BLOCKING items before adding item IDs: `VERIFICATION_UNAVAILABLE:` (after its one
@@ -129,9 +134,10 @@ this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the 
   item keeps its ID (reviewers prefix it) — number only new items.
 - **Loop** (orchestrator-run, cap = 1 fix/re-review cycle):
   - **Round 1** (`r1`) = the pinned panel; consumes no fix budget.
-  - **Fix:** the first fix is ONE fresh producer via native dispatch primed with the deduped
+  - **Fix:** the first fix is ONE fresh producer (`Task`) primed with the deduped
     open blockers (with item IDs) + cited files only; keep its agent ID in context; later
-    fixes continue it via native continuation with its recorded ID that starts it when idle (unknown ID / error → fresh producer, whose ID
+    fixes continue the same subagent by its id (`SendMessage`); use a continuation
+    that starts it when idle (unknown ID / error → fresh producer, whose ID
     replaces it). A fix-time genuine fork goes through the **S5 FORK → council**
     mechanism, not an in-loop council. Full blocker text primes the fix transiently; only
     a concise gist is logged.
@@ -162,11 +168,12 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
   - Else resolve the requirement's host-specific `<branch>` before lookup or creation; use this same resolved branch for worktree reuse and resume:
     - `<prefix>` = the ticket ID when the work is for one single ticket (e.g. Linear `TASK-123`), else `autopilot`.
     - `<slug>` = `input` lowercased, non-alphanumerics → hyphens, collapsed to <=40 chars; with a ticket prefix, a short feature description instead (not the ticket ID again).
-    - Follow repo worktree/branch conventions; fallback: Claude `.claude/worktrees/<prefix>-<slug>` / `<prefix>-<slug>`, Codex `.codex/worktrees/<prefix>-<slug>` / `codex/<prefix>-<slug>`. Ensure the worktree directory is gitignored.
+    - Follow repo worktree/branch conventions, otherwise the session defaults above. Ensure the worktree directory is gitignored.
     - If this requirement's resolved `<branch>` exists from a prior run, reuse it with its commits — do not create a numbered one: enter its worktree (`git worktree list`; if none, `git worktree add <path> <branch>`), `base_ref` = `git merge-base HEAD <branch>`; a state file there → resume from it.
     - Else create worktree on local HEAD, then enter:
       - On collision with another requirement's worktree/branch: retry with a uniquified slug (`-2`, …) and resolve `<path>` and `<branch>` again.
       - Use an exposed host worktree tool only if it honors the exact local HEAD base and resolved branch; otherwise `git worktree add <path> -b <branch> HEAD`. Use the absolute worktree directory for commands and workers.
+  - Switch into the worktree; run every later command there (`EnterWorktree({path: <path>})`).
   - Hold `worktree`, `branch`, `base_ref` (HEAD) in context.
 - **S4 — task list.** Write the task list yourself (invoke no planning skill): a code-free
   task list into the state file — S4 always materializes the state file. The task list is
@@ -180,7 +187,7 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
     full suite: the S6 verification reviewer runs that); commit message.
   - A small change is one task.
 - **S5 — produce.** Per S4 task, in order from the first not `done`, dispatch one
-  fresh producer subagent via native dispatch on the requirement, the task list header and
+  fresh producer subagent (`Task`) on the requirement, the task list header and
   its `### Task N` brief: tests first, then the code; run only the checks its brief
   names that cover its changed files (never the full verify command or full suite);
   commit with the brief's message; log the task `done`
@@ -189,7 +196,7 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
 - **S6 — work review.** Run the review above; genuine check failures block. Each fix
   producer runs only checks covering the files it changes; the fix producer must commit
   all product changes before re-review under the dispatch rules above.
-- **S7 — squash.** Idempotent squash to one commit **via `git` (host command tool)** — **skip
+- **S7 — squash.** Idempotent squash to one commit **via `git` (`Bash`)** — **skip
   if already exactly 1 ahead of `base_ref`**. The state file is committed or
   ignored per the project's convention — do not force either. Require a clean worktree
   and matching `git rev-parse HEAD^{tree}` / `git rev-parse <reviewed_sha>^{tree}`
@@ -201,10 +208,10 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
 ## Safety stops (handoffs, not questions)
 
 Stop and hand off (state + exact next step) only on the cases below.
-1. **Destructive op requiring host approval without existing authorization.**
-   Before force-push, history rewrite beyond this branch, or rm/reset of uncommitted
-   work, follow the current host’s approval rules, honoring existing user authorization.
-   Report a denied action and its reason.
+1. **Destructive op — unless the session runs with automatic approval (Claude: Auto Mode).**
+   Before any force-push, write outside the worktree, history rewrite beyond this branch,
+   or rm/reset of uncommitted work, stop and hand off the state and exact next step.
+   Follow the session's permission rules; report a denied action and its reason.
 2. **Non-convergence at cap** — the S6 review hits its cap without convergence (with the
    classification).
 3. **Non-review phase failure / missing required capability** — one retry, then STOP
