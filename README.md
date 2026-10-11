@@ -50,7 +50,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 │   ├── test-reviewer.md          # work / optional (code)
 │   ├── performance-reviewer.md   # work / optional (code)
 │   ├── security-reviewer.md      # both / optional — conditional, dual-phase
-│   └── verification-reviewer.md  # work / core — full checks in isolated checkout
+│   └── verification-reviewer.md  # work / core — full checks in frozen worktree
 ├── tests/
 │   └── test_scripts.py           # stdlib unittest for the helper scripts
 ├── README.md
@@ -139,7 +139,7 @@ without the ceremony. It is a skill (model-invocable / composable), emits the sa
 - **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch (native `EnterWorktree`). **State:** no spec doc — the state file is materialized at S4 (see **S4 — Task list**).
 - **S4 — Task list:** the orchestrator writes a code-free task list (Global Constraints + per-task `### Task N` briefs: files, Consumes/Produces, tests first, commit message) into the state file — S4 always materializes it. S5 dispatches one fresh producer per task, in order.
 - **S5 — Produce:** dispatch one fresh producer per S4 task, in order from the first not `done`, via plain `Task`. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
-- **S6 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc` + mandatory `verification`, with full checks run in an isolated checkout against the same revision as other reviewers — **capped at 1** review+fix round. The verifier runs every round; other passed lenses carry their PASS. This is the sole correctness gate.
+- **S6 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc` + mandatory `verification`, with full checks run in the frozen source worktree at the reviewed SHA, the same revision as other reviewers — **capped at 1** review+fix round. The verifier runs every round; other passed lenses carry their PASS. This is the sole correctness gate.
 - **S7 — Squash → S8 — Finish:** one clean commit + report. **Never merges.**
 
 **No scope gate.** light-build is a harness, not a gatekeeper — it runs whatever it is
@@ -171,7 +171,8 @@ that returns the strict `VERDICT / BLOCKING / NON-BLOCKING`
 contract, so a review is reproducible and a lens is attributable — unlike anonymous
 ad-hoc reviewers chosen anew each time. `phase` is when a lens runs — `spec` (S3
 spec-review), `work` (S6 work-review), or `both`. Ordinary reviewers are read-only
-and never run a full suite; the verification reviewer runs it in an isolated checkout.
+and never run a full suite; the verification reviewer runs it in the frozen source
+worktree at the reviewed SHA.
 
 | File | Lens | Phase | Tier |
 | --- | --- | --- | --- |

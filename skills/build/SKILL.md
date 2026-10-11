@@ -83,9 +83,10 @@ otherwise restart S6. For legacy S1–S9 plans, restart old S6–S9 at S6, keepi
   For every S6 round, require a clean committed source worktree (`git -C <worktree>
   status --porcelain` empty); set `reviewed_sha=<HEAD>` with `git -C <worktree> rev-parse HEAD`.
   Keep it unchanged until all verdicts return; check HEAD still equals `reviewed_sha`
-  and status remains empty before judging. Ordinary reviewers read source HEAD; the
-  verification reviewer clones reviewed_sha into its isolated checkout and runs full
-  checks every round. Ordinary reviewers leave full checks to it. Each
+  and status remains empty before judging (dirty only with paths the verifier reports
+  as leaked → judge normally; the fix removes them). Ordinary reviewers read source
+  HEAD; the verification reviewer runs full checks in the frozen source worktree every
+  round. Ordinary reviewers leave full checks to it. Each
   member is `autopilot:<name>` and gets ONLY a run-input prompt — "PHASE=<spec|work>.
   Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…, requirement=…, focus=…,
   reviewed_sha=<HEAD> (S6 only). Output ONLY the verdict, no extra prose."
