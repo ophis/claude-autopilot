@@ -19,8 +19,7 @@ import unittest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(REPO, "scripts")
-SELECT_PANEL = os.path.join(SCRIPTS, "select-panel.py")
-CONFIG = os.path.join(SCRIPTS, "autopilot-config.py")
+SELECT_PANEL = os.path.join(REPO, "skills", "build", "scripts", "select-panel.py")
 LINT_ROSTER = os.path.join(SCRIPTS, "lint-roster.py")
 REVIEW_ROUND = os.path.join(REPO, "workflows", "review-round.js")
 SKILLS = os.path.join(REPO, "skills")
@@ -133,6 +132,16 @@ class SelectPanelTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         return [e["agent"] for e in json.loads(proc.stdout)["selected"]]
 
+    def test_bundled_selector_finds_live_roster_from_unrelated_cwd(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            proc = subprocess.run([sys.executable, SELECT_PANEL, "--phase", "spec"],
+                                  cwd=cwd, capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        selected = {entry["agent"]: entry for entry in json.loads(proc.stdout)["selected"]}
+        self.assertIn("spec-fitness-reviewer", selected)
+        self.assertEqual(selected["spec-fitness-reviewer"]["tier"], "core")
+        self.assertNotIn("verification-reviewer", selected)
+
     def test_spec_phase_core_only_without_specfile(self):
         names = self.names(run_select("--phase", "spec", "--agents-dir", self.agents))
         # arch's map tier resolves to core in spec; optionals/work-only/no-tier excluded.
@@ -242,73 +251,6 @@ class SelectPanelTests(unittest.TestCase):
         self.assertEqual(spec.returncode, 0, spec.stderr)
         self.assertNotIn("verification-reviewer",
                          {e["agent"] for e in json.loads(spec.stdout)["selected"]})
-
-
-class AutopilotConfigTests(unittest.TestCase):
-    DEFAULTS = {"ralphLoop": {"maxIterations": {"spec-phase": 3, "implementation-phase": 3}}}
-
-    def run_config(self, data_dir):
-        return subprocess.run(
-            [sys.executable, CONFIG],
-            env=dict(os.environ, CLAUDE_PLUGIN_DATA=data_dir),
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-
-    def test_fresh_writes_defaults(self):
-        d = tempfile.mkdtemp()
-        proc = self.run_config(d)
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertEqual(json.loads(proc.stdout), self.DEFAULTS)
-        cfg = os.path.join(d, "config.json")
-        self.assertTrue(os.path.exists(cfg))
-        with open(cfg) as fh:
-            self.assertEqual(json.load(fh), self.DEFAULTS)
-
-    def test_partial_override_is_deep_merged(self):
-        d = tempfile.mkdtemp()
-        # Deprecated "enabled" toggle (gone from DEFAULTS) still merges through.
-        write_raw(d, "config.json", json.dumps({"ralphLoop": {"enabled": True}}))
-        eff = json.loads(self.run_config(d).stdout)
-        self.assertTrue(eff["ralphLoop"]["enabled"])
-        self.assertEqual(eff["ralphLoop"]["maxIterations"],
-                         {"spec-phase": 3, "implementation-phase": 3})
-
-    def test_nested_partial_override(self):
-        d = tempfile.mkdtemp()
-        write_raw(d, "config.json",
-                  json.dumps({"ralphLoop": {"maxIterations": {"spec-phase": 5}}}))
-        eff = json.loads(self.run_config(d).stdout)
-        self.assertEqual(eff["ralphLoop"]["maxIterations"]["spec-phase"], 5)
-        self.assertEqual(eff["ralphLoop"]["maxIterations"]["implementation-phase"], 3)
-        self.assertNotIn("enabled", eff["ralphLoop"])
-
-    def test_unparseable_config_falls_back_without_overwrite(self):
-        d = tempfile.mkdtemp()
-        write_raw(d, "config.json", "{ not valid json")
-        proc = self.run_config(d)
-        self.assertEqual(json.loads(proc.stdout), self.DEFAULTS)
-        with open(os.path.join(d, "config.json")) as fh:
-            self.assertEqual(fh.read(), "{ not valid json")            # bad file left intact
-
-    def test_fallback_dir_when_env_unset(self):
-        # Env unset must fall back to the real {id} dir, not the old ".../autopilot" path.
-        home = tempfile.mkdtemp()
-        env = dict(os.environ, HOME=home)
-        env.pop("CLAUDE_PLUGIN_DATA", None)
-        proc = subprocess.run(
-            [sys.executable, CONFIG],
-            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertEqual(json.loads(proc.stdout), self.DEFAULTS)
-        good = os.path.join(home, ".claude", "plugins", "data",
-                            "autopilot-claude-autopilot", "config.json")
-        bad = os.path.join(home, ".claude", "plugins", "data",
-                           "autopilot", "config.json")
-        self.assertTrue(os.path.exists(good), "fallback config.json not at {id} dir")
-        with open(good) as fh:
-            self.assertEqual(json.load(fh), self.DEFAULTS)
-        self.assertFalse(os.path.exists(bad), "config.json written to old wrong path")
 
 
 # A valid reviewer body: inlines the four contract markers and ends with the
@@ -620,6 +562,22 @@ Body.
 
 class SkillWorktreePinTests(unittest.TestCase):
     """Every orchestrator skill must require worktree-pinned subagent dispatch."""
+    def test_claude_tool_forms_and_action_guards_are_preserved(self):
+        markers = (
+            "EnterWorktree({path", "by its id (`SendMessage`)", "`autopilot:<name>` via the Agent tool",
+            "never one at a time", "ONLY that prompt",
+            'Workflow({name: "autopilot:autopilot-review-round"', "**Workflow (default):**",
+            "force-push", "write outside the worktree", "history rewrite beyond this branch",
+            "rm/reset of uncommitted work", "unless the session runs with automatic approval",
+            "Claude: Auto Mode", "Stop and hand off (state + exact next step)",
+        )
+        for skill in ("build", "light-build"):
+            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
+                text = " ".join(fh.read().split())
+            for marker in markers:
+                with self.subTest(skill=skill, marker=marker):
+                    self.assertTrue(marker in text, f"{skill}: missing {marker}")
+
     def test_all_skills_pin_subagents_to_worktree(self):
         for skill in ("build", "light-build"):
             with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
@@ -633,8 +591,13 @@ class SkillWorktreePinTests(unittest.TestCase):
             with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
                 text = fh.read()
             s1 = text[text.index("- **S1 — worktree.**"):text.index("- **S", text.index("- **S1 — worktree.**") + 1)]
-            reuse = s1.index("branch (below) exists from a prior run, reuse it with its commits")
+            resolve = s1.index("host-specific `<branch>` before lookup or creation")
+            reuse = s1.index("resolved `<branch>` exists from a prior run, reuse it with its commits")
+            self.assertLess(resolve, reuse, skill)
             self.assertLess(reuse, s1.index("Else create worktree"), skill)
+            self.assertIn("same resolved branch for worktree reuse and resume", s1, skill)
+            self.assertIn("Follow repo worktree/branch conventions", s1, skill)
+            self.assertNotIn("`<prefix>-<slug>` branch", s1, skill)
             self.assertIn("git worktree add <path> <branch>", s1, skill)
             self.assertIn("collision with another requirement's", s1, skill)
 
@@ -680,16 +643,15 @@ class SkillWorktreePinTests(unittest.TestCase):
     def test_build_has_no_dependency_preflight_and_plans_itself(self):
         with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
-        preflight = text[text.index("## Preflight"):text.index("## Operating disciplines")]
-        self.assertEqual(preflight.count("\n- "), 1)
-        self.assertIn("autopilot-config.py", preflight)
+        self.assertNotIn("## Preflight", text)
+        self.assertNotIn("Load config", text)
         self.assertIn("invoke no planning skill", " ".join(text.split()))
 
     def test_build_s2_follows_its_spec_guide(self):
         with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
         s2 = text[text.index("- **S2 — spec."):text.index("- **S3 — spec review.")]
-        self.assertIn("`${CLAUDE_SKILL_DIR}/spec.md`", s2)
+        self.assertIn("[spec.md](spec.md)", s2)
         tracked = subprocess.run(["git", "-C", REPO, "ls-files", "skills/build/spec.md"],
                                  capture_output=True, text=True, check=True).stdout.split()
         self.assertEqual(tracked, ["skills/build/spec.md"])

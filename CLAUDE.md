@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides repository guidance to Claude Code and Codex.
 
 ## What this is
 
-Claude Autopilot is a **Claude Code plugin** that packages an autonomous
+Claude Autopilot is a **Claude Code and Codex plugin** that packages an autonomous
 build / light-build pipeline driven by a committed roster of named
 review agents. The git repo **is both
 the marketplace and the plugin** (`.claude-plugin/marketplace.json` points its single
@@ -30,10 +30,10 @@ claude --plugin-dir .
 /reload-plugins
 ```
 
-Also run the manual smoke in README "Smoke test (the build eval)".
+Also run the [contributor smoke protocol](CONTRIBUTING.md#smoke-protocol).
 
-There is no build step. `tests/test_scripts.py` exercises `scripts/select-panel.py`
-and `scripts/autopilot-config.py` as CLIs via subprocess (they have hyphenated names,
+There is no build step. `tests/test_scripts.py` exercises `skills/build/scripts/select-panel.py`
+and `scripts/lint-roster.py` as CLIs via subprocess (they have hyphenated names,
 so they're not importable — the CLI is the contract).
 
 ## Architecture (the big picture)
@@ -45,10 +45,10 @@ step inside a larger skill/workflow); users still type `/autopilot:build` /
 (S1 → S4 → S5 → S6 → S7 → S8) with no spec doc and no spec review. S4 always
 materializes a state file holding the task list; S6 is a pinned cap-1 panel
 (correctness + requirement-fidelity + doc + verification). It does not gate scope — surface choice is
-the user's responsibility. When invoked, the *main-session Claude becomes a thin
+the user's responsibility. When invoked, the *main-session agent becomes a thin
 orchestrator*: it dispatches subagents and judges their structured output, and never
 edits the work product itself. Understanding the system means reading those two skill
-files plus `agents/` and `scripts/` together:
+files plus `agents/` and the bundled `skills/build/scripts/` helpers together:
 
 - **Shared spine.** `build` runs a single **S1–S8** pipeline: S1 worktree → S2 spec →
   S3 spec-review → S4 task list → S5 produce → S6 work-review with mandatory verification → S7 squash → S8 finish.
@@ -56,11 +56,12 @@ files plus `agents/` and `scripts/` together:
   **It never merges** — the deliverable is a review-ready branch.
 
 - **Ralph convergence loops (S3, S6).** review → fix → re-review until the frozen
-  review panel all-PASSes or a per-phase cap (default 3) is hit. Convergence is decided
+  review panel all-PASSes or a per-phase cap (build: 3 total rounds) is hit. Convergence is decided
   **only from reviewers' own verdicts** in the strict `VERDICT / BLOCKING / NON-BLOCKING`
   grammar — never from the orchestrator's opinion. Rounds are batched (wait for every
-  verdict, one fix, one re-review); the orchestrator never overrides a verdict. Round 0
-  short-circuits if all-PASS.
+  verdict, one fix, one re-review); the orchestrator never overrides a verdict. Round 1
+  short-circuits if all-PASS. Build counts it toward its 3-round cap (override in
+  the requirement); light-build permits one subsequent fix/re-review cycle.
 
 - **Named review roster (`agents/`).** Each reviewer has a single lens. Ordinary reviewers
   are read-only and never run the full test suite; the mandatory work-phase verification
@@ -69,17 +70,19 @@ files plus `agents/` and `scripts/` together:
   `applies_to`) so the selector can route it with no code change. `reviewer-contract.md`
   is an authoring-time template (selector-inert: no `phase`) inlined into ordinary reviewers;
   `verification-reviewer.md` follows its dedicated execution contract.
-  Reviewers run as `autopilot:<name>`, each at its own `model` + `tools`
-  allowlist. **Each round** is one call to the plugin workflow (below) — a re-reviewed lens
+  Both skills use neutral actions with Claude tool forms in parentheses.
+  Claude reviewers run as `autopilot:<name>` with configured models;
+  Codex inherits the host model and gives generic agents the canonical reviewer files.
+  **Each round** uses the plugin workflow when exposed, otherwise native dispatch; a re-reviewed lens
   is a fresh member primed with its prior items (+ the fix diff in S6). If that call fails,
-  the phase falls back to a parallel native `Task` batch of the same members and prompts.
-  **Both surfaces** run the convergence loop natively in the orchestrator (round 0 + fix →
+  the phase falls back to a native host dispatch batch of the same members and prompts.
+  **Both surfaces** run the convergence loop natively in the orchestrator (Round 1 + fix →
   re-review until all-PASS or the per-phase cap). The orchestrator owns the loop, the fix
   (a fixer continued across rounds), and the re-review set: S3 the full panel; S6 the
   lenses that failed plus every core lens (light-build: failed lenses plus the
   verification reviewer every round).
 
-- **Selection stage (`scripts/select-panel.py`).** Deterministic, stdlib-only router:
+- **Selection stage (`skills/build/scripts/select-panel.py`).** Deterministic, stdlib-only router:
   `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every
   `core` agent is a mandatory floor; `optional` agents route in when their `applies_to`
   matches the signals (spec keywords for S3; changed paths for S6). `tier` is usually a
@@ -92,13 +95,8 @@ files plus `agents/` and `scripts/` together:
 - **Plugin workflow (`workflows/review-round.js`).** The v0.9.x per-round review transport,
   restored byte-identical and invoked by name as `autopilot:autopilot-review-round` (the
   runtime names plugin workflows `<plugin>:<meta.name>`). The default S3/S6 review-round
-  transport of both skills; Task is the fallback. Contract in README "Plugin workflow".
-
-- **Config (`scripts/autopilot-config.py`).** Reads/initializes
-  `${CLAUDE_PLUGIN_DATA}/config.json` (the plugin's own data dir, never Claude's
-  `settings.json`). Holds the Ralph-loop per-phase caps (`ralphLoop.maxIterations.*`).
-  The old `ralphLoop.enabled` driver toggle (native vs. `ralph-loop` plugin) is
-  deprecated and ignored — the native loop is the only driver.
+  transport when Workflow is exposed; native host dispatch is the fallback.
+  Contract in README "Plugin workflow".
 
 - **Disk-backed state.** A run persists a **spec doc** and a **plan doc** (task list +
   a progress section + a `RESUME:` block). The RESUME block
@@ -117,12 +115,8 @@ files plus `agents/` and `scripts/` together:
 
 ## Conventions & gotchas (non-obvious, learned the hard way)
 
-- **`${CLAUDE_PLUGIN_DATA}` is NOT exported to bash subprocesses.** Claude Code
-  inline-substitutes it into command *text*, but a `python3` call won't see it in
-  `os.environ` unless you forward it explicitly:
-  `CLAUDE_PLUGIN_DATA='…' python3 scripts/autopilot-config.py`.
-- **Roster agents are only dispatchable as `autopilot:<name>` from the *installed*
-  plugin.** After adding/renaming an agent, the new `subagent_type` resolves only once
+- **On Claude Code, roster agents are only dispatchable as `autopilot:<name>` from
+  the *installed* plugin.** After adding/renaming an agent, the new `subagent_type` resolves only once
   the plugin is reloaded/updated — a fresh agent can't be dispatched natively in the
   same run that creates it (dispatch it ad-hoc via `general-purpose` until shipped).
   The same applies to the `skills/build` + `skills/light-build` skills: edits to a

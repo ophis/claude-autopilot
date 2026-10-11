@@ -202,11 +202,11 @@ def main(argv=None):
         help="review phase to select reviewers for",
     )
     default_agents = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "..", "agents"
+        os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "agents"
     )
     parser.add_argument(
         "--agents-dir", default=default_agents,
-        help="directory of agent *.md files (default: <script_dir>/../agents)",
+        help="directory of agent *.md files (default: <script_dir>/../../../agents)",
     )
     parser.add_argument(
         "--spec-file",
