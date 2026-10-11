@@ -7,8 +7,9 @@ See [local development](README.md#local-development) for helper tests and roster
 Run both build and light-build on Claude Code and Codex with the candidate's skill
 files and bundled resources. In Claude, load the candidate with
 `claude --plugin-dir <absolute-checkout>` and invoke `/autopilot:build` or
-`/autopilot:light-build`; in Codex, explicitly invoke the candidate's absolute
-SKILL.md path with the same requirement.
+`/autopilot:light-build`; in Codex, point to the candidate's absolute `SKILL.md`
+path with the same requirement so this smoke tests the candidate version. Codex
+can also invoke installed skills when a request matches.
 
 Exercise production and a fixture whose full checks expose a failure outside
 S5's targeted checks: require an S6 FAIL, one committed fix, fresh re-review and
