@@ -54,7 +54,7 @@ RESUME: phase=<S[1-8]> worktree=<path> branch=<name> base_ref=<sha> review_round
 **Keep RESUME current:** rewrite `phase=` at every phase transition and `review_round=`
 each loop iteration. **Location follows the user's / project's convention** — honor
 CLAUDE.md and existing repo patterns. From S6, persist RESUME, the frozen panel and
-verdicts, reviewed SHA/tree, and command results (exit codes, failure counts, diagnostics)
+verdicts, reviewed SHA/tree, and exact commands and results (exit codes, failure counts, diagnostics)
 in an ignored run note; reuse an ignored plan, or link the note from a tracked plan before
 committing it for review. Resume S7/S8 only with all-PASS evidence for the current tree;
 otherwise restart S6. For legacy S1–S9 plans, restart old S6–S9 at S6, keeping task progress.

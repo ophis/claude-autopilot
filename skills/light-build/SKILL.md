@@ -43,7 +43,7 @@ RESUME: phase=<S[14-8]> worktree=<path> branch=<name> base_ref=<sha> review_roun
 ```
 
 Advance RESUME's `phase=` with the run. From S6, persist RESUME, the frozen panel and
-verdicts, reviewed SHA/tree, and command results (exit codes, failure counts, diagnostics)
+verdicts, reviewed SHA/tree, and exact commands and results (exit codes, failure counts, diagnostics)
 in an ignored run note; reuse an ignored state file, or link the note from a tracked state
 file before committing it for review. Resume S7/S8 only with all-PASS evidence for the current
 tree; otherwise restart S6. For legacy S1–S9 states, restart old S6–S9 at S6, keeping task progress.
