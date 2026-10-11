@@ -42,16 +42,16 @@ The two surfaces — `skills/build/SKILL.md` and `skills/light-build/SKILL.md` �
 **orchestrator prompts**, not code. They are **skills** (model-invocable, so composable as a
 step inside a larger skill/workflow); users still type `/autopilot:build` /
 `/autopilot:light-build`. `light-build` is the low-ceremony surface: a harness
-(S1 → S4 → S5 → S6 → S7 → S8 → S9) with no spec doc and no spec review. S4 always
+(S1 → S4 → S5 → S7 → S8 → S9) with no spec doc and no spec review. S4 always
 materializes a state file holding the task list; S7 is a pinned cap-1 panel
-(correctness + requirement-fidelity + doc). It does not gate scope — surface choice is
+(correctness + requirement-fidelity + doc + verification). It does not gate scope — surface choice is
 the user's responsibility. When invoked, the *main-session Claude becomes a thin
 orchestrator*: it dispatches subagents and judges their structured output, and never
 edits the work product itself. Understanding the system means reading those two skill
 files plus `agents/` and `scripts/` together:
 
 - **Shared spine.** `build` runs a single **S1–S9** pipeline: S1 worktree → S2 spec →
-  S3 spec-review → S4 task list → S5 produce → S6 verify → S7 work-review → S8 squash → S9 finish.
+  S3 spec-review → S4 task list → S5 produce → S7 work-review with mandatory verification → S8 squash → S9 finish.
   `light-build` skips S2, S3 (same number = same step).
   **It never merges** — the deliverable is a review-ready branch.
 
@@ -62,18 +62,21 @@ files plus `agents/` and `scripts/` together:
   verdict, one fix, one re-review); the orchestrator never overrides a verdict. Round 0
   short-circuits if all-PASS.
 
-- **Named review roster (`agents/`).** Each reviewer is a **read-only, single-lens**
-  agent whose frontmatter is **self-describing** (`lens` / `phase` / `tier` /
+- **Named review roster (`agents/`).** Each reviewer has a single lens. Ordinary reviewers
+  are read-only and never run the full test suite; the mandatory work-phase verification
+  reviewer runs the complete checks in an isolated checkout of the reviewed SHA. Each
+  agent has **self-describing** frontmatter (`lens` / `phase` / `tier` /
   `applies_to`) so the selector can route it with no code change. `reviewer-contract.md`
   is an authoring-time template (selector-inert: no `phase`) inlined into each reviewer.
-  Reviewers run as `autopilot:<name>`, each at its own `model` + read-only `tools`
+  Reviewers run as `autopilot:<name>`, each at its own `model` + `tools`
   allowlist. **Each round** is one call to the plugin workflow (below) — a re-reviewed lens
   is a fresh member primed with its prior items (+ the fix diff in S7). If that call fails,
   the phase falls back to a parallel native `Task` batch of the same members and prompts.
   **Both surfaces** run the convergence loop natively in the orchestrator (round 0 + fix →
   re-review until all-PASS or the per-phase cap). The orchestrator owns the loop, the fix
   (a fixer continued across rounds), and the re-review set: S3 the full panel; S7 the
-  lenses that failed plus every core lens (light-build: only the failed ones).
+  lenses that failed plus every core lens (light-build: failed lenses plus the
+  verification reviewer every round).
 
 - **Selection stage (`scripts/select-panel.py`).** Deterministic, stdlib-only router:
   `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every
@@ -101,7 +104,10 @@ files plus `agents/` and `scripts/` together:
   (`phase=… worktree=… branch=… base_ref=… review_round=…`) lets a run survive
   compaction and resume from the current phase; an interrupted review round re-runs whole.
   The progress section records each S5 task done (a resume continues from the next), the
-  review transport, and per-lens blocker gists that prime re-reviewed lenses.
+  review transport, and per-lens blocker gists that prime re-reviewed lenses. It also
+  keeps the full verify command outside producer briefs, with command, exit-code,
+  failure-count and diagnostic evidence for the final reviewed SHA. In light-build,
+  the command and concise evidence live above RESUME in the state file.
 
 - **No plugin dependencies.** Both surfaces use only native tools, the plugin's own
   scripts, or inline logic; neither invokes another plugin's skill or preflights for one.

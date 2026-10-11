@@ -1,6 +1,6 @@
 ---
 name: build
-description: "Use to build a new work product from a requirement, end to end: create an isolated worktree, write and review a spec, write a task list, implement, verify, and review-loop to a single review-ready branch (never merges). Pass the requirement text, or a path to an existing spec file."
+description: "Use to build a new work product from a requirement, end to end: create an isolated worktree, write and review a spec, write a task list, implement, and run a capped review with mandatory verification to a single review-ready branch (never merges). Pass the requirement text, or a path to an existing spec file."
 argument-hint: "<requirements|spec-file-path>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, SendMessage, Workflow, Skill, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite, ScheduleWakeup
 ---
@@ -56,6 +56,11 @@ RESUME: phase=<S1..S9> worktree=<path> branch=<name> base_ref=<sha> review_round
 each loop iteration. **Location follows the user's / project's convention** — honor
 CLAUDE.md and existing repo patterns.
 
+The plan doc progress section records the full verify command outside the task-list
+header, plus each verification reviewer's reviewed SHA, commands, exit codes, failure
+counts and diagnostic gist. Resume an interrupted S7 round by re-running its whole
+frozen panel; never carry verification evidence to a different SHA.
+
 ## Deciding at decision points (expert council)
 
 - At a genuine fork — two-plus viable approaches with materially different trade-offs, or a
@@ -73,14 +78,21 @@ CLAUDE.md and existing repo patterns.
   --phase spec --spec-file <spec doc>` (S3) / `... --phase work --worktree <worktree>
   --base <base_ref>` (S7) → a `selected` list of `{agent, subagent_type, tier, matched}`.
   The panel = ALL `core` agents (mandatory) + the `optional` agents you judge relevant (may
-  drop marginal ones).
+  drop marginal ones). For S7, include the selected core
+  `autopilot:verification-reviewer`; S3 spec review never includes it.
 - **Freeze & log** the panel to the **plan doc** progress section (see **Progress log
   format**); reuse it every round of that phase.
-- **Dispatch the whole round together** — never one at a time, re-reviews included. Each
+- **Dispatch the whole round together** — never one at a time, re-reviews included. Before
+  each S7 round, capture `reviewed_sha=<HEAD>` and verify the source worktree HEAD equals
+  it; do not mutate the source until all verdicts return, then verify HEAD still equals
+  `reviewed_sha` before judging. Every S7 member gets the same fixed revision. Each
   member is `autopilot:<name>` and gets ONLY a run-input prompt — "PHASE=<spec|work>.
-  Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…, requirement=…, focus=…. Output
+  Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…, requirement=…, focus=…,
+  reviewed_sha=<HEAD> (S7 only). Output
   ONLY the verdict, no extra prose." (absolute paths; reviewers read the worktree, never
-  main). A re-reviewed lens's prompt adds its prior items (`<lens>#<n> "<gist>"`, from the
+  main). The verification reviewer reads the plan doc by reference for the full verify
+  command and runs in its own isolated checkout. Ordinary reviewers do not run the full
+  verify command or test suite. A re-reviewed lens's prompt adds its prior items (`<lens>#<n> "<gist>"`, from the
   persisted gists); S7 also adds the fix diff `git -C <worktree> diff <pre-fix HEAD>..HEAD` (record HEAD
   before each fix).
   - **Workflow (default):** one call per round —
@@ -91,8 +103,11 @@ CLAUDE.md and existing repo patterns.
   - **Task (fallback):** if the `Workflow` call fails, dispatch the same members fresh as
     one parallel `Task` batch with the same prompts, and stay on Task for the phase (freeze
     line `->Task`). PASS only with no BLOCKING; no or unparseable verdict → FAIL.
-- **Wait for every verdict** — never poll or judge early — then ONE fix over all open
-  blockers, then ONE re-review round.
+- **Wait for every verdict** — never poll or judge early. After every verdict is in,
+  inspect the verification reviewer's raw BLOCKING items before adding item IDs;
+  `VERIFICATION_UNAVAILABLE:` at the start of an item triggers Safety stop 3;
+  do not dispatch a code fixer for an unavailable environment or tool. Otherwise make
+  ONE fix over all open blockers, then ONE re-review round.
 - **Item IDs:** before deduping for the fixer, label each item `<lens>#<n>` — numbered per
   lens across the phase, never reused; a repeated OPEN item keeps its ID (reviewers prefix it).
 
@@ -114,9 +129,9 @@ panel freeze, S5 task done, review round and decision, in the shapes below (`S3`
 the `S7` shapes), plus the final residual NON-BLOCKING items. The per-lens blocker gists prime
 re-reviewed lenses.
 
-- **Panel freeze:** `S7 panel: core=[correctness,requirement-fidelity,doc] +optional=[code-quality] transport=Workflow` (append `->Task` if the fallback fires).
+- **Panel freeze:** `S7 panel: core=[correctness,requirement-fidelity,doc,verification] +optional=[code-quality] transport=Workflow` (append `->Task` if the fallback fires).
 - **Task done:** `S5 task 3 done: <commit sha>`.
-- **Review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S7 r0: correctness=FAIL requirement-fidelity=PASS -> correctness#1 off-by-one in slice bound; fix dispatched`.
+- **Review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S7 r0 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fix dispatched`. Record useful verification diagnostics when a command fails.
 - **Decision** (council or solo): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
 <!-- progress-log-format:end -->
 
@@ -143,33 +158,38 @@ re-reviewed lenses.
   contradiction → Safety stop 4.
 - **S4 — task list.** Write the task list yourself (invoke no planning skill): a code-free
   task list into the plan doc's implementation-plan section:
-  - Header: spec path; Global Constraints (exact values, S6's verify command).
+  - Header: spec path; Global Constraints (exact values producers need). Put the full
+    verify command outside the task-list header, in the plan doc progress section,
+    so the verification reviewer can read it by `plan_doc` reference.
   - Per task, a `### Task N: <name>` heading (its S5 producer reads its brief by it) with:
     Files; Consumes/Produces (exact names/signatures crossing tasks); tests to write
     first, incl. edge cases; the checks it runs (only those its change affects, never a
-    full suite: S6 runs those once); commit message.
+    full suite: the S7 verification reviewer runs that); commit message.
   - The task list is the plan doc's last section; the progress section, RESUME block and
     any verification notes go above it (a brief runs to the next Task heading).
 - **S5 — produce.** Code → per S4 task, in order from the first not `done`, dispatch one
   fresh producer subagent on the task list header and its `### Task N` brief: tests first,
-  then the code; run only the checks its brief names (never the verify command); commit
+  then the code; run only the checks its brief names that cover its changed files (never
+  the full verify command or full suite); commit
   with the brief's message; log the task `done`. Non-code → producer subagents. The
   orchestrator never edits the work product itself.
-- **S6 — verify.** Run the target repo's own checks (those its CLAUDE.md, README or CI
-  name) **inline via `Bash`**; none named → the checks its build/test manifests define
-  (`package.json` `test`, Makefile, pre-commit, …); none at all → say so in the S9 report.
-  **Never weaken, skip, or delete a check.** Idempotent — re-running is safe. Claim a
-  result only from this run's output (exit code, failure count).
-- **S7 — work review.** Run the S7 review loop (see **Review rounds**) over the work.
+- **S7 — work review.** Run the S7 review loop (see **Review rounds**) over the work;
+  the mandatory verification reviewer runs the complete checks in parallel with the
+  ordinary reviewers. Its genuine failed checks are blocking FAILs in the existing loop.
   **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the deduped
   open blockers (with item IDs) + cited files only; later fixes continue it via `SendMessage`
   (unknown ID / error → fresh producer, whose ID replaces the recorded one). Docs are part
-  of S7.
+  of S7. Each fix producer runs only checks covering the files it changes, never the
+  full verify command or full suite; the verification reviewer repeats full checks on
+  every S7 round. A `VERIFICATION_UNAVAILABLE:` result after the reviewer's one retry
+  is a safety stop, not a code-fix task.
 - **S8 — squash.** Idempotent squash to one commit (skip if already exactly 1
   ahead of `base_ref`). Working notes (spec/plan/progress) are committed or ignored per the
   project's convention — do not force either.
 - **S9 — finish.** Inline (no skill): report
-  review history, decisions, deferred non-blockers (stop-reason first if the run stopped);
+  review history and final verification evidence (reviewed SHA, commands, exit codes,
+  failure counts and useful diagnostics), decisions, deferred non-blockers
+  (stop-reason first if the run stopped);
   offer integration options as an informational report menu, NOT a question. NO merge.
 
 ## Safety stops (handoffs, not questions)

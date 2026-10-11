@@ -10,8 +10,8 @@ with one explicit command.
 > skill/workflow, while `/autopilot:build` still works for users.
 > A second surface, **`skills/light-build`** (`/autopilot:light-build`), is
 > the low-ceremony path: autonomy + expert-council-at-forks with no
-> spec doc and no spec review — an S4 task list, then produce → verify → a single
-> capped correctness + requirement-fidelity review. **light-build does not gate scope** —
+> spec doc and no spec review — an S4 task list, then produce → one capped core
+> review with mandatory full verification. **light-build does not gate scope** —
 > choosing the right surface is your call (see its section below for when it fits).
 > The **named review roster** is complete for both phases in `agents/`, and the
 > **selection stage** (`scripts/select-panel.py`) wires the roster into the S3/S7
@@ -39,7 +39,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 │   └── select-panel.py           # selector: (phase, signals) → panel JSON
 ├── workflows/
 │   └── review-round.js           # plugin workflow autopilot:autopilot-review-round — one parallel review round (the skills' default review transport)
-├── agents/                       # named review roster (read-only)
+├── agents/                       # named review roster (ordinary reviewers read-only)
 │   ├── reviewer-contract.md      # authoring template, inlined into each reviewer
 │   ├── spec-fitness-reviewer.md  # spec / core
 │   ├── architecture-reviewer.md  # spec core / work optional (@structural)
@@ -49,7 +49,8 @@ claude-autopilot/                 # git repo = marketplace + plugin
 │   ├── code-quality-reviewer.md  # work / optional (code)
 │   ├── test-reviewer.md          # work / optional (code)
 │   ├── performance-reviewer.md   # work / optional (code)
-│   └── security-reviewer.md      # both / optional — conditional, dual-phase
+│   ├── security-reviewer.md      # both / optional — conditional, dual-phase
+│   └── verification-reviewer.md  # work / core — full checks in isolated checkout
 ├── tests/
 │   └── test_scripts.py           # stdlib unittest for the helper scripts
 ├── README.md
@@ -90,10 +91,9 @@ and it drives, end to end and without asking you questions:
 - **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch (`<prefix>` = the ticket ID when the work is for one single ticket, e.g. `TASK-123`, else `autopilot`); create the plan doc (progress + RESUME).
 - **S2 — Spec:** write the spec from the requirement and the affected code (expert council at decision points).
 - **S3 — Spec review:** Ralph loop over the spec until the panel passes.
-- **S4 — Task list:** a code-free task list (files, cross-task interfaces, tests first, the checks each task runs, commit message) + S6's verify command.
-- **S5 — Produce:** one fresh producer per task, in order; each runs only the checks its brief names, never a full suite (S6 runs those once); no per-task review (S7 is the gate).
-- **S6 — Verify:** run the target repo's own checks inline.
-- **S7 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency.
+- **S4 — Task list:** a code-free task list (files, cross-task interfaces, tests first, the checks each task runs, commit message); keep the full verify command in the plan progress section, outside producer briefs.
+- **S5 — Produce:** one fresh producer per task, in order; each runs only checks covering its changed files, never a full suite; no per-task review (S7 is the gate).
+- **S7 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency and the mandatory core `verification-reviewer` runs the full target checks against the same fixed revision as the other reviewers. An unavailable environment stops safely after one retry; genuine check failures enter the fix loop.
 - **S8 — Squash:** idempotent squash to one clean commit.
 - **S9 — Finish:** report + integration menu. **Never merges.**
 
@@ -139,8 +139,7 @@ without the ceremony. It is a skill (model-invocable / composable), emits the sa
 - **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch (native `EnterWorktree`). **State:** no spec doc — the state file is materialized at S4 (see **S4 — Task list**).
 - **S4 — Task list:** the orchestrator writes a code-free task list (Global Constraints + per-task `### Task N` briefs: files, Consumes/Produces, tests first, commit message) into the state file — S4 always materializes it. S5 dispatches one fresh producer per task, in order.
 - **S5 — Produce:** dispatch one fresh producer per S4 task, in order from the first not `done`, via plain `Task`. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
-- **S6 — Verify:** run the discovered checks inline.
-- **S7 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc`, `requirement-fidelity` checking the work against the requirement text — **capped at 1** review+fix round. This is the sole correctness gate.
+- **S7 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc` + mandatory `verification`, with full checks run in an isolated checkout against the same revision as other reviewers — **capped at 1** review+fix round. The verifier runs every round; other passed lenses carry their PASS. This is the sole correctness gate.
 - **S8 — Squash → S9 — Finish:** one clean commit + report. **Never merges.**
 
 **No scope gate.** light-build is a harness, not a gatekeeper — it runs whatever it is
@@ -167,11 +166,12 @@ returned branch — it reads the outcome from the final `autopilot-result` block
 
 ## Review roster (`agents/`)
 
-The committed, accountable review roster. Each reviewer is a **read-only,
-single-lens** agent that returns the strict `VERDICT / BLOCKING / NON-BLOCKING`
+The committed, accountable review roster. Each reviewer is a **single-lens** agent
+that returns the strict `VERDICT / BLOCKING / NON-BLOCKING`
 contract, so a review is reproducible and a lens is attributable — unlike anonymous
 ad-hoc reviewers chosen anew each time. `phase` is when a lens runs — `spec` (S3
-spec-review), `work` (S7 work-review), or `both`.
+spec-review), `work` (S7 work-review), or `both`. Ordinary reviewers are read-only
+and never run a full suite; the verification reviewer runs it in an isolated checkout.
 
 | File | Lens | Phase | Tier |
 | --- | --- | --- | --- |
@@ -181,6 +181,7 @@ spec-review), `work` (S7 work-review), or `both`.
 | `agents/correctness-reviewer.md` | Intent/logic, edge & boundary cases, error paths | work | core |
 | `agents/requirement-fidelity-reviewer.md` | Work realizes the requirement & spec — right thing built, no missing items, no drift/scope creep | work | core |
 | `agents/doc-reviewer.md` | Docs **repo-wide** still accurate after the change (not just touched files); edits concise / not bloated | work | core |
+| `agents/verification-reviewer.md` | Full target checks with commands, exit codes, failure counts and diagnostics | work | core |
 | `agents/code-quality-reviewer.md` | Readability, naming, duplication, dead code, needless complexity, comment quality | work | optional |
 | `agents/test-reviewer.md` | Tests meaningful & assert the spec; coverage of new/changed code | work | optional |
 | `agents/performance-reviewer.md` | Complexity, N+1, allocation, resource leaks, hotspots | work | optional |
@@ -193,7 +194,7 @@ missing items, no drift or scope creep), `correctness` (built bug-free);
 
 The **floor** that always runs is the phase's `core` lenses — spec phase:
 spec-fitness + architecture; work phase: correctness +
-requirement-fidelity + doc-reviewer — so every review is
+requirement-fidelity + doc-reviewer + verification-reviewer — so every review is
 non-empty for any deliverable. `optional` lenses are **conditional**: they run only
 when the spec/diff matches their `applies_to`, auditably skipped otherwise. The
 `code-quality`/`performance` pack matches code-source files, `test` also matches
@@ -213,12 +214,12 @@ panel: it globs `agents/`, reads each frontmatter, and returns the selected revi
 `optional` whose `applies_to` matches the signals (spec keywords for S3; changed paths,
 `git diff --name-only base...HEAD`, for S7). The orchestrator then runs **all** core
 (the floor) and **curates** the optionals (may drop a marginal one). Each member runs at its
-own model and read-only tool allowlist. Each round is one call to the
+own model and tool allowlist; ordinary reviewers remain read-only. Each round is one call to the
 [plugin workflow](#plugin-workflow-workflowsreview-roundjs); a re-reviewed lens is a fresh
 member primed with its prior items (ID + blocker gist) and, in S7, the fix diff. If the call
 fails, that phase falls back to a parallel `Task(subagent_type="autopilot:<name>")` batch of
 the same members and prompts. S7 re-reviews the lenses that failed plus every core lens
-(light-build: only the failed ones); S3 re-reviews the full panel. The S7 fixer is a `Task`, continued via `SendMessage`.
+(light-build: failed lenses plus the verification reviewer every round); S3 re-reviews the full panel. The S7 fixer is a `Task`, continued via `SendMessage`, and runs only checks covering its changed files.
 Rounds are batched, and convergence comes only from the reviewers' own verdicts.
 Nothing to configure.
 Doc upkeep is folded into S7: the core `doc-reviewer` flags stale/missing docs **repo-wide**
