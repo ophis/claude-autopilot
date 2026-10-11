@@ -44,14 +44,14 @@ step inside a larger skill/workflow); users still type `/autopilot:build` /
 `/autopilot:light-build`. `light-build` is the low-ceremony surface: a harness
 (S1 → S4 → S5 → S6 → S7 → S8) with no spec doc and no spec review. S4 always
 materializes a state file holding the task list; S6 is a pinned cap-1 panel
-(correctness + requirement-fidelity + doc + verification). It does not gate scope — surface choice is
+(correctness + requirement-fidelity + doc, plus verification when relevant). It does not gate scope — surface choice is
 the user's responsibility. When invoked, the *main-session agent becomes a thin
 orchestrator*: it dispatches subagents and judges their structured output, and never
 edits the work product itself. Understanding the system means reading those two skill
 files plus `agents/` and the bundled `skills/build/scripts/` helpers together:
 
 - **Shared spine.** `build` runs a single **S1–S8** pipeline: S1 worktree → S2 spec →
-  S3 spec-review → S4 task list → S5 produce → S6 work-review with mandatory verification → S7 squash → S8 finish.
+  S3 spec-review → S4 task list → S5 produce → S6 work-review (verification optional) → S7 squash → S8 finish.
   `light-build` skips S2, S3 (same number = same step).
   **It never merges** — the deliverable is a review-ready branch.
 
@@ -64,7 +64,7 @@ files plus `agents/` and the bundled `skills/build/scripts/` helpers together:
   the requirement); light-build permits one subsequent fix/re-review cycle.
 
 - **Named review roster (`agents/`).** Each reviewer has a single lens. Ordinary reviewers
-  are read-only and never run the full test suite; the mandatory work-phase verification
+  are read-only and never run the full test suite; the optional work-phase verification
   reviewer runs the complete checks in the frozen source worktree at the reviewed SHA. Each
   agent has **self-describing** frontmatter (`lens` / `phase` / `tier` /
   `applies_to`) so the selector can route it with no code change. `reviewer-contract.md`
@@ -79,8 +79,8 @@ files plus `agents/` and the bundled `skills/build/scripts/` helpers together:
   **Both surfaces** run the convergence loop natively in the orchestrator (Round 1 + fix →
   re-review until all-PASS or the per-phase cap). The orchestrator owns the loop, the fix
   (a fixer continued across rounds), and the re-review set: S3 the full panel; S6 the
-  lenses that failed plus every core lens (light-build: failed lenses plus the
-  verification reviewer every round).
+  lenses that failed plus every core lens and any verifier (light-build: failed lenses
+  plus any verifier every round). The skills' S6 rule says when the verifier runs.
 
 - **Selection stage (`skills/build/scripts/select-panel.py`).** Deterministic, stdlib-only router:
   `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every
