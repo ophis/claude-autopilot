@@ -37,7 +37,7 @@ frozen panel, on the phase's transport; only `review_round` need be persisted to
 loop. **No state file → start at S1.**
 
 **The state file** (materialized in S4) holds the requirement and full verify command
-above RESUME, then the task list — **never an audit trail**:
+above RESUME, then the task list:
 
 ```
 RESUME: phase=<S1|S4|S5|S6|S7|S8> worktree=<path> branch=<name> base_ref=<sha> review_round=<n>
@@ -47,8 +47,8 @@ Advance RESUME's `phase=` with the run. Before S6, commit tracked state edits an
 an ignored run note there; from S6 onward, keep mutable RESUME, panel verdicts,
 reviewed SHA/tree, commands, exit codes, failure counts, and diagnostics in that note
 (an ignored state file may serve as the note). Re-run an interrupted S6 round with its
-full panel; on resume, read the note first and rerun S6 unless it has an all-PASS panel and verification
-results for the current tree.
+full panel. On resume, continue the recorded phase; for S7/S8, rerun S6 unless the
+note has an all-PASS panel and verification results for the current tree.
 For legacy S1–S9 state files, restart old S6–S9 at new S6, retaining task progress.
 
 **Location follows the user's / project's convention** — honor CLAUDE.md and existing repo
@@ -137,9 +137,10 @@ S6 is the **sole correctness gate**.
     without convergence → Safety stop 2. Only reviewers' own verdicts decide
     convergence: never override one, downgrade a blocker, or mark an item INVALID yourself.
 
-## Working-note shapes (in context — not persisted)
+## Working-note shapes
 
-Track these for the S8 report, which surfaces them plus the residual NON-BLOCKING items:
+Track these for S8 (S6 verdicts/evidence in the run note, other notes in context),
+plus residual NON-BLOCKING items:
 
 - **Panel freeze:** `S6 panel: pinned=[correctness,requirement-fidelity,doc,verification] transport=Workflow` (append `->Task` if the fallback fires).
 - **Each completed S5 task** (from the state file's done marks): `S5 task <N> done: <commit sha>` — feeds the S8 report.

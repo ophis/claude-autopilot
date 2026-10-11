@@ -57,8 +57,8 @@ each loop iteration. **Location follows the user's / project's convention** — 
 CLAUDE.md and existing repo patterns. Before S6, commit tracked plan edits and name an
 ignored run note there; from S6 onward, keep mutable RESUME, panel verdicts, and
 verification evidence in that note (an ignored plan doc may serve as the note).
-On resume, read the note first; rerun S6 unless it has an all-PASS panel and verification results for
-the current tree.
+On resume, continue the recorded phase; for S7/S8, rerun S6 unless the note has an
+all-PASS panel and verification results for the current tree.
 For legacy S1–S9 plans, restart old S6–S9 at new S6, retaining task progress.
 
 Keep the full verify command in the plan doc progress section. The run note records
