@@ -111,8 +111,11 @@ You can also hand `/autopilot:build` a path to an existing spec file instead of 
 At a genuine decision point it convenes a small **expert council** (ad-hoc sub-agents)
 to deliberate, then decides and records — it does not ask you. It stops only to hand off on a
 safety condition (non-convergence after 3 total review rounds per phase; an unrecoverable phase
-failure; a self-contradictory requirement; or a destructive operation requiring a handoff under the session's permission rules). Reviews converge via a structured `VERDICT/BLOCKING/
-NON-BLOCKING` contract decided from disk, not vibes.
+failure; a self-contradictory requirement; or a destructive operation (force-push,
+write outside the worktree, history rewrite beyond the branch, rm/reset of
+uncommitted work), unless the session runs with automatic approval (Claude: Auto Mode)).
+Reviews converge via a structured `VERDICT/BLOCKING/NON-BLOCKING` contract decided
+from disk, not vibes.
 
 On every terminal path (S8 finish or any safety stop) the run emits, as its final
 output, one fenced `autopilot-result` JSON block (`status` / `branch` / `base_ref` /
@@ -223,15 +226,17 @@ panel: it globs `agents/`, reads each frontmatter, and returns the selected revi
 `{agent, subagent_type, tier, matched}` — every `core` agent for the phase, plus every
 `optional` whose `applies_to` matches the signals (spec keywords for S3; changed paths,
 `git diff --name-only base...HEAD`, for S6). The orchestrator then runs **all** core
-(the floor) and **curates** the optionals (may drop a marginal one). Each member uses
-its host's model and the canonical tool boundaries; ordinary reviewers remain read-only.
+(the floor) and **curates** the optionals (may drop a marginal one). On Claude Code,
+each reviewer uses the `model:` / `effort:` in its `agents/<name>.md` frontmatter;
+on Codex, it inherits the session model. Canonical tool boundaries apply; ordinary
+reviewers remain read-only.
 The skills select Workflow when available or native agent dispatch, loading complete
 canonical reviewer files for generic agents and respecting
 concurrency capacity. Re-reviewed lenses start fresh with prior items (ID + blocker
 gist) and, in S6, the fix diff. S6 re-reviews failed lenses plus every core lens
 (light-build: failed lenses plus the verification reviewer every round); S3
-re-reviews the full panel. The S6 fixer is continued through the host's native
-operation and runs only checks covering its changed files.
+re-reviews the full panel. The S6 fixer is continued by its id (Claude: `SendMessage`)
+and runs only checks covering its changed files.
 Rounds are batched, and convergence comes only from the reviewers' own verdicts.
 Nothing to configure.
 Doc upkeep is folded into S6: the core `doc-reviewer` flags stale/missing docs **repo-wide**
