@@ -678,8 +678,13 @@ class SkillWorktreePinTests(unittest.TestCase):
             with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
                 text = fh.read()
             s1 = text[text.index("- **S1 — worktree.**"):text.index("- **S", text.index("- **S1 — worktree.**") + 1)]
-            reuse = s1.index("branch (below) exists from a prior run, reuse it with its commits")
+            resolve = s1.index("host-specific `<branch>` before lookup or creation")
+            reuse = s1.index("resolved `<branch>` exists from a prior run, reuse it with its commits")
+            self.assertLess(resolve, reuse, skill)
             self.assertLess(reuse, s1.index("Else create worktree"), skill)
+            self.assertIn("same resolved branch for worktree reuse and resume", s1, skill)
+            self.assertIn("worktree/branch conventions in `skills/host-runtime.md`", s1, skill)
+            self.assertNotIn("`<prefix>-<slug>` branch", s1, skill)
             self.assertIn("git worktree add <path> <branch>", s1, skill)
             self.assertIn("collision with another requirement's", s1, skill)
 
