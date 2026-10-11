@@ -42,20 +42,20 @@ The two surfaces — `skills/build/SKILL.md` and `skills/light-build/SKILL.md` �
 **orchestrator prompts**, not code. They are **skills** (model-invocable, so composable as a
 step inside a larger skill/workflow); users still type `/autopilot:build` /
 `/autopilot:light-build`. `light-build` is the low-ceremony surface: a harness
-(S1 → S4 → S5 → S7 → S8 → S9) with no spec doc and no spec review. S4 always
-materializes a state file holding the task list; S7 is a pinned cap-1 panel
+(S1 → S4 → S5 → S6 → S7 → S8) with no spec doc and no spec review. S4 always
+materializes a state file holding the task list; S6 is a pinned cap-1 panel
 (correctness + requirement-fidelity + doc + verification). It does not gate scope — surface choice is
 the user's responsibility. When invoked, the *main-session Claude becomes a thin
 orchestrator*: it dispatches subagents and judges their structured output, and never
 edits the work product itself. Understanding the system means reading those two skill
 files plus `agents/` and `scripts/` together:
 
-- **Shared spine.** `build` runs a single **S1–S9** pipeline: S1 worktree → S2 spec →
-  S3 spec-review → S4 task list → S5 produce → S7 work-review with mandatory verification → S8 squash → S9 finish.
+- **Shared spine.** `build` runs a single **S1–S8** pipeline: S1 worktree → S2 spec →
+  S3 spec-review → S4 task list → S5 produce → S6 work-review with mandatory verification → S7 squash → S8 finish.
   `light-build` skips S2, S3 (same number = same step).
   **It never merges** — the deliverable is a review-ready branch.
 
-- **Ralph convergence loops (S3, S7).** review → fix → re-review until the frozen
+- **Ralph convergence loops (S3, S6).** review → fix → re-review until the frozen
   review panel all-PASSes or a per-phase cap (default 3) is hit. Convergence is decided
   **only from reviewers' own verdicts** in the strict `VERDICT / BLOCKING / NON-BLOCKING`
   grammar — never from the orchestrator's opinion. Rounds are batched (wait for every
@@ -71,18 +71,18 @@ files plus `agents/` and `scripts/` together:
   `verification-reviewer.md` follows its dedicated execution contract.
   Reviewers run as `autopilot:<name>`, each at its own `model` + `tools`
   allowlist. **Each round** is one call to the plugin workflow (below) — a re-reviewed lens
-  is a fresh member primed with its prior items (+ the fix diff in S7). If that call fails,
+  is a fresh member primed with its prior items (+ the fix diff in S6). If that call fails,
   the phase falls back to a parallel native `Task` batch of the same members and prompts.
   **Both surfaces** run the convergence loop natively in the orchestrator (round 0 + fix →
   re-review until all-PASS or the per-phase cap). The orchestrator owns the loop, the fix
-  (a fixer continued across rounds), and the re-review set: S3 the full panel; S7 the
+  (a fixer continued across rounds), and the re-review set: S3 the full panel; S6 the
   lenses that failed plus every core lens (light-build: failed lenses plus the
   verification reviewer every round).
 
 - **Selection stage (`scripts/select-panel.py`).** Deterministic, stdlib-only router:
   `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every
   `core` agent is a mandatory floor; `optional` agents route in when their `applies_to`
-  matches the signals (spec keywords for S3; changed paths for S7). `tier` is usually a
+  matches the signals (spec keywords for S3; changed paths for S6). `tier` is usually a
   scalar but may be a per-phase JSON map (`tier: {"spec":"core","work":"optional"}` —
   resolved to the effective scalar per phase, emitted as such); `applies_to` may carry
   the reserved `@structural` work-phase token, which matches iff the diff changed file
@@ -91,7 +91,7 @@ files plus `agents/` and `scripts/` together:
 
 - **Plugin workflow (`workflows/review-round.js`).** The v0.9.x per-round review transport,
   restored byte-identical and invoked by name as `autopilot:autopilot-review-round` (the
-  runtime names plugin workflows `<plugin>:<meta.name>`). The default S3/S7 review-round
+  runtime names plugin workflows `<plugin>:<meta.name>`). The default S3/S6 review-round
   transport of both skills; Task is the fallback. Contract in README "Plugin workflow".
 
 - **Config (`scripts/autopilot-config.py`).** Reads/initializes
