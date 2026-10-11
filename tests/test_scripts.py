@@ -310,6 +310,61 @@ class AutopilotConfigTests(unittest.TestCase):
             self.assertEqual(json.load(fh), self.DEFAULTS)
         self.assertFalse(os.path.exists(bad), "config.json written to old wrong path")
 
+    def run_host_config(self, home, *args, **environment):
+        env = dict(os.environ, HOME=home)
+        for name in ("CLAUDE_PLUGIN_DATA", "CODEX_HOME"):
+            env.pop(name, None)
+        env.update(environment)
+        return subprocess.run(
+            [sys.executable, CONFIG, *args], env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+
+    def test_codex_default_is_separate_from_claude_data(self):
+        with tempfile.TemporaryDirectory() as home:
+            claude_data = os.path.join(home, "claude-data")
+            proc = self.run_host_config(home, "--host", "codex",
+                                        CLAUDE_PLUGIN_DATA=claude_data)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(json.loads(proc.stdout), self.DEFAULTS)
+            path = os.path.join(home, ".codex", "plugins", "data",
+                                "autopilot-claude-autopilot", "config.json")
+            self.assertTrue(os.path.exists(path))
+            self.assertFalse(os.path.exists(claude_data))
+
+    def test_codex_home_selects_config_and_deep_merges(self):
+        with tempfile.TemporaryDirectory() as home:
+            codex_home = os.path.join(home, "custom-codex")
+            data = os.path.join(codex_home, "plugins", "data",
+                                "autopilot-claude-autopilot")
+            os.makedirs(data)
+            write_raw(data, "config.json", json.dumps(
+                {"ralphLoop": {"maxIterations": {"spec-phase": 7}}}))
+            proc = self.run_host_config(home, "--host", "codex", CODEX_HOME=codex_home)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(json.loads(proc.stdout)["ralphLoop"]["maxIterations"],
+                             {"spec-phase": 7, "implementation-phase": 3})
+            self.assertFalse(os.path.exists(os.path.join(home, ".codex")))
+
+    def test_explicit_data_dir_overrides_both_host_defaults(self):
+        for host in ("claude", "codex"):
+            with self.subTest(host=host), tempfile.TemporaryDirectory() as home:
+                data = os.path.join(home, "explicit data")
+                proc = self.run_host_config(
+                    home, "--host", host, "--data-dir", data,
+                    CODEX_HOME=os.path.join(home, "codex"),
+                    CLAUDE_PLUGIN_DATA=os.path.join(home, "claude"))
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertTrue(os.path.exists(os.path.join(data, "config.json")))
+                self.assertFalse(os.path.exists(os.path.join(home, host)))
+
+    def test_explicit_claude_host_preserves_environment_override(self):
+        with tempfile.TemporaryDirectory() as home:
+            data = os.path.join(home, "claude-data")
+            proc = self.run_host_config(home, "--host", "claude", CLAUDE_PLUGIN_DATA=data)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertTrue(os.path.exists(os.path.join(data, "config.json")))
+
 
 # A valid reviewer body: inlines the four contract markers and ends with the
 # verdict-grammar section as the last "## " heading.
@@ -679,7 +734,7 @@ class SkillWorktreePinTests(unittest.TestCase):
         with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
         s2 = text[text.index("- **S2 — spec."):text.index("- **S3 — spec review.")]
-        self.assertIn("`${CLAUDE_SKILL_DIR}/spec.md`", s2)
+        self.assertIn("`<skill_dir>/spec.md`", s2)
         tracked = subprocess.run(["git", "-C", REPO, "ls-files", "skills/build/spec.md"],
                                  capture_output=True, text=True, check=True).stdout.split()
         self.assertEqual(tracked, ["skills/build/spec.md"])

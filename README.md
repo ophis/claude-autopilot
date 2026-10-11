@@ -1,6 +1,6 @@
 # Claude Autopilot
 
-A Claude Code **plugin** that packages a high-ceremony, autonomous pipeline for
+A Claude Code and Codex **plugin** that packages a high-ceremony, autonomous pipeline for
 shipping complex work products (code, but also docs, designs, data, plans). It
 replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
 with one explicit command.
@@ -16,8 +16,8 @@ with one explicit command.
 > The **named review roster** is complete for both phases in `agents/`, and the
 > **selection stage** (`scripts/select-panel.py`) wires the roster into the S3/S6
 > review loops — the skills select the panel from the roster and dispatch each round
-> through the plugin workflow `autopilot:autopilot-review-round`, falling back to native
-> `Task` dispatch (see [Review roster](#review-roster-agents)).
+> through the available host transport
+> (see [Host runtime](skills/host-runtime.md) and [Review roster](#review-roster-agents)).
 
 ## Repository structure
 
@@ -31,14 +31,15 @@ claude-autopilot/                 # git repo = marketplace + plugin
 ├── skills/
 │   ├── build/SKILL.md            # skill; /autopilot:build       still works
 │   ├── build/spec.md             # spec-writing guide for build S2
-│   └── light-build/SKILL.md      # skill; /autopilot:light-build  — low-ceremony
+│   ├── light-build/SKILL.md      # skill; /autopilot:light-build  — low-ceremony
+│   └── host-runtime.md          # shared Claude Code / Codex execution mappings
 ├── scripts/
 │   ├── _frontmatter.py           # shared frontmatter reader (imported by select-panel.py + lint-roster.py)
-│   ├── autopilot-config.py       # reads/initializes ${CLAUDE_PLUGIN_DATA}/config.json
+│   ├── autopilot-config.py       # reads/initializes host-specific plugin config
 │   ├── lint-roster.py            # A3 roster lint: validates each reviewer's frontmatter + contract
 │   └── select-panel.py           # selector: (phase, signals) → panel JSON
 ├── workflows/
-│   └── review-round.js           # plugin workflow autopilot:autopilot-review-round — one parallel review round (the skills' default review transport)
+│   └── review-round.js           # plugin workflow autopilot:autopilot-review-round — one parallel review round (when the host exposes Workflow)
 ├── agents/                       # named review roster (ordinary reviewers read-only)
 │   ├── reviewer-contract.md      # authoring template, inlined into ordinary reviewers
 │   ├── spec-fitness-reviewer.md  # spec / core
@@ -62,7 +63,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 No other plugin is required: every phase of both surfaces uses a native tool, the
 plugin's own script, or inline logic.
 
-This repo is its own single-repo marketplace, so add it and install:
+In Claude Code, this repo is its own single-repo marketplace, so add it and install:
 
 ```
 /plugin marketplace add https://github.com/ophis/claude-autopilot.git
@@ -81,6 +82,16 @@ install).
 /plugin marketplace update claude-autopilot
 /plugin install autopilot@claude-autopilot
 ```
+
+### Codex
+
+Install `autopilot@claude-autopilot` from the `claude-autopilot` marketplace in
+Codex's plugin manager, then select the installed `autopilot:build` or
+`autopilot:light-build` skill and include your requirement in the invoking message.
+For a local candidate, explicitly invoke its absolute SKILL.md path. The
+[shared host runtime](skills/host-runtime.md) maps the same workflow to exposed
+Codex tools; subagent support is required. Codex inherits the session model by
+default and reads reviewer instructions from the plugin's canonical agent files.
 
 ## `/autopilot:build <requirements>`
 
@@ -102,8 +113,7 @@ You can also hand `/autopilot:build` a path to an existing spec file instead of 
 At a genuine decision point it convenes a small **expert council** (ad-hoc sub-agents)
 to deliberate, then decides and records — it does not ask you. It stops only to hand off on a
 safety condition (non-convergence after 3 review rounds; an unrecoverable phase
-failure; a self-contradictory requirement; or — **only when Auto Mode is off** — a
-destructive git op). Reviews converge via a structured `VERDICT/BLOCKING/
+failure; a self-contradictory requirement; or an unauthorized destructive git op requiring host approval). Reviews converge via a structured `VERDICT/BLOCKING/
 NON-BLOCKING` contract decided from disk, not vibes.
 
 On every terminal path (S8 finish or any safety stop) the run emits, as its final
@@ -122,9 +132,18 @@ In a throwaway git repo:
 /autopilot:build add a function add(a,b) with a passing unit test
 ```
 
-Expect: a new `<prefix>-<slug>` worktree+branch; the spec and work review loops
+Run in each host (Codex: invoke the installed skill with the same requirement).
+Expect: a new isolated worktree+branch; the spec and work review loops
 each reach `VERDICT: PASS`; the test actually runs and passes; the run ends at a
 **single squashed commit with no merge** and a final report.
+
+Also exercise both surfaces on each host with a fixture whose full checks expose
+a failure outside S5's targeted checks: require an S6 FAIL, one committed fix,
+fresh re-review and full verification of the fixed SHA. Interrupt a run after S5,
+resume from its recorded state, and confirm the final head tree equals the tree
+with all-PASS review evidence. Record host, exact invocation/check commands, exit
+codes and final `autopilot-result`; record an unavailable scenario with its actual
+reason rather than a PASS.
 
 ## `/autopilot:light-build <requirements>`
 
@@ -136,9 +155,9 @@ and as a lighter alternative to `build` when you want the autonomous interaction
 without the ceremony. It is a skill (model-invocable / composable), emits the same final
 `autopilot-result` block, and `/autopilot:light-build` is preserved for users.
 
-- **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch (native `EnterWorktree`). **State:** no spec doc — the state file is materialized at S4 (see **S4 — Task list**).
+- **S1 — Worktree:** create `<prefix>-<slug>` worktree+branch through the host runtime. **State:** no spec doc — the state file is materialized at S4 (see **S4 — Task list**).
 - **S4 — Task list:** the orchestrator writes a code-free task list (Global Constraints + per-task `### Task N` briefs: files, Consumes/Produces, tests first, commit message) into the state file — S4 always materializes it. S5 dispatches one fresh producer per task, in order.
-- **S5 — Produce:** dispatch one fresh producer per S4 task, in order from the first not `done`, via plain `Task`. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
+- **S5 — Produce:** dispatch one fresh producer per S4 task, in order from the first not `done`, via native host dispatch. On a **genuine fork** the producer returns a `FORK:` marker (options, no guessing) → the orchestrator convenes the expert council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
 - **S6 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc` + mandatory `verification`, with full checks run in an isolated checkout against the same revision as other reviewers — **capped at 1** review+fix round. The verifier runs every round; other passed lenses carry their PASS. This is the sole correctness gate.
 - **S7 — Squash → S8 — Finish:** one clean commit + report. **Never merges.**
 
@@ -213,13 +232,15 @@ panel: it globs `agents/`, reads each frontmatter, and returns the selected revi
 `{agent, subagent_type, tier, matched}` — every `core` agent for the phase, plus every
 `optional` whose `applies_to` matches the signals (spec keywords for S3; changed paths,
 `git diff --name-only base...HEAD`, for S6). The orchestrator then runs **all** core
-(the floor) and **curates** the optionals (may drop a marginal one). Each member runs at its
-own model and tool allowlist; ordinary reviewers remain read-only. Each round is one call to the
-[plugin workflow](#plugin-workflow-workflowsreview-roundjs); a re-reviewed lens is a fresh
-member primed with its prior items (ID + blocker gist) and, in S6, the fix diff. If the call
-fails, that phase falls back to a parallel `Task(subagent_type="autopilot:<name>")` batch of
-the same members and prompts. S6 re-reviews the lenses that failed plus every core lens
-(light-build: failed lenses plus the verification reviewer every round); S3 re-reviews the full panel. The S6 fixer is a `Task`, continued via `SendMessage`, and runs only checks covering its changed files.
+(the floor) and **curates** the optionals (may drop a marginal one). Each member uses
+its host-mapped model and tool boundaries; ordinary reviewers remain read-only.
+[Host runtime](skills/host-runtime.md) selects Workflow when available or native
+agent dispatch, loading canonical reviewer files for generic agents and respecting
+concurrency capacity. Re-reviewed lenses start fresh with prior items (ID + blocker
+gist) and, in S6, the fix diff. S6 re-reviews failed lenses plus every core lens
+(light-build: failed lenses plus the verification reviewer every round); S3
+re-reviews the full panel. The S6 fixer is continued through the host's native
+operation and runs only checks covering its changed files.
 Rounds are batched, and convergence comes only from the reviewers' own verdicts.
 Nothing to configure.
 Doc upkeep is folded into S6: the core `doc-reviewer` flags stale/missing docs **repo-wide**
@@ -231,20 +252,23 @@ so there is no separate docs phase.
 The v0.9.x per-round transport, restored unchanged and shipped as a plugin workflow:
 `Workflow({name: "autopilot:autopilot-review-round", args})` (the name comes from its
 `meta.name`). It runs one review round — every member in parallel, each verdict
-schema-validated — and is the skills' **default review-round transport** (`Task` is the
-fallback).
+schema-validated — when the host exposes it; native dispatch is the fallback (see
+[Host runtime](skills/host-runtime.md)).
 
 - **Input** `args`: `{phase, members: [{agent, subagent_type, prompt}]}`.
 - **Output**: `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}]}`,
   in member order. `VERDICT` is `PASS` only when the reviewer said `PASS` and
   `BLOCKING` is empty. A member that yields no verdict becomes `FAIL` with
-  `synthetic: true` and is not retried (the skills re-dispatch it once via `Task`).
+  `synthetic: true` and is not retried (the skills re-dispatch it once through native host dispatch).
 
 ## Configuration
 
-The plugin keeps its own config in its data dir — never Claude's managed
-`settings.json`. Edit `${CLAUDE_PLUGIN_DATA}/config.json`
-(`~/.claude/plugins/data/<plugin-id>/config.json`):
+The plugin keeps its own config in its data dir, separate from host settings.
+Claude uses `${CLAUDE_PLUGIN_DATA}/config.json` (fallback
+`~/.claude/plugins/data/autopilot-claude-autopilot/config.json`); Codex uses
+`${CODEX_HOME:-~/.codex}/plugins/data/autopilot-claude-autopilot/config.json`.
+`autopilot-config.py --host claude|codex --data-dir <directory>` can select an explicit
+data directory. Omitting flags retains the existing Claude behavior. Example config:
 
 ```json
 { "ralphLoop": { "maxIterations": { "spec-phase": 3, "implementation-phase": 3 } } }
@@ -257,8 +281,8 @@ The plugin keeps its own config in its data dir — never Claude's managed
   re-dispatch only the affected lens subset on re-review rounds) is the only
   driver. A config file still carrying the key is harmless.
 
-The commands run `scripts/autopilot-config.py` at startup; it creates this file with
-defaults if absent, so editing it takes effect on the next run.
+build runs `scripts/autopilot-config.py` at startup; it creates the file with defaults
+if absent, so edits take effect on the next run. light-build retains its pinned cap of 1.
 
 ## Local development
 

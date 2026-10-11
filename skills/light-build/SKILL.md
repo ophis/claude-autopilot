@@ -10,9 +10,12 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, SendMessage, Workflow,
 Autonomous light-build run. Drive the pipeline end to end: dispatch and judge; no scope
 gate. **Self-contained: name or invoke no external plugin skill; no dependency preflight.**
 
-## Your input ($ARGUMENTS)
+Before any phase, read [Host runtime](../host-runtime.md) and apply its mappings
+for startup, paths, dispatch, review transport, and approvals throughout this skill.
 
-`$ARGUMENTS` is the single source of intent: free-text requirements. **The requirement IS
+## Your input
+
+`input` is the single source of intent: free-text requirements. **The requirement IS
 the spec.** Empty input → STOP with a handoff asking for requirements.
 
 ## Operating disciplines
@@ -48,15 +51,15 @@ in an ignored run note; reuse an ignored state file, or link the note from a tra
 file before committing it for review. Resume S7/S8 only with all-PASS evidence for the current
 tree; otherwise restart S6. For legacy S1–S9 states, restart old S6–S9 at S6, keeping task progress.
 
-**Location follows the user's / project's convention** — honor CLAUDE.md and existing repo
+**Location follows the user's / project's convention** — honor AGENTS.md / CLAUDE.md and existing repo
 patterns.
 
 ## Deciding at decision points (expert council)
 
 - At a genuine fork — two-plus viable approaches with materially different trade-offs, or a
   choice shaping architecture / data model / interface / scope, costly to reverse, or one a
-  later review might miss — **convene a council**: 2–4 ad-hoc expert personas in one parallel
-  `Task` batch, each returning a concise position (recommendation, rationale, trade-offs,
+  later review might miss — **convene a council**: 2–4 ad-hoc expert personas in one independent
+  native-dispatch batch, each returning a concise position (recommendation, rationale, trade-offs,
   dissent). You **synthesize, decide, and record** a brief decision (see **Working-note
   shapes**) — the decider, breaking ties.
 - Otherwise decide solo and record (a wrong guess is caught by review). Never fabricate
@@ -84,7 +87,7 @@ this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the 
 - **Panel:** pin `autopilot:correctness-reviewer`, `autopilot:requirement-fidelity-reviewer`,
   `autopilot:doc-reviewer` AND `autopilot:verification-reviewer` — four cores, no optionals.
   Freeze it in the run note (see **Working-note shapes**); reuse it every round.
-- **Dispatch** each round's members together, never one at a time (the re-review too).
+- **Dispatch** each round's members together through the host adapter (the re-review too).
   Require a clean committed source worktree (`git -C <worktree> status --porcelain` empty);
   set `reviewed_sha=<HEAD>` with `git -C <worktree> rev-parse HEAD`. Keep it unchanged
   until all verdicts return; check HEAD still equals `reviewed_sha` and status remains
@@ -93,17 +96,11 @@ this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the 
   Ordinary reviewers leave full checks to it. Each member's run-input prompt:
   "PHASE=work. Inputs: worktree=…, base_ref=…, state_file=…, requirement=…, focus=…,
   reviewed_sha=<HEAD>. Output ONLY the verdict, no extra prose."
-  Members: `autopilot:<name>` with ONLY that prompt. A re-reviewed lens adds prior items
+  Members use canonical `autopilot:<name>` instructions plus that prompt. A re-reviewed lens adds prior items
   (`<lens>#<n> "<gist>"`, from the run note) + the fix diff `git -C <worktree> diff <pre-fix HEAD>..HEAD` (record the
   pre-fix HEAD before the fix).
-  - **Workflow (default):** per round, one
-    `Workflow({name: "autopilot:autopilot-review-round", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`
-    → `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` in member
-    order; never pass `resumeFromRunId`. Re-dispatch a `synthetic: true` member once via
-    `Task` with its prompt; still no verdict → FAIL.
-  - **Task (fallback):** if the `Workflow` call fails, dispatch the same members fresh as
-    one parallel `Task` batch with the same prompts, and stay on Task for the phase (freeze
-    note `->Task`). PASS only with no BLOCKING; no or unparseable verdict → FAIL.
+  - **Transport:** use the host adapter’s Workflow/native dispatch and verdict rules;
+    freeze the actual transport with the panel.
 - **Wait for every verdict** — never poll or judge early. Inspect the verifier's raw
   BLOCKING items before adding item IDs: `VERIFICATION_UNAVAILABLE:` (after its one
   retry) triggers Safety stop 3. Otherwise ONE fix over all blockers, then the re-review.
@@ -112,9 +109,9 @@ this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the 
   item keeps its ID (reviewers prefix it) — number only new items.
 - **Loop** (orchestrator-run, cap = 1):
   - **Round 0** = the pinned panel.
-  - **Fix:** the first fix is ONE fresh producer via plain `Task` primed with the deduped
+  - **Fix:** the first fix is ONE fresh producer via native dispatch primed with the deduped
     open blockers (with item IDs) + cited files only; keep its agent ID in context; later
-    fixes continue it via `SendMessage` (unknown ID / error → fresh producer, whose ID
+    fixes continue it via the host continuation operation (unknown ID / error → fresh producer, whose ID
     replaces it). A fix-time genuine fork goes through the **S5 FORK → council**
     mechanism, not an in-loop council. Full blocker text primes the fix transiently; only
     a concise gist is logged.
@@ -145,10 +142,9 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
   - Else, if this requirement's `<prefix>-<slug>` branch (below) exists from a prior run, reuse it with its commits — do not create a numbered one: enter its worktree (`git worktree list`; if none, `git worktree add <path> <branch>`), `base_ref` = `git merge-base HEAD <branch>`; a state file there → resume from it.
   - Else create worktree on local HEAD, then enter:
     - `<prefix>` = the ticket ID when the work is for one single ticket (e.g. Linear `TASK-123`), else `autopilot`.
-    - `<path>` = `.claude/worktrees/<prefix>-<slug>`, ensure `.claude/worktrees/` is gitignored (add it to `.gitignore` if not)
-    - `<slug>` = `$ARGUMENTS` lowercased, non-alphanumerics → hyphens, collapsed to <=40 chars; with a ticket prefix, a short feature description instead (not the ticket ID again). On collision with another requirement's worktree/branch: retry with a uniquified slug (`-2`, …).
-    - `git worktree add <path> -b <prefix>-<slug> HEAD`
-    - `EnterWorktree({path: <path>})`
+    - `<path>` and `<branch>` follow the host adapter’s worktree/branch conventions; ensure the worktree directory is gitignored
+    - `<slug>` = `input` lowercased, non-alphanumerics → hyphens, collapsed to <=40 chars; with a ticket prefix, a short feature description instead (not the ticket ID again). On collision with another requirement's worktree/branch: retry with a uniquified slug (`-2`, …).
+    - Create and enter through the host adapter (git fallback: `git worktree add <path> -b <branch> HEAD`); use the absolute worktree directory for commands.
   - Hold `worktree`, `branch`, `base_ref` (HEAD) in context.
 - **S4 — task list.** Write the task list yourself (invoke no planning skill): a code-free
   task list into the state file — S4 always materializes the state file. The task list is
@@ -162,7 +158,7 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
     full suite: the S6 verification reviewer runs that); commit message.
   - A small change is one task.
 - **S5 — produce.** Per S4 task, in order from the first not `done`, dispatch one
-  fresh producer subagent via plain `Task` on the requirement, the task list header and
+  fresh producer subagent via native dispatch on the requirement, the task list header and
   its `### Task N` brief: tests first, then the code; run only the checks its brief
   names that cover its changed files (never the full verify command or full suite);
   commit with the brief's message; log the task `done`
@@ -171,7 +167,7 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
 - **S6 — work review.** Run the review above; genuine check failures block. Each fix
   producer runs only checks covering the files it changes; the fix producer must commit
   all product changes before re-review under the dispatch rules above.
-- **S7 — squash.** Idempotent squash to one commit **via `git` (`Bash`)** — **skip
+- **S7 — squash.** Idempotent squash to one commit **via `git` (host command tool)** — **skip
   if already exactly 1 ahead of `base_ref`**. The state file is committed or
   ignored per the project's convention — do not force either. Require a clean worktree
   and matching `git rev-parse HEAD^{tree}` / `git rev-parse <reviewed_sha>^{tree}`
@@ -183,9 +179,9 @@ Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
 ## Safety stops (handoffs, not questions)
 
 Stop and hand off (state + exact next step) only on the cases below.
-1. **Destructive op — only when Auto Mode (auto-accept / bypass-permissions) is OFF.**
-   Before any force-push, write outside the worktree, history rewrite beyond this branch,
-   or rm/reset of uncommitted work.
+1. **Destructive op requiring host approval without existing authorization.**
+   Before force-push, history rewrite beyond this branch, or rm/reset of uncommitted
+   work, apply the host adapter’s approval rules.
 2. **Non-convergence at cap** — the S6 review hits its cap without convergence (with the
    classification).
 3. **Non-review phase failure** — one retry, then STOP.

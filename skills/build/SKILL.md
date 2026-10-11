@@ -9,12 +9,15 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Task, SendMessage, Workflow,
 
 Autonomous build run. Drive the pipeline end to end: dispatch and judge.
 
-## Your input ($ARGUMENTS)
+Before any phase, read [Host runtime](../host-runtime.md) and apply its mappings
+for startup, paths, dispatch, review transport, and approvals throughout this skill.
 
-`$ARGUMENTS` is the single source of intent:
+## Your input
+
+`input` is the single source of intent:
 
 - **Requirements mode (default):** free-text requirements → full pipeline.
-- **Spec-file mode:** if `$ARGUMENTS` is the path of an **existing spec file**, **skip S2
+- **Spec-file mode:** if `input` is the path of an **existing spec file**, **skip S2
   and S3**. The spec must be **self-contained** — enough to plan, implement, and verify
   without further clarification.
 
@@ -22,7 +25,7 @@ Empty input → STOP.
 
 ## Preflight
 
-- **Load config:** `CLAUDE_PLUGIN_DATA='${CLAUDE_PLUGIN_DATA}' python3 "${CLAUDE_PLUGIN_ROOT}/scripts/autopilot-config.py"`. It prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`.
+- **Load config:** run `<plugin_root>/scripts/autopilot-config.py` through the host adapter. It prints the effective config, including the per-phase Ralph caps `ralphLoop.maxIterations.spec-phase` / `.implementation-phase`.
 
 ## Operating disciplines
 
@@ -53,7 +56,7 @@ RESUME: phase=<S[1-8]> worktree=<path> branch=<name> base_ref=<sha> review_round
 
 **Keep RESUME current:** rewrite `phase=` at every phase transition and `review_round=`
 each loop iteration. **Location follows the user's / project's convention** — honor
-CLAUDE.md and existing repo patterns. From S6, persist RESUME, the frozen panel and
+AGENTS.md / CLAUDE.md and existing repo patterns. From S6, persist RESUME, the frozen panel and
 verdicts, reviewed SHA/tree, and exact commands and results (exit codes, failure counts, diagnostics)
 in an ignored run note; reuse an ignored plan, or link the note from a tracked plan before
 committing it for review. Resume S7/S8 only with all-PASS evidence for the current tree;
@@ -63,8 +66,8 @@ otherwise restart S6. For legacy S1–S9 plans, restart old S6–S9 at S6, keepi
 
 - At a genuine fork — two-plus viable approaches with materially different trade-offs, or a
   choice shaping architecture / data model / interface / scope, costly to reverse, or one a
-  later review might miss — **convene a council**: 2–4 ad-hoc expert personas in one parallel
-  batch, each returning a concise position
+  later review might miss — **convene a council**: 2–4 ad-hoc expert personas in one independent
+  native-dispatch batch, each returning a concise position
   (recommendation, rationale, trade-offs, dissent). You **synthesize, decide, and record** a
   brief decision (see **Progress log format**) — the decider, breaking ties.
 - Otherwise decide solo and record (a wrong guess is caught by review). Never fabricate
@@ -72,34 +75,28 @@ otherwise restart S6. For legacy S1–S9 plans, restart old S6–S9 at S6, keepi
 
 ## Review rounds (S3 & S6)
 
-- **Select & compose.** Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/select-panel.py"
+- **Select & compose.** Run `python3 "<plugin_root>/scripts/select-panel.py"
   --phase spec --spec-file <spec doc>` (S3) / `... --phase work --worktree <worktree>
   --base <base_ref>` (S6) → a `selected` list of `{agent, subagent_type, tier, matched}`.
   The panel = ALL `core` agents (mandatory) + the `optional` agents you judge relevant (may
   drop marginal ones). S6 includes core `autopilot:verification-reviewer`; S3 does not.
 - **Freeze & log** the panel to the plan doc progress section (S6: run note if tracked;
   see **Progress log format**); reuse it every round of that phase.
-- **Dispatch the whole round together** — never one at a time, re-reviews included.
+- **Dispatch the whole round together** through the host adapter, re-reviews included.
   For every S6 round, require a clean committed source worktree (`git -C <worktree>
   status --porcelain` empty); set `reviewed_sha=<HEAD>` with `git -C <worktree> rev-parse HEAD`.
   Keep it unchanged until all verdicts return; check HEAD still equals `reviewed_sha`
   and status remains empty before judging. Ordinary reviewers read source HEAD; the
   verification reviewer clones reviewed_sha into its isolated checkout and runs full
   checks every round. Ordinary reviewers leave full checks to it. Each
-  member is `autopilot:<name>` and gets ONLY a run-input prompt — "PHASE=<spec|work>.
+  member uses canonical `autopilot:<name>` instructions plus a run-input prompt — "PHASE=<spec|work>.
   Inputs: worktree=…, base_ref=…, spec_doc=…, plan_doc=…, requirement=…, focus=…,
   reviewed_sha=<HEAD> (S6 only). Output ONLY the verdict, no extra prose."
   A re-reviewed lens's prompt adds its prior items (`<lens>#<n> "<gist>"`, from the
   persisted gists); S6 also adds the fix diff `git -C <worktree> diff <pre-fix HEAD>..HEAD` (record HEAD
   before each fix).
-  - **Workflow (default):** one call per round —
-    `Workflow({name: "autopilot:autopilot-review-round", args: {phase: "<spec|work>", members: [{agent, subagent_type, prompt}, …]}})`
-    → `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` in member
-    order (never pass `resumeFromRunId`). A `synthetic: true` member is re-dispatched once
-    via `Task` with its prompt; still no verdict → FAIL.
-  - **Task (fallback):** if the `Workflow` call fails, dispatch the same members fresh as
-    one parallel `Task` batch with the same prompts, and stay on Task for the phase (freeze
-    line `->Task`). PASS only with no BLOCKING; no or unparseable verdict → FAIL.
+  - **Transport:** use the host adapter’s Workflow/native dispatch and verdict rules;
+    freeze the actual transport with the panel.
 - **Wait for every verdict** — never poll or judge early. Inspect the verifier's raw
   BLOCKING items before adding item IDs: `VERIFICATION_UNAVAILABLE:` (after its one
   retry) triggers Safety stop 3. Otherwise ONE fix over all blockers, then ONE re-review.
@@ -140,13 +137,12 @@ re-reviewed lenses.
   - Else, if this requirement's `<prefix>-<slug>` branch (below) exists from a prior run, reuse it with its commits — do not create a numbered one: enter its worktree (`git worktree list`; if none, `git worktree add <path> <branch>`), `base_ref` = `git merge-base HEAD <branch>`; a plan doc there → resume from it.
   - Else create worktree on local HEAD, then enter:
     - `<prefix>` = the ticket ID when the work is for one single ticket (e.g. Linear `TASK-123`), else `autopilot`.
-    - `<path>` = `.claude/worktrees/<prefix>-<slug>`, ensure `.claude/worktrees/` is gitignored (add it to `.gitignore` if not)
-    - `<slug>` = `$ARGUMENTS` lowercased, non-alphanumerics → hyphens, collapsed to <=40 chars; with a ticket prefix, a short feature description instead (not the ticket ID again). On collision with another requirement's worktree/branch: retry with a uniquified slug (`-2`, …).
-    - `git worktree add <path> -b <prefix>-<slug> HEAD`
-    - `EnterWorktree({path: <path>})`
+    - `<path>` and `<branch>` follow the host adapter’s worktree/branch conventions; ensure the worktree directory is gitignored
+    - `<slug>` = `input` lowercased, non-alphanumerics → hyphens, collapsed to <=40 chars; with a ticket prefix, a short feature description instead (not the ticket ID again). On collision with another requirement's worktree/branch: retry with a uniquified slug (`-2`, …).
+    - Create and enter through the host adapter (git fallback: `git worktree add <path> -b <branch> HEAD`); use the absolute worktree directory for commands.
   - Create the **plan doc** (with RESUME + progress section) at location per the project's convention. Record `worktree`, `branch`, and `base_ref` (HEAD) in the RESUME block.
 - **S2 — spec. (Skipped in spec-file mode)** Write the spec into the spec doc per
-  `${CLAUDE_SKILL_DIR}/spec.md`; read the affected code first. A genuine fork → the expert
+  `<skill_dir>/spec.md`; read the affected code first. A genuine fork → the expert
   council (**Deciding at decision points**); never ask the user.
 - **S3 — spec review. (Skipped in spec-file mode)** Run the S3 review loop (see **Review
   rounds**) over the spec. **Fixes:** the orchestrator edits the spec doc directly. Root
@@ -169,7 +165,7 @@ re-reviewed lenses.
   orchestrator never edits the work product itself.
 - **S6 — work review.** Run the review loop above; genuine check failures block.
   **Fixes:** the first fix dispatches ONE fresh producer subagent primed with the deduped
-  open blockers (with item IDs) + cited files only; later fixes continue it via `SendMessage`
+  open blockers (with item IDs) + cited files only; later fixes continue it via the host continuation operation
   (unknown ID / error → fresh producer, whose ID replaces the recorded one). Docs are part
   of S6. Each fix producer runs only checks covering the files it changes; the fix producer
   must commit all product changes before re-review under the dispatch rules above.
@@ -185,9 +181,9 @@ re-reviewed lenses.
 ## Safety stops (handoffs, not questions)
 
 Stop and hand off (state + exact next step) only on the cases below.
-1. **Destructive op — only when Auto Mode (auto-accept / bypass-permissions) is OFF.**
-   Before any force-push, write outside the worktree, history rewrite beyond this branch,
-   or rm/reset of uncommitted work.
+1. **Destructive op requiring host approval without existing authorization.**
+   Before force-push, history rewrite beyond this branch, or rm/reset of uncommitted
+   work, apply the host adapter’s approval rules.
 2. **Non-convergence at cap** — a Ralph loop hits `cap` (with the classification).
 3. **Non-review phase failure** — one retry, then STOP.
 4. **Root-contradiction** — the core requirement asks for two things that cannot both be

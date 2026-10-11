@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides repository guidance to Claude Code and Codex.
 
 ## What this is
 
-Claude Autopilot is a **Claude Code plugin** that packages an autonomous
+Claude Autopilot is a **Claude Code and Codex plugin** that packages an autonomous
 build / light-build pipeline driven by a committed roster of named
 review agents. The git repo **is both
 the marketplace and the plugin** (`.claude-plugin/marketplace.json` points its single
@@ -45,7 +45,7 @@ step inside a larger skill/workflow); users still type `/autopilot:build` /
 (S1 → S4 → S5 → S6 → S7 → S8) with no spec doc and no spec review. S4 always
 materializes a state file holding the task list; S6 is a pinned cap-1 panel
 (correctness + requirement-fidelity + doc + verification). It does not gate scope — surface choice is
-the user's responsibility. When invoked, the *main-session Claude becomes a thin
+the user's responsibility. When invoked, the *main-session agent becomes a thin
 orchestrator*: it dispatches subagents and judges their structured output, and never
 edits the work product itself. Understanding the system means reading those two skill
 files plus `agents/` and `scripts/` together:
@@ -69,10 +69,12 @@ files plus `agents/` and `scripts/` together:
   `applies_to`) so the selector can route it with no code change. `reviewer-contract.md`
   is an authoring-time template (selector-inert: no `phase`) inlined into ordinary reviewers;
   `verification-reviewer.md` follows its dedicated execution contract.
-  Reviewers run as `autopilot:<name>`, each at its own `model` + `tools`
-  allowlist. **Each round** is one call to the plugin workflow (below) — a re-reviewed lens
+  Host dispatch, paths and approvals are mapped in `skills/host-runtime.md`, loaded
+  by both skills. Claude reviewers run as `autopilot:<name>` with configured models;
+  Codex inherits the host model and gives generic agents the canonical reviewer files.
+  **Each round** uses the plugin workflow when exposed, otherwise native dispatch; a re-reviewed lens
   is a fresh member primed with its prior items (+ the fix diff in S6). If that call fails,
-  the phase falls back to a parallel native `Task` batch of the same members and prompts.
+  the phase falls back to a native host dispatch batch of the same members and prompts.
   **Both surfaces** run the convergence loop natively in the orchestrator (round 0 + fix →
   re-review until all-PASS or the per-phase cap). The orchestrator owns the loop, the fix
   (a fixer continued across rounds), and the re-review set: S3 the full panel; S6 the
@@ -92,11 +94,13 @@ files plus `agents/` and `scripts/` together:
 - **Plugin workflow (`workflows/review-round.js`).** The v0.9.x per-round review transport,
   restored byte-identical and invoked by name as `autopilot:autopilot-review-round` (the
   runtime names plugin workflows `<plugin>:<meta.name>`). The default S3/S6 review-round
-  transport of both skills; Task is the fallback. Contract in README "Plugin workflow".
+  transport when Workflow is exposed; native host dispatch is the fallback.
+  Contract in README "Plugin workflow".
 
 - **Config (`scripts/autopilot-config.py`).** Reads/initializes
-  `${CLAUDE_PLUGIN_DATA}/config.json` (the plugin's own data dir, never Claude's
-  `settings.json`). Holds the Ralph-loop per-phase caps (`ralphLoop.maxIterations.*`).
+  host-specific plugin data config via `--host claude|codex` and optional `--data-dir`;
+  no flags preserves `${CLAUDE_PLUGIN_DATA}/config.json` and its Claude fallback.
+  Holds the Ralph-loop per-phase caps (`ralphLoop.maxIterations.*`).
   The old `ralphLoop.enabled` driver toggle (native vs. `ralph-loop` plugin) is
   deprecated and ignored — the native loop is the only driver.
 
@@ -118,11 +122,10 @@ files plus `agents/` and `scripts/` together:
 ## Conventions & gotchas (non-obvious, learned the hard way)
 
 - **`${CLAUDE_PLUGIN_DATA}` is NOT exported to bash subprocesses.** Claude Code
-  inline-substitutes it into command *text*, but a `python3` call won't see it in
-  `os.environ` unless you forward it explicitly:
-  `CLAUDE_PLUGIN_DATA='…' python3 scripts/autopilot-config.py`.
-- **Roster agents are only dispatchable as `autopilot:<name>` from the *installed*
-  plugin.** After adding/renaming an agent, the new `subagent_type` resolves only once
+  inline-substitutes it into command *text*; pass the resolved path explicitly via
+  `python3 scripts/autopilot-config.py --host claude --data-dir <path>`.
+- **On Claude Code, roster agents are only dispatchable as `autopilot:<name>` from
+  the *installed* plugin.** After adding/renaming an agent, the new `subagent_type` resolves only once
   the plugin is reloaded/updated — a fresh agent can't be dispatched natively in the
   same run that creates it (dispatch it ad-hoc via `general-purpose` until shipped).
   The same applies to the `skills/build` + `skills/light-build` skills: edits to a

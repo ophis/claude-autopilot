@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Read (and initialize) the Claude Autopilot plugin config.
 
-Run once at skill startup: locate the plugin's own data dir
-(``$CLAUDE_PLUGIN_DATA``, else ``~/.claude/plugins/data/autopilot-claude-autopilot``),
+Run once at skill startup: locate the plugin's own data dir for the selected host
+(Claude by default; ``--host codex`` uses ``$CODEX_HOME`` or ``~/.codex``).
+``--data-dir`` overrides host defaults. For Claude, honor ``$CLAUDE_PLUGIN_DATA``.
 ensure ``<data-dir>/config.json`` exists (write DEFAULTS if absent), and print
 the effective config (DEFAULTS deep-merged with the user's file) as JSON to
-stdout. Config lives in the plugin's data dir, never in Claude's settings.json.
+stdout. Config lives in the plugin's data dir, never in host settings files.
 """
+import argparse
 import json
 import os
 import sys
@@ -34,10 +36,20 @@ def deep_merge(base, override):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--host", choices=("claude", "codex"), default="claude")
+    parser.add_argument("--data-dir", help="explicit plugin config directory")
+    args = parser.parse_args()
     # Fallback {id} = "<plugin>-<marketplace>" with non-[A-Za-z0-9_-] sanitized to '-'.
-    data_dir = os.environ.get("CLAUDE_PLUGIN_DATA") or os.path.expanduser(
-        "~/.claude/plugins/data/autopilot-claude-autopilot"
-    )
+    if args.data_dir:
+        data_dir = args.data_dir
+    elif args.host == "codex":
+        data_dir = os.path.join(os.environ.get("CODEX_HOME") or "~/.codex",
+                                "plugins", "data", "autopilot-claude-autopilot")
+    else:
+        data_dir = os.environ.get("CLAUDE_PLUGIN_DATA") or (
+            "~/.claude/plugins/data/autopilot-claude-autopilot")
+    data_dir = os.path.expanduser(data_dir)
     os.makedirs(data_dir, exist_ok=True)
     path = os.path.join(data_dir, "config.json")
 
