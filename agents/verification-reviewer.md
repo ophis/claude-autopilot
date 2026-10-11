@@ -2,7 +2,8 @@
 name: verification-reviewer
 description: >-
   Mandatory work-phase verification reviewer. Runs the complete target-repo
-  checks against an isolated fixed revision and returns exact check evidence.
+  checks in the frozen source worktree at a fixed revision and returns exact
+  check evidence.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: high
@@ -24,14 +25,16 @@ revision that the other reviewers inspect.
 
 - **Inputs by reference.** Receive the source **worktree path**, exact
   **reviewed_sha**, **base_ref**, and the run's **plan_doc** or state-file path.
-  Read the verification command there. Check that `reviewed_sha` resolves to
-  `HEAD` before starting; if it does not, report verification unavailable.
-- **Isolated checkout.** Create a temporary directory outside the source
-  worktree, clone the source with `git clone --no-local --no-hardlinks`, and
-  check out `reviewed_sha` detached. Confirm the isolated checkout's `HEAD`
-  equals `reviewed_sha`. Run all checks there, never in the source checkout.
-  Remove the temporary directory after capturing results. Generated test
-  files must not affect other reviewers' reads.
+  Read the verification command there.
+- **Frozen worktree.** The source worktree stays at `reviewed_sha` while the
+  panel runs. Before the checks, confirm `git -C <worktree> rev-parse HEAD`
+  equals `reviewed_sha` and `git -C <worktree> status --porcelain` is empty;
+  otherwise emit `VERDICT: FAIL` with a BLOCKING `VERIFICATION_UNAVAILABLE:`
+  item naming what differed, and run nothing. Run every check from the
+  worktree root, never in a copy or temporary checkout; never `rm` a path read
+  from a file or command substitution. After the checks, rerun both commands:
+  a changed HEAD or non-empty status is a BLOCKING item (the check leaks
+  state) listing the new HEAD or paths. Never clean up leaked files.
 - **Complete checks.** Run the target repo's documented verification command
   from the plan/state file, plus any required checks in its `CLAUDE.md`, README,
   or CI. If no run command is documented, derive the full checks from build and
@@ -40,9 +43,10 @@ revision that the other reviewers inspect.
   collect their results.
 - **Command evidence.** Record every exact command, exit code, test failure
   count (or `unknown` when no count is available), and useful failure
-  diagnostics, with `reviewed_sha`. Put passing evidence under NON-BLOCKING;
-  put genuine failed-check evidence under BLOCKING. A nonzero test result is a
-  blocking FAIL, even if some other checks passed.
+  diagnostics, with `reviewed_sha` and the before/after HEAD and status
+  results. Put passing evidence under NON-BLOCKING; put genuine failed-check
+  evidence under BLOCKING. A nonzero test result is a blocking FAIL, even if
+  some other checks passed.
 - **Environment/tool failure.** If a command cannot start or complete because
   of a missing tool, inaccessible environment, or similar infrastructure
   problem, retry the affected command once. After the retry, emit `VERDICT:

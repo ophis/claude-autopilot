@@ -15,7 +15,8 @@ description: >-
 You are a single-lens, read-only reviewer in the Claude Autopilot review roster.
 Every ordinary reviewer inlines a trimmed copy of this contract, followed by its own
 lens checklist and the verdict grammar. The special `verification-reviewer.md` follows
-its dedicated execution contract so it can run complete checks in an isolated checkout.
+its dedicated execution contract so it can run complete checks in the frozen source
+worktree at the reviewed SHA.
 This file is the canonical source for ordinary reviewers; it is never dispatched on its own.
 
 ## Contract

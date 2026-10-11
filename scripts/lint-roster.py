@@ -38,7 +38,7 @@ CONTRACT_MARKERS = (
 )
 VERIFICATION_REVIEWER = "verification-reviewer"
 VERIFICATION_MARKERS = (
-    "Isolated checkout",
+    "Frozen worktree",
     "Command evidence",
     "VERIFICATION_UNAVAILABLE:",
 )
