@@ -186,14 +186,14 @@ For each task, starting from the first one not `done`:
 
 1. Implement it yourself from its `### Task N` brief: the tests first, then the code.
 2. Run the checks its brief names.
-3. Commit with the brief's message, add Notes for anything a later task needs, and log
-   the task `done`.
+3. Commit with the brief's message, push in PR mode (PR mode), add Notes for anything a
+   later task needs, and log the task `done`.
 
 **Delegation.** You may hand a self-contained task that would flood your context, such as
 a bulk mechanical edit or a large isolated module, to one fresh producer. Give it the task
 list header, its `### Task N` brief, the worktree pin, the constraints, and what the skill
 adds. The producer follows steps 1 and 2, commits, and returns any Notes lines for you
-to record. You confirm the commit, then log the task `done`. If the producer fails,
+to record. You confirm the commit, then finish step 3. If the producer fails,
 implement the task yourself.
 
 A producer never consults the council. At a genuine fork, it stops and returns:
@@ -285,21 +285,24 @@ The run publishes its branch as a draft pull request, and the repo's CI is the v
 
 - **Check at S1.** It needs an authenticated `gh` and a GitHub `origin`; without them,
   take safety stop 3. Look up the branch's open PR
-  (`gh pr list --head <branch> --state open --json url,isDraft`). A run that continues a
-  branch updates that PR: log it as a decision and name it in the task-list header at S4,
-  so reviewers know the requirement's PR is this one.
-- **Push** each S6 round's `reviewed_sha` before dispatch:
-  `git -C <worktree> push -u origin <branch>`. Never force; a rejected push is safety
-  stop 3.
-- **One draft PR.** Until `pr=` is recorded, repeat the S1 lookup before each push: adopt
-  the open PR, turning a ready one back into a draft (`gh pr ready --undo <url>`), since an
-  earlier run on this branch may have marked it ready. With none after the push, open a
-  draft:
+  (`gh pr list --head <branch> --state open --json url,isDraft`) and adopt it: turn a
+  ready one back into a draft (`gh pr ready --undo <url>`), since an earlier run on this
+  branch may have marked it ready, and record `pr=<url>` in RESUME. A run that continues
+  a branch updates that PR: log it as a decision and name it in the task-list header at
+  S4, so reviewers know the requirement's PR is this one.
+- **Push** after each S5 task commit and at each S6 pin, so the PR shows each task as it
+  lands: `git -C <worktree> push -u origin <branch>`. Never force; a rejected push is
+  safety stop 3.
+- **One draft PR.** Until `pr=` is recorded, repeat the S1 lookup before each push and
+  adopt what it finds. With none after the push, open a draft:
   `gh pr create --draft --base '<base>' --head '<branch>' --title '<title>' --body-file <file>`,
   with the body written from the requirement with the file-write tool and a plain-words,
   quote-free title. A base the requirement names must match `[A-Za-z0-9._/-]+`; otherwise
   take safety stop 3. `<base>` is the branch the requirement names, else the repo's default
   branch. Record `pr=<url>` in RESUME.
+- **Spec (build).** Post the spec doc as one PR comment
+  (`gh pr comment <url> --body-file <spec doc>`) at S4 if `pr=` is recorded, else right
+  after it is recorded, and log `spec posted`. Never post it twice.
 - **Finish.** Converged: unless the PR body already holds it, add the S7 report, headed
   with HEAD's SHA, after any earlier run's (`gh pr view <url> --json body`, then
   `gh pr edit <url> --body-file <file>`). Then mark the PR ready (`gh pr ready <url>`).

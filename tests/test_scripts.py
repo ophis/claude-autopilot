@@ -698,6 +698,8 @@ class SkillContractTests(unittest.TestCase):
             "every lens passing means the phase converged: advance",
             "If HEAD moved, take safety stop 3",
             "Until `pr=` is recorded, repeat the S1 lookup before each push",
+            "Push** after each S5 task commit and at each S6 pin", "push in PR mode (PR mode)",
+            "gh pr comment <url> --body-file <spec doc>", "Never post it twice",
             "the run stays on it", "uncommitted changes there are the user's",
             "matched by RESUME `input_sha`",
             "never dirties the worktree", "**Review items.**",
@@ -1215,6 +1217,7 @@ REQ_SLUG = "add-a-wordcount-text-function-to-textkit"
 
 class ResolveBranchTests(unittest.TestCase):
     def setUp(self):
+        # git reports resolved paths, and macOS's temp dir sits under the /var -> /private/var link.
         self.tmp = os.path.realpath(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp)
         self.repo = self.new_repo("repo")

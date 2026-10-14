@@ -57,8 +57,9 @@ reading those three files plus `agents/` and the bundled `skills/build/scripts/`
   S3 spec-review → S4 task list → S5 produce → S6 work-review → S7 finish.
   `light-build` skips S2, S3 (same number = same step).
   **It never merges** — the deliverable is a review-ready branch, plus a draft-then-ready
-  PR in PR mode (the requirement asks for a PR; S6 pushes each reviewed commit and the
-  repo's CI is the verifier's backend, read by `skills/build/scripts/ci-verdict.py`).
+  PR in PR mode (the requirement asks for a PR; each commit is pushed as it lands, build
+  posts the reviewed spec as a PR comment, and the repo's CI is the verifier's backend,
+  read by `skills/build/scripts/ci-verdict.py`).
 
 - **Ralph convergence loops (S3, S6).** review → fix → re-review until the frozen
   review panel all-PASSes or a per-phase cap (build: 3 total rounds) is hit. Convergence is decided

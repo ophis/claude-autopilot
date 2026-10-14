@@ -112,10 +112,11 @@ and it drives, end to end and without asking you questions:
 
 You can also hand `/autopilot:build` a path to an existing spec file instead of free-text requirements — it then skips the spec + spec-review (S2/S3) and plans straight from your spec (`S1 → S4`; e.g. `/autopilot:build path/to/spec.md`).
 
-**PR mode.** Ask for a pull request in the requirement (e.g. `… and open a PR`) and each
-S6 round pushes the reviewed commit, opens a draft PR on the first push, and lets the
-repo's CI verify that commit while the other reviewers read it. A CI failure enters the
-same fix loop as any blocker, so no fix lands unreviewed. On convergence the PR body gets
+**PR mode.** Ask for a pull request in the requirement (e.g. `… and open a PR`) and the
+run pushes each task commit as it lands, opening a draft PR on the first push; build also
+posts the reviewed spec there as a comment. Each S6 round pushes the reviewed commit and
+lets the repo's CI verify it while the other reviewers read it. A CI failure enters the
+same fix loop as any blocker, so the PR stays a draft until every reviewer passes. On convergence the PR body gets
 the final report and the PR is marked ready; on a stop it stays a draft. Both skills
 support it; it needs an authenticated `gh` and a GitHub `origin`.
 
