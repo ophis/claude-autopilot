@@ -839,6 +839,8 @@ class SkillContractTests(unittest.TestCase):
             self.assertEqual(len(heads), len(set(heads)), path)
             return {p.splitlines()[0]: p.rstrip() for p in parts if p.startswith("## ")}
         template = sections(os.path.join(REPO, "agents", "reviewer-contract.md"))
+        self.assertIn("FAIL needs at least one. With no blocker, output PASS",
+                      flat(template["## Verdict grammar (strict)"]))
         shared = ("## Contract", "## Verdict grammar (strict)")
         for path in sorted(glob.glob(os.path.join(REPO, "agents", "*-reviewer.md"))):
             name = os.path.basename(path)

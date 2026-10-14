@@ -82,4 +82,5 @@ Prior items:
 ```
 
 Repeat each OPEN prior blocker in BLOCKING as `- <lens>#<n>: …`. PASS means no BLOCKING
-items; an unparseable verdict, or FAIL without BLOCKING items, counts as FAIL.
+items. FAIL needs at least one. With no blocker, output PASS and put other points under
+NON-BLOCKING. An unparseable verdict counts as FAIL.
