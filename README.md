@@ -1,311 +1,230 @@
 # Claude Autopilot
 
-A Claude Code and Codex **plugin** that packages a high-ceremony, autonomous pipeline for
-shipping complex work products (code, but also docs, designs, data, plans). It
-replaces a copy-pasted "do all this, summon a team to review, never ask me" prompt
-with one explicit command.
+A Claude Code and Codex plugin that turns one requirement into a review-ready git branch
+without asking you anything. It writes the work itself (code, docs, designs, data, plans),
+independent reviewer agents judge it, and it fixes until they all pass. It never merges.
 
-> Status: **v1.9.1** — the build surface is now a **skill** (`skills/build`):
-> model-invocable and composable as a step inside a larger
-> skill/workflow, while `/autopilot:build` still works for users.
-> A second surface, **`skills/light-build`** (`/autopilot:light-build`), is
-> the low-ceremony path: autonomy + expert-council-at-forks with no
-> spec doc and no spec review — an S4 task list, then produce → one capped core
-> review, with full verification every round. **light-build does not gate scope** —
-> choosing the right surface is your call (see its section below for when it fits).
-> The **named review roster** is complete for both phases in `agents/`, and the
-> **selection stage** (`skills/build/scripts/select-panel.py`) wires the roster into the S3/S6
-> review loops — the skills select the panel from the roster and dispatch each round
-> through the available host transport
-> (see [Review roster](#review-roster-agents)).
+> Status: **v1.9.1**
 
-## Repository structure
+## Install
 
-The git repo is **both the marketplace and the plugin**:
-
-```
-claude-autopilot/                 # git repo = marketplace + plugin
-├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 1.9.1)
-│   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
-├── skills/
-│   ├── build/SKILL.md            # skill; /autopilot:build       still works
-│   ├── build/spec.md             # spec-writing guide for build S2
-│   ├── build/scripts/select-panel.py # selector: (phase, signals) → panel JSON
-│   ├── build/scripts/check-spec.py   # S2 spec structure + AC coverage check
-│   ├── build/scripts/ci-verdict.py   # publishing: one commit's CI checks → verifier verdict
-│   ├── build/scripts/pr.py           # publishing: draft PR start / push / spec / finish, as JSON
-│   ├── build/scripts/resolve-branch.py # S1: resume / stay / reuse / create / stop, as JSON
-│   ├── build/scripts/_frontmatter.py # parser shared with dev lint
-│   └── light-build/SKILL.md      # skill; /autopilot:light-build  — low-ceremony
-├── references/
-│   └── autopilot-common.md       # rules both skills share; each SKILL.md reads it first
-├── scripts/
-│   └── lint-roster.py            # roster lint: validates each reviewer's frontmatter + contract
-├── workflows/
-│   └── review-round.js           # plugin workflow autopilot:autopilot-review-round — one parallel review round (when the host exposes Workflow)
-├── agents/                       # named review roster (ordinary reviewers read-only)
-│   ├── reviewer-contract.md      # authoring template, inlined into ordinary reviewers
-│   ├── spec-fitness-reviewer.md  # spec / core
-│   ├── architecture-reviewer.md  # spec core / work optional (@structural)
-│   ├── correctness-reviewer.md   # work / core — purely behavioral
-│   ├── requirement-fidelity-reviewer.md   # work / core — work ⊨ requirement & spec
-│   ├── doc-reviewer.md           # work / core — repo-wide docs vs the change + concise
-│   ├── code-quality-reviewer.md  # work / optional (code)
-│   ├── test-reviewer.md          # work / optional (code)
-│   ├── performance-reviewer.md   # work / optional (code)
-│   ├── security-reviewer.md      # both / optional — conditional, dual-phase
-│   └── verification-reviewer.md  # work / core — full checks locally or via the PR's CI
-├── tests/
-│   └── test_scripts.py           # stdlib unittest for the helper scripts
-├── README.md
-└── .gitignore                    # ignores per-run state files
-```
-
-## Installation
-
-No other plugin is required: every phase of both surfaces uses a native tool, the
-plugin's own script, or inline logic.
-
-In Claude Code, this repo is its own single-repo marketplace, so add it and install:
+In Claude Code, this repo is its own marketplace:
 
 ```
 /plugin marketplace add https://github.com/ophis/claude-autopilot.git
 /plugin install autopilot@claude-autopilot
 ```
 
-`https://github.com/ophis/claude-autopilot.git` is the marketplace's git URL (the
-`owner/repo` shorthand `ophis/claude-autopilot` or a local path works too). You can
-also browse and install via the interactive `/plugin` menu (Marketplaces → add →
-install).
+`ophis/claude-autopilot`, a local path or the `/plugin` menu also work. Releases use
+explicit semver (currently `1.9.1`). To update, run `/plugin marketplace update claude-autopilot`,
+then the install line again. No other plugin is needed.
 
-**Updating:** this plugin uses explicit semver (currently `1.9.1`). A release bumps
-`version` in both `plugin.json` and `marketplace.json`; users then refresh with:
+**Codex.** Invoke the `autopilot:build` or `autopilot:light-build` skill with your
+requirement, or ask Codex to run a checkout's absolute `skills/build/SKILL.md` or
+`skills/light-build/SKILL.md`. Needs subagent support. Reviewers inherit the session
+model. No Codex marketplace manifest yet.
 
-```
-/plugin marketplace update claude-autopilot
-/plugin install autopilot@claude-autopilot
-```
-
-### Codex
-
-Invoke the available `autopilot:build` or `autopilot:light-build` skill and
-include your requirement in the message. For a local checkout, explicitly ask
-Codex to run its absolute `skills/build/SKILL.md` or `skills/light-build/SKILL.md`
-path with your requirement. This repo ships Claude marketplace metadata; it does
-not currently provide a Codex marketplace manifest or a verified Codex plugin
-manager installation procedure. Subagent support is required. Codex reviewers
-inherit the session model and receive the canonical agent body and run inputs.
-
-## `/autopilot:build <requirements>`
-
-A skill, so it is model-invocable now — call it directly, or compose it as a step in a
-larger skill/workflow; `/autopilot:build` is preserved for users. Hand it a requirement
-and it drives, end to end and without asking you questions:
-
-- **S1 — Worktree:** on any branch but `main`/`master`/the local default branch, stay on it; otherwise create a worktree and branch following the [shared S1 conventions](references/autopilot-common.md#worktree-s1) (`<prefix>` = the ticket ID when the work is for one single ticket, e.g. `TASK-123`, else `autopilot`); create the plan doc (progress + RESUME).
-- **S2 — Spec:** write the spec from the requirement and the affected code (expert council at decision points); `check-spec.py` checks its sections and that every acceptance criterion has a test or check.
-- **S3 — Spec review:** Ralph loop over the spec until the panel passes.
-- **S4 — Task list:** a code-free task list, each task one revertable commit (files, cross-task interfaces, tests first, the checks each task runs, commit message); the full verify command sits at the top of the plan doc, outside the task briefs, with the CI checks that run its tests when publishing.
-- **S5 — Produce:** the orchestrator implements each task itself, in order (it may hand a self-contained task to a fresh producer); each task's new tests fail before its code exists; each task runs only checks covering its changed files, never a full suite; no per-task review (S6 is the gate).
-- **S6 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency and the core `verification-reviewer` checks the same fixed revision as the other reviewers: it runs the full target checks locally, or when publishing reads the CI checks that run the tests for that commit (running the checks locally when CI gives none). A test run of 0 tests fails. An unavailable environment stops safely after one retry; genuine check failures enter the fix loop.
-- **S7 — Finish:** report + integration menu (a squash merge gives one commit). **Never merges.**
-
-You can also hand `/autopilot:build` a path to an existing spec file instead of free-text requirements — it then skips the spec + spec-review (S2/S3) and plans straight from your spec (`S1 → S4`; e.g. `/autopilot:build path/to/spec.md`).
-
-**CI and PR mode.** A repo with CI (a pull_request workflow, a GitHub `origin`, an
-authenticated `gh`) never runs its full suite locally: before the first S6 round the run
-pushes and opens a draft PR, and each round lets CI verify the reviewed commit while the
-other reviewers read it. Ask for a pull request in the requirement (e.g. `… and open a
-PR`) and it also pushes each task commit as it lands, build posts the reviewed spec as a
-comment, and on convergence the PR body gets the final report and the PR is marked ready.
-Without the ask, the PR stays a draft for you or your caller to adopt; a PR that was
-already ready is drafted for the run and made ready again on convergence, so nobody merges
-it mid-review. CI that hasn't finished an hour after the first check stops the run; it
-never falls back to a local full suite. A CI failure enters
-the same fix loop as any blocker. A PR that conflicts with its base gets no CI, so the run
-merges the base in (never rebases) and re-runs the round. With no CI, or a refused push,
-the checks run locally.
-
-At a genuine decision point it convenes a small **expert council** (ad-hoc sub-agents)
-to deliberate, then decides and records — it does not ask you. It stops only to hand off on a
-safety condition (non-convergence after 3 total review rounds per phase; an unrecoverable phase
-failure; a self-contradictory requirement; or a destructive operation (force-push,
-write outside the worktree, history rewrite beyond the branch, rm/reset of
-uncommitted work), unless the session runs with automatic approval (Claude: Auto Mode)).
-Reviews converge via a structured `VERDICT/BLOCKING/NON-BLOCKING` contract decided
-from disk, not vibes.
-
-On every terminal path (S7 finish or any safety stop) the run emits, as its final
-output, one fenced `autopilot-result` JSON block (`status` / `branch` / `base_ref` /
-`head` / `pr` / `blockers` / `reason`) so a calling workflow reads the outcome without
-parsing prose.
-
-State lives in one plan doc per run (plus build's spec doc), in the worktree's ignored
-`.autopilot/` directory, including a Notes section of durable codebase facts, so a run
-survives context compaction and can be resumed: after a compaction the orchestrator
-re-reads the skill, the plan doc and `git log` before acting. At finish the docs are copied
-to your project's plan location if its AGENTS.md / CLAUDE.md names one.
-
-### Smoke test (the build eval)
-
-In a throwaway git repo:
+## Use
 
 ```
 /autopilot:build add a function add(a,b) with a passing unit test
-```
-
-Expect (run from `main`): a new isolated worktree+branch; the spec and work review loops
-each reach `VERDICT: PASS`; the test actually runs and passes; the run ends at a
-review-ready branch (one commit per task, one per fix round) **with no merge** and a final report.
-Contributor scenarios and evidence requirements: [smoke protocol](CONTRIBUTING.md#smoke-protocol).
-
-## `/autopilot:light-build <requirements>`
-
-The low-ceremony path. It keeps autopilot's autonomy,
-**expert-council-at-forks**, and an S4 task list (orchestrator-written, code-free;
-implemented by the orchestrator) — but drops the rigor: no spec doc (S2), no spec review.
-**The requirement IS the spec.** It is **dual-use** — for simple tasks,
-and as a lighter alternative to `build` when you want the autonomous interaction model
-without the ceremony. It is a skill (model-invocable / composable), emits the same final
-`autopilot-result` block, and `/autopilot:light-build` is preserved for users.
-
-- **S1 — Worktree:** stay on the current branch unless it is `main`/`master`/the local default branch, else create a worktree and branch following the [shared S1 conventions](references/autopilot-common.md#worktree-s1). **State:** no spec doc; S1 creates the plan doc.
-- **S4 — Task list:** the orchestrator writes a code-free task list (Global Constraints + per-task `### Task N` briefs, each task one revertable commit: files, Consumes/Produces, tests first, commit message) into the plan doc. S5 implements the tasks in order.
-- **S5 — Produce:** the orchestrator implements each S4 task itself, in order from the first not `done`. At a **genuine fork** it convenes the expert council. It may hand a self-contained task to a fresh producer; a producer at a genuine fork returns a `FORK:` marker (options, no guessing) and the orchestrator convenes the council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
-- **S6 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc` + `verification` (full checks at the reviewed SHA, the same revision as other reviewers, run locally or read from the PR's CI) — **capped at 3 rounds**: Round 1, then up to two fix/re-reviews. The verifier runs every round, correctness re-reviews a fix after a verifier FAIL, and other passed lenses carry their PASS. This is the sole correctness gate.
-- **S7 — Finish:** report + integration menu. **Never merges.**
-
-**No scope gate.** light-build is a harness, not a gatekeeper — it runs whatever it is
-given. **When it fits:** simple tasks, or any work where you want autonomy + forks-resolved-
-by-experts and are comfortable with a single capped review as the only gate (no spec
-doc, no spec review — just an S4 task list). Choosing the surface is your responsibility.
-
-```
+/autopilot:build path/to/spec.md
 /autopilot:light-build add a --json flag to the status command
 ```
 
-Together, `build` → review → re-run `build` to iterate → … is the human-in-the-loop
-cycle. Run the next requirement from the previous run's branch (the session stays in its
-worktree after a run) and it continues that branch: its own plan doc, its review covering
-only its new commits, and the same PR.
+Expect a new worktree and branch, review loops that end in `VERDICT: PASS`, tests that
+really ran, one commit per task and per fix round, a final report, and no merge. Given a
+self-contained spec file, build skips S2 and S3. To iterate, run the next requirement from
+the finished run's branch. It continues that branch, with its own plan doc, a review of only its new
+commits, and the same PR.
 
-### Invoking from a workflow
+|  | `build` | `light-build` |
+| --- | --- | --- |
+| Steps | S1–S7 | S1, S4–S7 |
+| Spec | written (S2), reviewed (S3) | the requirement is the spec |
+| S6 panel | every core lens, plus the optional lenses the change matches | pinned: correctness, requirement-fidelity, doc, verification |
+| S6 re-review | failed lenses, plus every core lens | failed lenses, plus the verifier, plus correctness after a verifier FAIL |
+| Cap | 3 rounds per review phase, changeable in the requirement | 3 rounds |
+| Fits | complex work | simple tasks, or autonomy without spec rigor |
 
-Because it is a skill, `build` can be invoked **by name** from another
-skill or workflow, not just typed by a user. A nested run stays on the caller's branch
-unless that is `main`/`master`/the default branch, where it creates its **own** worktree +
-branch following the skill's S1 conventions. Either way it persists its own spec/plan docs
-(named per requirement, so runs don't stomp each other). The pipeline **never merges**, so the calling workflow owns integration of the
-returned branch — it reads the outcome from the final `autopilot-result` block
-(`status` / `branch` / `base_ref` / `head` / `pr` / `blockers` / `reason`).
+light-build gates no scope. It runs whatever you give it. Picking the skill is your call.
+
+## How a run works
+
+```mermaid
+flowchart LR
+    S1[S1 Worktree] --> S2[S2 Spec] --> S3[S3 Spec review] --> S4[S4 Task list] --> S5[S5 Produce] --> S6[S6 Work review] --> S7[S7 Finish]
+    S1 -.->|light-build, or a spec file| S4
+    S3 -->|FAIL: fix| S3
+    S6 -->|FAIL: fix| S6
+```
+
+| Step | What happens |
+| --- | --- |
+| S1 Worktree | Stays on any branch but `main`, `master` or origin's default. Otherwise creates a worktree and a branch `<prefix>-<slug>`, the prefix being the ticket ID for one-ticket work, else `autopilot`. Creates the plan doc and decides how to publish. |
+| S2 Spec | Writes the spec from the requirement and the code it touches. `check-spec.py` checks its sections and that every acceptance criterion has a test or check. |
+| S3 Spec review | Review loop over the spec. Each re-review covers the whole spec with the full panel. |
+| S4 Task list | Code-free. Each task is one revertable commit: files, cross-task interfaces, tests to write first, the checks it runs, commit message. The full verify command sits above the tasks, with the CI checks that run its tests when publishing. |
+| S5 Produce | Implements the tasks in order: new tests fail first, then the code, then checks covering only the changed files, then a commit. May hand a self-contained task to a fresh producer. No per-task review. |
+| S6 Work review | Review loop over the work at a pinned commit. Each fix round is one `fix(r<N>)` commit. |
+| S7 Finish | Report and integration options, a squash merge among them. Copies the plan docs to the project's plan location if its AGENTS.md or CLAUDE.md names one. |
+
+### One work-review round
+
+```mermaid
+flowchart TD
+    pin[Pin HEAD as reviewed_sha, push it when publishing] --> lenses[Reviewers read reviewed_sha]
+    pin --> verifier[Verifier: CI checks, or the full suite locally]
+    lenses --> judge{Every lens PASS?}
+    verifier --> judge
+    verifier -.->|PR conflicts with its base| merge[Merge the base, never rebase] --> pin
+    judge -->|yes| finish[S7 Finish]
+    judge -->|no, rounds left| fix[One fix for all blockers, one commit] --> pin
+    judge -->|no, at the cap| capped[Stop: capped-without-pass]
+```
+
+Rounds are batched: every verdict, then one fix, then one re-review. Only the reviewers'
+verdicts decide, in the strict `VERDICT / BLOCKING / NON-BLOCKING` grammar; the
+orchestrator never overrides one. A test command that ran 0 tests fails.
+
+## CI and pull requests
+
+A repo with CI never runs its full suite locally while CI can run it. The run publishes
+its branch as a draft PR, and the verifier reads the CI checks for the reviewed commit
+while the other reviewers read the code.
+
+| `publish` | When | Pushes | At the end |
+| --- | --- | --- | --- |
+| `pr` | the requirement asks for a PR | each task commit and each S6 pin | build has posted the reviewed spec as a comment; the report goes in the PR body; PR marked ready |
+| `ci` | a `pull_request` workflow, and `gh` authenticated for origin's host | each S6 pin | a draft PR, for you or a caller to adopt |
+| `none` | otherwise, or a push refused in `ci` | nothing | no PR; checks ran locally |
+
+- An open PR on the branch is adopted. A ready one goes back to draft for the run and is
+  marked ready on convergence, so nobody merges it mid-review.
+- S4 names the CI checks that run the tests. If none does, verification runs locally.
+- A CI failure enters the fix loop like any blocker.
+- CI still unfinished an hour after the verifier's first look stops the run. It never
+  falls back to a local full suite.
+
+## Decisions and stops
+
+At a genuine fork (materially different trade-offs, or a choice costly to reverse) the run
+convenes an expert council of 2–4 ad-hoc subagents, decides and logs the decision. A
+delegated producer at a fork returns a `FORK:` marker instead, and the orchestrator decides
+and re-dispatches it.
+
+Every run ends with one fenced `autopilot-result` JSON block, so a caller reads the
+outcome without parsing prose:
+
+```autopilot-result
+{ "status": "converged", "branch": "autopilot-add-json-flag", "base_ref": "<sha>", "head": "<sha>", "pr": "", "blockers": [], "reason": "" }
+```
+
+| `status` | When | `reason` |
+| --- | --- | --- |
+| `converged` | every lens passed and S7 ran | empty |
+| `capped-without-pass` | a review loop hit its cap | `oscillation`, `unfixable` or `requirements-conflict` |
+| `stopped` | a destructive op (force-push, write outside the worktree, history rewrite beyond the branch, rm or reset of uncommitted work) without automatic approval (Claude: Auto Mode) | `destructive-op` |
+| `stopped` | a phase failure or missing capability after one retry, CI past its deadline included | `phase-failure` |
+| `stopped` | a requirement that contradicts itself | `root-contradiction` |
+
+`pr` is the run's PR URL, a draft when `publish=ci`. `blockers` lists the open blocking
+items when not converged.
+
+## Call it from a workflow
+
+Both surfaces are skills, so another skill or workflow can call them by name. A nested run
+stays on the caller's branch unless that is a default branch, where it creates its own
+worktree. Its docs are named per requirement, so runs don't collide. The caller integrates
+the returned branch, read from the `autopilot-result` block.
+
+## State and resume
+
+Each run keeps its state in one ignored plan doc, `.autopilot/<slug>-plan.md` in its
+worktree (build adds a spec doc beside it): the verify command, a `RESUME:` line, the
+progress log, review items, Notes of codebase facts and the task list. After a context
+compaction the run rebuilds from it and `git log`. Running the same requirement again
+resumes an unfinished run.
 
 ## Review roster (`agents/`)
 
-The committed, accountable review roster. Each reviewer is a **single-lens** agent
-that returns the strict `VERDICT / BLOCKING / NON-BLOCKING`
-contract, so a review is reproducible and a lens is attributable — unlike anonymous
-ad-hoc reviewers chosen anew each time. `phase` is when a lens runs — `spec` (S3
-spec-review), `work` (S6 work-review), or `both`. Ordinary reviewers are read-only
-and never run a full suite; the core verification reviewer runs it in the frozen
-source worktree at the reviewed SHA, or when publishing reads the CI checks that run the tests for that SHA.
+Each reviewer has one lens. A phase's `core` lenses always run; an `optional` lens runs
+when its `applies_to` matches the spec's keywords (S3) or the changed paths (S6). Ordinary
+reviewers are read-only and never run the full suite.
 
 | File | Lens | Phase | Tier |
 | --- | --- | --- | --- |
-| `agents/reviewer-contract.md` | Authoring template inlined into ordinary reviewers (not dispatched); verification reviewer has a dedicated execution contract | — | — |
-| `agents/spec-fitness-reviewer.md` | Spec fitness, gaps, ambiguity, scope, testability | spec | core |
-| `agents/architecture-reviewer.md` | Structure, boundaries, coupling, extensibility | both | spec core / work optional (`@structural`) |
-| `agents/correctness-reviewer.md` | Intent/logic, edge & boundary cases, error paths | work | core |
-| `agents/requirement-fidelity-reviewer.md` | Work realizes the requirement & spec — right thing built, no missing items, no drift/scope creep | work | core |
-| `agents/doc-reviewer.md` | Docs **repo-wide** still accurate after the change (not just touched files); edits concise / not bloated | work | core |
-| `agents/verification-reviewer.md` | Full target checks with commands, exit codes, test and failure counts and diagnostics, or the CI checks that run them | work | core |
-| `agents/code-quality-reviewer.md` | Readability, naming, duplication, dead code, needless complexity, comment quality | work | optional |
-| `agents/test-reviewer.md` | Tests meaningful & assert the spec; coverage of new/changed code | work | optional |
-| `agents/performance-reviewer.md` | Complexity, N+1, allocation, resource leaks, hotspots | work | optional |
-| `agents/security-reviewer.md` | Authz, input validation, secrets, injection, supply chain | both | optional |
+| `reviewer-contract.md` | Authoring template inlined into ordinary reviewers (not dispatched); verification reviewer has a dedicated execution contract |  |  |
+| `spec-fitness-reviewer.md` | Spec fitness: gaps, ambiguity, scope, testability | spec | core |
+| `architecture-reviewer.md` | Structure, boundaries, coupling, extensibility | both | spec: core. work: optional, when a file is added, deleted, renamed or copied (`@structural`) |
+| `correctness-reviewer.md` | Logic, edge and boundary cases, error paths | work | core |
+| `requirement-fidelity-reviewer.md` | The requirement and spec built, nothing missing, drifted or added | work | core |
+| `doc-reviewer.md` | Docs anywhere in the repo the change made false; bloated doc edits | work | core |
+| `verification-reviewer.md` | Full checks at the reviewed SHA, locally or from CI: commands, exit codes, test and failure counts | work | core |
+| `code-quality-reviewer.md` | Readability, naming, duplication, dead code, complexity, comments | work | optional: code files |
+| `test-reviewer.md` | Tests assert the spec and cover new or changed code | work | optional: code or test files |
+| `performance-reviewer.md` | Complexity, N+1, allocation, leaks, hotspots | work | optional: code files |
+| `security-reviewer.md` | Authz, input validation, secrets, injection, supply chain | both | optional: auth, input, network, I/O, dependency or crypto signals |
 
-The work-phase core lenses form a **requirement → spec → work** chain:
-`requirement-fidelity` (the right thing built, faithfully per the spec — no
-missing items, no drift or scope creep), `correctness` (built bug-free);
-`doc-reviewer` keeps docs **repo-wide** current (not just touched files) and concise.
-
-The **floor** that always runs is the phase's `core` lenses — spec phase:
-spec-fitness + architecture; work phase: correctness +
-requirement-fidelity + doc-reviewer + verification — so every review is
-non-empty for any deliverable. `optional` lenses are **conditional**: they run only
-when the spec/diff matches their `applies_to`, auditably skipped otherwise. The
-`code-quality`/`performance` pack matches code-source files, `test` also matches
-test files/dirs; `security` matches auth,
-input-handling, network, file/DB I/O, dependency, or crypto signals;
-`architecture` is core in the spec phase but a structural-signal-gated optional in
-the work phase — it runs in S6 only when the diff changes file topology
-(`@structural`: any added/deleted/renamed/copied file).
-
-Each reviewer's frontmatter is **self-describing** (`lens`/`phase`/`tier`/
-`applies_to`), so the selection stage discovers and routes the roster with no code
-change; new lenses (domain packs) join the same way — a new file under `agents/`.
-
-**Selection stage (`skills/build/scripts/select-panel.py`).** S3 and S6 call this script to pick the
-panel: it globs `agents/`, reads each frontmatter, and returns the selected reviewers as
-`{agent, subagent_type, tier, matched}` — every `core` agent for the phase, plus every
-`optional` whose `applies_to` matches the signals (spec keywords for S3; changed paths,
-`git diff --name-only base...HEAD`, for S6). The orchestrator then runs **all** core
-(the floor) and **curates** the optionals (may drop a marginal one). On Claude Code,
-each reviewer uses the `model:` / `effort:` in its `agents/<name>.md` frontmatter;
-on Codex, it inherits the session model. Canonical tool boundaries apply; ordinary
-reviewers remain read-only.
-The skills select Workflow when available or native agent dispatch, loading complete
-canonical reviewer files for generic agents and respecting
-concurrency capacity. Re-reviewed lenses start fresh with prior items (ID + blocker
-gist) and, in S6, the fix diff (the re-review sets are in each skill's review
-settings). Rounds are batched, and convergence comes only from the reviewers' own verdicts.
-Nothing to configure.
-Doc upkeep is folded into S6: the core `doc-reviewer` flags stale/missing docs **repo-wide**
-(touched files and docs elsewhere the change contradicts) as BLOCKING (fixed in the S6 loop),
-so there is no separate docs phase.
+`skills/build/scripts/select-panel.py` builds build's panel from each file's frontmatter
+(`lens`, `phase`, `tier`, `applies_to`), so a new lens is a new file. build runs every core
+lens and drops a marginal optional one only with a logged reason. On Claude Code each
+reviewer runs as `autopilot:<name>` with its frontmatter `model:` and `effort:`; on Codex
+it inherits the session model. A re-reviewed lens starts fresh with its prior items and,
+in S6, the fix diff.
 
 ### Plugin workflow (`workflows/review-round.js`)
 
-The per-round review transport, shipped as a plugin workflow:
-`Workflow({name: "autopilot:autopilot-review-round", args})` (the name comes from its
-`meta.name`). It runs one review round — every member in parallel, each verdict
-schema-validated — in Claude Code when Workflow is exposed; otherwise the skills
-fall back to native dispatch.
+The default transport for a round, `Workflow({name: "autopilot:autopilot-review-round", args})`,
+runs every member in parallel and schema-validates each verdict. Without Workflow, the
+skills dispatch natively.
 
-- **Input** `args`: `{phase, members: [{agent, subagent_type, prompt}]}`.
-- **Output**: `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}]}`,
-  in member order. `VERDICT` is `PASS` only when the reviewer said `PASS` and
-  `BLOCKING` is empty. A member that yields no verdict becomes `FAIL` with
-  `synthetic: true` and is not retried (the skills re-dispatch it once through native host dispatch).
-
-## Review caps
-
-Build allows three total rounds per phase (S3 spec review and S6 work review):
-initial Round 1, then up to two fix/re-reviews in Rounds 2–3. To change a cap for
-one run, state it in the requirement. Light-build has the same cap in S6.
+- Input `args`: `{phase, members: [{agent, subagent_type, prompt}]}`.
+- Output: `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}]}`, in
+  member order. `VERDICT` is `PASS` only when the reviewer said `PASS` with no `BLOCKING`.
+  A member with no verdict becomes `FAIL` with `synthetic: true`; the skills re-dispatch
+  it once natively.
 
 ## Local development
 
-Test changes to this plugin from a local checkout, without installing from a
-marketplace:
-
 ```
-# Load the plugin straight from the working copy (path = the plugin root):
-claude --plugin-dir /path/to/claude-autopilot
-
-# After editing files, reload in-session (no restart):
-/reload-plugins
-
-# Validate manifests + frontmatter (use --strict in CI to fail on warnings):
-claude plugin validate /path/to/claude-autopilot --strict
-
-# Lint the review roster (validates each reviewer's frontmatter + contract):
-python3 scripts/lint-roster.py
-
-# Run the script tests (stdlib unittest, no deps):
-python3 tests/test_scripts.py
+claude --plugin-dir /path/to/claude-autopilot              # load the working copy
+/reload-plugins                                            # after an edit, in session
+claude plugin validate /path/to/claude-autopilot --strict  # manifests and frontmatter
+python3 scripts/lint-roster.py                             # after editing agents/
+python3 tests/test_scripts.py                              # helper-script tests, stdlib only
 ```
 
-Per-build development docs live in `dev-docs/<date>-<slug>-{spec,plan}.md`,
-kept locally (gitignored) as the build's audit trail — this is our development
-workflow, not something the command imposes on its users.
+Also run the [smoke protocol](CONTRIBUTING.md#smoke-protocol). Per-build dev docs go in
+gitignored `dev-docs/<date>-<slug>-{spec,plan}.md`.
+
+The repo is both the marketplace and the plugin:
+
+```
+claude-autopilot/
+├── .claude-plugin/
+│   ├── plugin.json               # name: autopilot (version 1.9.1)
+│   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
+├── skills/
+│   ├── build/SKILL.md            # /autopilot:build
+│   ├── build/spec.md             # spec-writing guide for S2
+│   ├── build/scripts/select-panel.py   # (phase, signals) → panel JSON
+│   ├── build/scripts/check-spec.py     # S2 spec structure and AC coverage
+│   ├── build/scripts/ci-verdict.py     # one commit's CI checks → verifier verdict
+│   ├── build/scripts/pr.py             # draft PR start / push / spec / finish
+│   ├── build/scripts/resolve-branch.py # S1: resume / stay / reuse / create / stop
+│   ├── build/scripts/_frontmatter.py   # parser shared with the roster lint
+│   └── light-build/SKILL.md      # /autopilot:light-build
+├── references/
+│   └── autopilot-common.md       # rules both skills share
+├── scripts/
+│   └── lint-roster.py            # roster lint
+├── workflows/
+│   └── review-round.js           # plugin workflow: one parallel review round
+├── agents/                       # review roster
+│   ├── reviewer-contract.md      # authoring template, inlined into ordinary reviewers
+│   └── *-reviewer.md             # one lens each
+├── tests/
+│   └── test_scripts.py           # stdlib unittest for the scripts
+└── README.md
+```
