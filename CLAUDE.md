@@ -33,7 +33,7 @@ claude --plugin-dir .
 Also run the [contributor smoke protocol](CONTRIBUTING.md#smoke-protocol).
 
 There is no build step. `tests/test_scripts.py` exercises `skills/build/scripts/select-panel.py`,
-`skills/build/scripts/check-spec.py`, `skills/build/scripts/ci-verdict.py` (against a fake `gh` on `PATH`),
+`skills/build/scripts/check-spec.py`, `skills/build/scripts/ci-verdict.py` and `skills/build/scripts/pr.py` (against a fake `gh` on `PATH`),
 `skills/build/scripts/resolve-branch.py` (on temp git repos) and `scripts/lint-roster.py` as CLIs via subprocess (they have hyphenated names,
 so they're not importable — the CLI is the contract).
 
@@ -57,11 +57,11 @@ reading those three files plus `agents/` and the bundled `skills/build/scripts/`
   S3 spec-review → S4 task list → S5 produce → S6 work-review → S7 finish.
   `light-build` skips S2, S3 (same number = same step).
   **It never merges** — the deliverable is a review-ready branch, plus a draft PR when
-  publishing (S1 `publish`): `pr` when the requirement asks for a PR (each commit pushed
-  as it lands, build posts the reviewed spec, ready on convergence), `ci` when the repo
-  has a pull_request workflow (pushed at S6 pins, left a draft). Either way the repo's CI
-  is the verifier's backend, read by `skills/build/scripts/ci-verdict.py`; a full suite
-  never runs locally while CI can run it.
+  publishing (S1 `publish`, all `gh` steps in `skills/build/scripts/pr.py`): `pr` when the
+  requirement asks for a PR (each commit pushed as it lands, build posts the reviewed spec,
+  ready on convergence), `ci` when the repo has a pull_request workflow (pushed at S6 pins,
+  a draft during the run). Either way the repo's CI is the verifier's backend, read by
+  `skills/build/scripts/ci-verdict.py`; a full suite never runs locally while CI can run it.
 
 - **Ralph convergence loops (S3, S6).** review → fix → re-review until the frozen
   review panel all-PASSes or a per-phase cap (build: 3 total rounds) is hit. Convergence is decided

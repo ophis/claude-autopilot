@@ -3,15 +3,13 @@
 
 Reads the requirement from --input-file (written with a file tool, so it never
 passes through a shell) and prints one JSON object:
-  {mode, branch, worktree, base_ref, plan_doc, spec_doc, input_sha, slug, ci_workflows,
-   resume_line, reason}
+  {mode, branch, worktree, base_ref, plan_doc, spec_doc, input_sha, slug, resume_line, reason}
 mode is one of:
   resume  this input's unfinished plan doc exists; continue it
   stay    on a non-default branch with a clean tree; work in this checkout
   reuse   the branch exists without another run's plan doc; enter its worktree
   create  add a worktree for a new branch at local HEAD
   stop    uncommitted changes on a non-default branch (safety stop 3)
-ci_workflows lists HEAD's workflow files that run on pull requests.
 Nothing is changed, except that `git remote set-head origin -a` may record
 origin's default branch when it is unknown.
 """
@@ -33,8 +31,6 @@ SAFE = {
     "worktree_root": re.compile(r"^[A-Za-z0-9._/~-]+$"),
 }
 SAFE_BRANCH = re.compile(r"^[A-Za-z0-9._/-]+$")
-PR_TRIGGER = re.compile(r"""^\s*['"]?on['"]?\s*:.*\bpull_request(_target)?\b"""
-                        r"""|^\s+(-\s*)?['"]?pull_request(_target)?['"]?\s*(:|$)""", re.M)
 
 
 def git(repo, *args, check=True, strip=True):
@@ -85,12 +81,6 @@ def plan_docs(worktree):
     return docs
 
 
-def ci_workflows(repo):
-    listed = git(repo, "ls-tree", "--name-only", "HEAD", ".github/workflows/", check=False) or ""
-    return [path for path in listed.splitlines() if path.endswith((".yml", ".yaml"))
-            and PR_TRIGGER.search(git(repo, "show", "HEAD:" + path, check=False) or "")]
-
-
 def free_docs(worktree, slug):
     """Plan and spec doc paths sharing the first stem neither of whose names is taken."""
     taken = {os.path.basename(p) for p in glob.glob(os.path.join(worktree, ".autopilot", "*"))}
@@ -105,7 +95,7 @@ def free_docs(worktree, slug):
 def resolve(repo, text, prefix, slug, host, worktree_root, branch_prefix):
     input_sha = hashlib.sha256(text.strip().encode("utf-8")).hexdigest()[:12]
     slug = slug or slugify(text)
-    base = {"input_sha": input_sha, "slug": slug, "ci_workflows": ci_workflows(repo), "reason": ""}
+    base = {"input_sha": input_sha, "slug": slug, "reason": ""}
     trees = worktrees(repo)
     for tree, _ in trees:
         for path, fields in plan_docs(tree):

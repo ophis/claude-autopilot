@@ -1,33 +1,31 @@
 # Autopilot common rules
 
-The rules `build` and `light-build` share. The calling SKILL.md owns the pipeline and its
-settings; this file owns everything both surfaces do the same way. Paths here are relative
-to this file's directory.
+Rules `build` and `light-build` share; the calling SKILL.md owns its pipeline and settings.
+Paths here are relative to this file's directory.
 
 ## Terms
 
 - **Input**: `input` is Claude Code's substituted `$ARGUMENTS`, or Codex's invoking user
   request or explicit caller input. An unresolved placeholder counts as absent. It is the
   single source of intent; the skill lists its forms.
-- **Plan doc**: the run's one state file (see State and resume).
-- **Producer**: a fresh subagent you hand one self-contained task to (see Produce (S5)).
 - **Lens**: one reviewer agent. The **panel** is the set of lenses for a phase.
 - **Round**: one parallel review of the panel, numbered `r1`, `r2`, ….
-- **Publish**: `publish=pr|ci|none`, set at S1 (Publish): `pr` when the requirement asks
-  for a pull request, `ci` when only the repo's CI needs one.
+- **Publish**: `publish=pr|ci|none`, set at S1 (Publish).
 - **Genuine fork**: two or more viable approaches with materially different trade-offs,
   or a choice that shapes architecture, data model, interface or scope, is costly to
   reverse, or that a later review might miss.
 
 ## Disciplines
 
-- **Decide everything yourself.** Never ask the user anything. Settle a genuine fork with
-  the council, anything else solo. Every stop is a handoff, not a question.
+- **Decide everything yourself** (Council). Never ask the user anything. Every stop is a
+  handoff, not a question.
 - **Author the work; let reviewers judge it.** You implement the S5 tasks and the S6 fixes
   yourself. Independent reviewer subagents judge the result.
 - **Guard your context.** Read only what the current step needs. Send long command output
   to a file and read bounded slices of it. Hand bulk searches and reads to a subagent and
   keep its summary.
+- **Targeted checks.** Your own checks (tasks, fixes, merges) cover only the files you
+  changed; the full suite is the verifier's.
 - **Real exit codes.** A command whose exit code decides anything (check, commit, push)
   runs unpiped, output to a file, or after `set -o pipefail`: `tests | tail -2 && git
   commit` commits a failing test.
@@ -39,7 +37,7 @@ to this file's directory.
   a default branch (Worktree (S1)).
 - **Batch steps.** Every tool call re-sends your whole context. Combine independent shell
   steps into one command, and make independent calls together in one parallel batch.
-- **End at a review-ready branch.** Never merge.
+- **Never merge.**
 
 ## Hosts
 
@@ -65,8 +63,8 @@ to this file's directory.
   (from S4).
 - **RESUME** is one line, rewritten at every phase change and loop iteration:
   `RESUME: phase=<step|done> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> input_sha=<sha>`,
-  plus `spec_file=<path>` when the skill records one, `publish=` from S1, and `pr=<url>`
-  once known.
+  plus `spec_file=<path>` when the skill records one. Publish state lives with `pr.py`
+  (Publish).
 - **Resume first.** On start, run the resolver (Worktree (S1)) before anything else.
   `mode: resume` points at this input's unfinished plan doc, matched by RESUME
   `input_sha`; a plan doc for another input, or at `phase=done`, is an earlier run's and
@@ -75,9 +73,7 @@ to this file's directory.
 - Re-run an interrupted review round whole: the frozen panel, on its recorded transport
   and round number.
 - **Review items.** After each round, append its items in full with their IDs, BLOCKING
-  and NON-BLOCKING, and the verifier's exact commands and results (exit codes, test and
-  failure counts, diagnostics).
-- Resume at S7 only with all-PASS evidence for HEAD. Otherwise restart S6.
+  and NON-BLOCKING.
 - **Notes.** Write each durable fact you learn to Notes as one line: key files and entry
   points, repo patterns and commands, gotchas, and anything a later task depends on. A
   context summary drops these; the plan doc keeps them.
@@ -85,26 +81,20 @@ to this file's directory.
 ### Re-hydrate after compaction
 
 After a context compaction, or whenever you are unsure of the run's state, rebuild it
-from disk before you act:
+from disk before you act. Re-read the plan doc whole (Resume first), the SKILL.md and this
+file from its `Rules:` paths (gone: find them in the installed plugin), and any spec doc.
+Run `pr.py status --plan-doc <plan_doc>`, `git -C <worktree> log --oneline <base_ref>..HEAD` and `git -C <worktree> status`; a
+commit carrying a task's brief message means that task is done (log it if unmarked).
+Finish unfinished work, then continue from RESUME `phase`:
 
-1. Find the plan doc (Resume first) and re-read it whole. With no plan doc yet, follow
-   Resume first.
-2. Re-read the SKILL.md and this file from the `Rules:` paths. If a path is gone, find
-   the file by skill name in the installed plugin.
-3. Re-read the spec doc if the run has one.
-4. Run `git -C <worktree> log --oneline <base_ref>..HEAD` and `git -C <worktree> status`.
-   A commit carrying a task's brief message means that task is done; log it if the mark
-   is missing.
-5. Finish unfinished work before moving on:
-   - **S5**: uncommitted changes belong to the first task not `done`. Finish or redo it.
-   - **S3**: if the latest round failed, the spec doc on disk holds any partial fix.
-     Finish it against that round's full BLOCKING items, then run the re-review.
-   - **S6**: uncommitted changes are the fix in progress. Finish it against the latest
-     round's review items, with that round's `reviewed_sha` as the
-     pre-fix HEAD, commit, then run the re-review. A clean tree with HEAD past that
-     `reviewed_sha` means the fix is committed: run the re-review. A clean tree with HEAD
-     at that `reviewed_sha` and every lens passing means the phase converged: advance.
-6. Continue from RESUME `phase`.
+- **S5**: uncommitted changes belong to the first task not `done`. Finish or redo it.
+- **S3**: if the latest round failed, the spec doc on disk holds any partial fix. Finish
+  it against that round's full BLOCKING items, then run the re-review.
+- **S6**: uncommitted changes are the fix in progress: finish it against the latest
+  round's review items, with that round's `reviewed_sha` as the pre-fix HEAD, commit, then
+  run the re-review. A clean tree with HEAD past that `reviewed_sha` means the fix is
+  committed: run the re-review. A clean tree with HEAD at that `reviewed_sha` and every
+  lens passing means the phase converged: advance.
 
 ## Progress log
 
@@ -112,7 +102,7 @@ A short audit log in the plan doc, one line per event, not a transcript. S3 uses
 shapes.
 
 - Panel freeze: the skill's freeze line, ending `transport=Workflow`. Append `->Task` or
-  `-><actual native tool>` if the fallback fires. In S6 it names the verifier's backend, `verification=local` or `verification=ci`.
+  `-><actual native tool>` if the fallback fires.
 - Task done: `S5 task 3 done: <commit sha> red=<tests failing before the code, or none>`.
 - Review round, with the verdict roll-up and one gist per blocker: `S6 r1 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, tests=12, failures=0) -> correctness#1 off-by-one in slice bound; fixing`.
 - Decision, council or solo: `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
@@ -140,13 +130,11 @@ shell, and run the resolver from the starting checkout:
 python3 <abs path of ../skills/build/scripts/resolve-branch.py> --host <claude|codex> --input-file <file>
 ```
 
-When the work is for one ticket, add `--prefix '<ticket ID>'` (letters, digits, `.`, `_`,
-`-`) and `--slug '<short-feature-slug>'` (lowercase letters, digits and hyphens). A repo
+When the work is for one ticket, add `--prefix '<ticket ID>'` and
+`--slug '<short-feature-slug>'`. A repo
 whose AGENTS.md / CLAUDE.md says where worktrees go or names a branch namespace passes
 `--worktree-root '<dir>'` and `--branch-prefix '<ns/>'`. Single-quote every value taken
-from the requirement or the repo's docs.
-It prints `{mode, branch, worktree, base_ref, plan_doc, spec_doc, input_sha, resume_line,
-reason}`. A **default branch** is `main`, `master` or `origin`'s default; on any other
+from the requirement or the repo's docs. A **default branch** is `main`, `master` or `origin`'s default; on any other
 branch the run stays on it, which is how a later requirement continues an earlier run's
 branch. Act on `mode`:
 
@@ -162,7 +150,7 @@ branch. Act on `mode`:
 For `reuse` and `create`, enter the worktree (`EnterWorktree({path: <worktree>})`). Run
 every later command in the worktree. Unless resuming, write `.autopilot/.gitignore` (`*`)
 in it, then create the plan doc at `plan_doc` (State and resume) with `resume_line` as its
-RESUME. Then set `publish` (Publish).
+RESUME. Then run `pr.py start` (Publish).
 
 ## Task list (S4)
 
@@ -186,8 +174,7 @@ command never does.
   - Files.
   - Consumes / Produces: exact names and signatures that cross tasks.
   - Tests to write first, including edge cases.
-  - The checks it runs: only those its change affects, never a full suite. The verifier
-    runs that.
+  - The checks it runs (Targeted checks).
   - Commit message.
 
 ## Produce (S5)
@@ -197,13 +184,12 @@ For each task, starting from the first one not `done`:
 1. Implement it yourself from its `### Task N` brief: tests first, run red (each new test
    fails because the behavior is missing, not because the test is broken), then the code.
 2. Run the checks its brief names.
-3. Commit with the brief's message, push with `publish=pr` (Publish), add Notes for anything a
-   later task needs, and log the task `done`.
+3. Commit with the brief's message, run `pr.py push --task` (Publish), add Notes for
+   anything a later task needs, and log the task `done`.
 
 **Delegation.** You may hand a self-contained task that would flood your context, such as
 a bulk mechanical edit or a large isolated module, to one fresh producer. Give it the task
-list header, its `### Task N` brief, the worktree pin, the constraints, and what the skill
-adds. The producer follows steps 1 and 2, commits, and returns its red count and any
+list header, its `### Task N` brief and what the skill adds (Brief workers fully). The producer follows steps 1 and 2, commits, and returns its red count and any
 Notes lines for you to record. You confirm the commit, then finish step 3. If the
 producer fails, implement the task yourself.
 
@@ -224,17 +210,15 @@ The skill sets the panel, the cap (total rounds, `r1` included), the re-review s
 the doc fields of the run-input prompt.
 
 **Verifier.** Every S6 panel includes `autopilot:verification-reviewer`. Freeze its
-backend in `r1`: `verification=ci` when the run publishes and the plan doc's `CI checks:`
-names a check, else `verification=local`. With `local` it runs the complete checks in the frozen
-source worktree; with `ci` it reads those CI checks for `reviewed_sha`, and runs the local
-checks when they give no usable result. It runs every round.
+backend in `r1`: `verification=ci` when `pr.py` reports `publish` other than `none` and
+the plan doc's `CI checks:` names a check, else `verification=local`. It runs every round.
 
 Run each round in these steps:
 
 1. **Freeze.** In `r1`, log the panel. Reuse it for every round of the phase.
 2. **Pin the revision (S6).** Require a clean committed source worktree:
    `git -C <worktree> status --porcelain` is empty. Set `reviewed_sha=<HEAD>` from
-   `git -C <worktree> rev-parse HEAD`. When publishing, push it (Publish). Leave HEAD alone
+   `git -C <worktree> rev-parse HEAD`. Run `pr.py push` (Publish). Leave HEAD alone
    until every verdict is back.
 3. **Write prompts.** Each member gets only its run-input prompt:
    `PHASE=<spec|work>. Inputs: worktree=…, base_ref=…, <doc fields>, requirement=…, focus=…, reviewed_sha=<HEAD> (S6 only). Output ONLY the verdict, no extra prose.`
@@ -277,7 +261,6 @@ advance. At the cap without a pass, take safety stop 2.
 
 ## S6 fixes
 
-- Genuine check failures are blockers like any other.
 - Record HEAD before each fix; the re-review diff starts there.
 - Fix all deduped open blockers yourself in one pass, from their full text, their item
   IDs and the files they cite.
@@ -287,58 +270,39 @@ advance. At the cap without a pass, take safety stop 2.
   silences a symptom is not a fix.
 - If an item stays OPEN after a fix, write down what that fix assumed and check the
   assumption before the next fix depends on it.
-- Run only the checks covering the files you changed, and commit the round's fix as one
-  commit, `fix(r<N>): <item IDs>`, before the re-review. The re-review then pins it.
-- Docs are fixed here. There is no separate doc phase.
+- Commit the round's fix as one commit, `fix(r<N>): <item IDs>`, before the re-review. The re-review then pins it.
 
 ## Publish
 
 With CI, the repo's CI verifies the work, never a local full-suite run, so the run
-publishes its branch as a draft PR.
+publishes its branch as a draft PR. `python3 <abs path of ../skills/build/scripts/pr.py>`
+does every `gh` step and keeps the state beside the plan doc. Each call prints
+`{publish, pr, …, reason}`; exit 3 is safety stop 3 with that reason.
 
-- **Set at S1**, recorded as RESUME `publish=`:
-  - `pr`: the requirement asks for a pull request. Needs
-    `gh auth status --hostname <origin's host>` to succeed; else safety stop 3.
-  - `ci`: otherwise, when that check succeeds and the resolver's `ci_workflows` is
-    non-empty.
-  - `none`: otherwise. Nothing is pushed.
-- **Adopt at S1** (`pr`, `ci`): look up the branch's open PR
-  (`gh pr list --head <branch> --state open --json url,isDraft`) and record `pr=<url>`.
-  With `pr`, turn a ready one back into a draft (`gh pr ready --undo <url>`), since an
-  earlier run may have marked it ready. A run that continues a branch updates that PR: log
-  it as a decision and name it in the task-list header at S4.
-- **Push** at each S6 pin, and with `pr` also after each S5 task commit, so the PR shows
-  each task as it lands: `git -C <worktree> push -u origin <branch> > <log> 2>&1; echo push=$?`.
-  Never force. A nonzero exit is safety stop 3 with `pr`; with `ci`, set `publish=none`,
-  log `decision(publish)`, and verify locally from then on.
-- **One draft PR.** Until `pr=` is recorded, repeat the S1 lookup before each push and
-  adopt what it finds. With none after the push, open a draft:
-  `gh pr create --draft --base '<base>' --head '<branch>' --title '<title>' --body-file <file>`,
-  with the body written from the requirement with the file-write tool and a plain-words,
-  quote-free title. A base the requirement names must match `[A-Za-z0-9._/-]+`; otherwise
-  take safety stop 3. `<base>` is the branch the requirement names, else the repo's default
-  branch. Record `pr=<url>` in RESUME.
+- **Start (S1).** Write the PR title (first line) and body from the requirement to a file
+  with the file-write tool. Run `pr.py start --plan-doc <plan_doc> --worktree <worktree>
+  --body-file <file>`, adding `--requested` when the requirement asks for a pull request
+  and `--base '<branch>'` when it names one. `publish` is `pr` (asked), `ci` (a
+  pull_request workflow and an authenticated `gh`) or `none`. A `pr` in its output is the
+  branch's open PR: log it as a decision and name it in the task-list header at S4.
+- **Push.** `pr.py push --plan-doc <plan_doc>`, with `--task` after an S5 task commit. A
+  refused push in `ci` returns `publish=none` with the reason: log `decision(publish)` and
+  verify locally from then on.
+- **Spec** (build). `pr.py spec --plan-doc <plan_doc> --spec-doc <spec doc>` at S4.
 - **Conflicts.** A verifier `CONFLICT:` item means the PR conflicts with its base, so CI
   will not run. With `<base>` from that line: `git -C <worktree> fetch origin <base>`,
-  `git -C <worktree> merge origin/<base>` (never rebase), resolve, run the checks covering
-  the resolved files, commit. Set RESUME `base_ref` to
-  `git -C <worktree> merge-base HEAD origin/<base>`, so reviewers see only this run's
-  changes. Push, re-pin, and re-run the round whole at the same number, like an
-  interrupted one. Unresolvable: `git -C <worktree> merge --abort`, then safety stop 3
+  `git -C <worktree> merge origin/<base>` (never rebase), resolve, run targeted checks,
+  commit. Set RESUME `base_ref` to `git -C <worktree> merge-base HEAD origin/<base>`, so
+  reviewers see only this run's changes. `pr.py push`, re-pin, and re-run the round like an
+  interrupted one (State and resume). Unresolvable: `git -C <worktree> merge --abort`, then safety stop 3
   naming the conflicting files.
-- **Spec** (build, `pr`). Post the spec doc as one PR comment
-  (`gh pr comment <url> --body-file <spec doc>`) at S4 if `pr=` is recorded, else right
-  after it is recorded, and log `spec posted`. Never post it twice.
-- **Finish.** With `pr`, converged: unless the PR body already holds it, add the S7
-  report, headed with HEAD's SHA, after any earlier run's (`gh pr view <url> --json body`,
-  then `gh pr edit <url> --body-file <file>`). Then mark the PR ready
-  (`gh pr ready <url>`). With `ci`, leave the PR as it is. On a stop, leave the draft.
-  Report the URL.
+- **Finish.** On convergence, write the S7 report to a file and run
+  `pr.py finish --plan-doc <plan_doc> --report-file <file>`. Report the URL.
 
 ## Finish (S7)
 
 Require a clean worktree with HEAD equal to the last all-PASS `reviewed_sha`; otherwise
-return to S6. The branch keeps its task and fix commits. When publishing, finish the PR
+return to S6. The branch keeps its task and fix commits. On convergence, finish the PR
 (Publish). If the user's or project's convention (AGENTS.md / CLAUDE.md) keeps plans or specs
 somewhere, copy the plan doc and any spec doc there. Report inline, with no skill: the
 review history, the final verification evidence from the plan doc, the decisions, and the deferred non-blockers and `deferred` lines. On a
@@ -357,8 +321,7 @@ these cases:
    denied action with its reason.
 2. **Non-convergence at the cap**, with its classification.
 3. **Non-review phase failure or missing required capability**: retry once, then stop
-   with the failure or missing capability. Review round step 7 also sends an unavailable
-   verifier here. Never act as your own reviewer or verifier.
+   with the failure or missing capability. Never act as your own reviewer or verifier.
 4. **Root contradiction**: the core requirement asks for two things that cannot both be
    true. Quote the two clauses. Vagueness is not a contradiction; decide it.
 
@@ -376,8 +339,8 @@ parsing prose:
   or `stopped` (any other safety stop).
 - `branch`, `base_ref`, `head`: the branch name, its base SHA, and its final commit SHA
   (`head` = `base_ref` if nothing was produced).
-- `pr`: the run's pull request URL, else empty. With `publish=ci` it is a draft; a caller
-  that opens the final PR adopts and updates it.
+- `pr`: the run's pull request URL (`pr.py status`), else empty. With `publish=ci` it is a
+  draft; a caller that opens the final PR adopts and updates it.
 - `blockers`: the residual open BLOCKING items as strings when not converged, else `[]`.
 - `reason`: empty when converged. Otherwise the classification plus detail: for a cap,
   `oscillation`, `unfixable` or `requirements-conflict`; for a stop, `root-contradiction`,

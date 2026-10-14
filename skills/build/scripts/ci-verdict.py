@@ -5,17 +5,19 @@ Run from the repo (or pass --worktree); `gh` must be authenticated. PASS needs e
 named by the plan doc's `CI checks:` (JSON array of names or globs) to succeed. Exit codes:
 0 PASS and 1 FAIL (the verdict is on stdout), 4 checks still running (call again),
 3 no usable CI result (run the local checks instead; the reason is on stdout),
-5 the branch's PR conflicts with its base, so GitHub runs no pull_request CI (merge the base).
+5 the branch's PR conflicts with its base, so GitHub runs no pull_request CI (merge the base),
+6 CI did not finish within --deadline seconds of the first call for this commit (stop; never
+  check locally). The first call's time is kept in ci-<sha>.json beside the plan doc.
 """
 
 import argparse
 import fnmatch
 import json
+import os
 import re
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
 
 PASS, FAIL, PENDING, INFRA = "pass", "fail", "pending", "infra"
 
@@ -34,6 +36,10 @@ class NoCI(Exception):
 
 
 class Conflict(Exception):
+    pass
+
+
+class Timeout(Exception):
     pass
 
 
@@ -88,7 +94,6 @@ def fetch_checks(sha, cwd):
             "url": url,
             "run_id": m.group(1) if m else None,
             "job_id": m.group(2) if m else None,
-            "started": run.get("started_at"),
             "detail": (run.get("output") or {}).get("title") or "",
         })
     for status in commit_items(sha, "status", "statuses", cwd):
@@ -99,18 +104,22 @@ def fetch_checks(sha, cwd):
             "url": status.get("target_url") or "",
             "run_id": None,
             "job_id": None,
-            "started": status.get("created_at"),
             "detail": status.get("description") or "",
         })
     return checks
 
 
-def age_seconds(stamp):
+def first_call(args):
+    """Epoch time of the first call for this commit, so the deadline spans every call."""
+    path = os.path.join(os.path.dirname(os.path.abspath(args.plan_doc)), "ci-%s.json" % args.sha[:12])
     try:
-        started = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
-    except (AttributeError, ValueError):
-        return 0
-    return (datetime.now(timezone.utc) - started).total_seconds()
+        with open(path, encoding="utf-8") as fh:
+            return float(json.load(fh)["first_call"])
+    except (OSError, ValueError, KeyError, TypeError):
+        now = time.time()
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump({"sha": args.sha, "first_call": now}, fh)
+        return now
 
 
 def names(checks):
@@ -192,6 +201,7 @@ def check_mergeable(args, deadline):
 def verdict(args):
     now = time.monotonic()
     deadline, appear_deadline = now + args.wait, now + args.appear
+    until = first_call(args) + args.deadline
     check_mergeable(args, min(deadline, appear_deadline))
     finished = None
     while True:
@@ -201,7 +211,6 @@ def verdict(args):
                 raise NoCI("no CI check reported for %s within %ss" % (args.sha[:7], args.appear))
         else:
             waiting = [c for c in checks if c["state"] == PENDING]
-            rerunning = False
             if not waiting:
                 # Settle on the second identical all-done poll: a finished workflow can
                 # still trigger another (workflow_run) or a status posted after it.
@@ -214,9 +223,8 @@ def verdict(args):
                 if code is not None:
                     return code
                 waiting = [c for c in checks if c["state"] == INFRA]
-                rerunning = True  # their stamps are the first attempt's, so age says nothing
-            if not rerunning and max(age_seconds(c["started"]) for c in waiting) > args.max_age:
-                raise NoCI("CI still running after %ss: %s" % (args.max_age, names(waiting)))
+            if time.time() >= until:
+                raise Timeout("CI did not finish within %ds: %s" % (args.deadline, names(waiting)))
             if time.monotonic() >= deadline:
                 print("PENDING: %d of %d checks running at %s" % (len(waiting), len(checks), args.sha[:7]))
                 return 4
@@ -231,11 +239,15 @@ def main():
     parser.add_argument("--wait", type=float, default=540, help="seconds to wait in this call")
     parser.add_argument("--appear", type=float, default=180, help="seconds to wait for a first check")
     parser.add_argument("--interval", type=float, default=20, help="seconds between polls")
-    parser.add_argument("--max-age", type=float, default=3600, help="give up on checks running longer")
+    parser.add_argument("--deadline", type=float, default=3600,
+                        help="total seconds to wait for this commit's CI, counted from the first call")
     args = parser.parse_args()
     try:
         args.required = required_checks(args.plan_doc)
         return verdict(args)
+    except Timeout as exc:
+        print("TIMEOUT: %s" % exc)
+        return 6
     except Conflict as exc:
         print("CONFLICT: %s" % exc)
         return 5

@@ -11,7 +11,7 @@ Paths are relative to this skill's directory.
 
 Drive one requirement through S1 → S4 → S5 → S6 → S7 to a single review-ready branch,
 autonomously. Step numbers match build's; light-build skips build's spec (S2) and spec
-review (S3). You implement the work; independent reviewer subagents judge it.
+review (S3).
 
 - **The requirement is the spec.**
 - **No scope gate.** Run whatever you are given; choosing the surface is the user's call.

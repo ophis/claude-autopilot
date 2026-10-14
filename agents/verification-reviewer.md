@@ -24,8 +24,7 @@ refs, and you verify the same fixed revision the other reviewers inspect.
 
 - **Inputs by reference.** You get the source **worktree path**, the exact
   **reviewed_sha**, **base_ref**, the run's **plan_doc** path, and `verification=local`
-  or `verification=ci` (with a `ci_script` path). Read the verification command in the
-  plan doc.
+  or `verification=ci` (with a `ci_script` path).
 - **Frozen worktree.** Before the checks, confirm `git -C <worktree> rev-parse HEAD`
   equals `reviewed_sha` and `git -C <worktree> status --porcelain` is empty. If not, emit
   `VERDICT: FAIL` with a BLOCKING `VERIFICATION_UNAVAILABLE:` item naming the difference,
@@ -38,10 +37,10 @@ refs, and you verify the same fixed revision the other reviewers inspect.
   (PASS needs the plan doc's `CI checks:` green) with a 10-minute tool
   timeout (Bash `timeout: 600000`). Exit 4 means checks are still running: run it again.
   On exit 0 or 1, return its verdict and run nothing else, with the re-review lines below
-  on a re-review. On exit 5 (the PR conflicts with its base, so CI will not run), emit
-  `VERDICT: FAIL` with the script's `CONFLICT:` line as the only BLOCKING item, and run
-  nothing else. Any other exit means CI gave no usable result: run the complete checks
-  below instead, and make the script's message your first NON-BLOCKING item.
+  on a re-review. On exit 5 (the PR conflicts with its base) or 6 (CI missed its deadline),
+  emit `VERDICT: FAIL` with the script's line as the only BLOCKING item, prefixed
+  `VERIFICATION_UNAVAILABLE: ` on exit 6, and run nothing else. Any other exit means CI gave no usable result: run the complete checks below
+  instead, and make the script's message your first NON-BLOCKING item.
 - **Complete checks.** Run the documented verification command from the plan doc, plus
   any checks the repo's `CLAUDE.md`, README or CI require. With no documented command,
   derive the full checks from the build and test manifests. Never weaken, skip or replace
@@ -51,9 +50,8 @@ refs, and you verify the same fixed revision the other reviewers inspect.
   `set -o pipefail`, so the recorded exit code is the check's own. Record each exact
   command, exit code, tests run and failed (`unknown` if the output has no count) and
   useful diagnostics, plus `reviewed_sha` and the before and after HEAD and status.
-  Passing evidence goes in NON-BLOCKING; failed-check evidence goes in BLOCKING. Any
-  nonzero test result is a blocking FAIL, even if other checks passed. A test command
-  that ran 0 tests is BLOCKING.
+  Passing evidence goes in NON-BLOCKING; failed-check evidence, including a test command
+  that ran 0 tests, goes in BLOCKING.
 - **Environment or tool failure.** If a command cannot start or finish because of a
   missing tool, an inaccessible environment or similar infrastructure trouble, retry it
   once. If it still fails, emit `VERDICT: FAIL` with a BLOCKING item that begins exactly

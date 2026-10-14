@@ -9,8 +9,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Agent, Task, Workflow, ToolS
 
 Paths are relative to this skill's directory.
 
-Drive one requirement through S1–S7 to a single review-ready branch, autonomously. You
-implement the work; independent reviewer subagents judge it.
+Drive one requirement through S1–S7 to a single review-ready branch, autonomously.
 
 **On start, before anything else (a resume included), read [`../../references/autopilot-common.md`](../../references/autopilot-common.md) in full.**
 This file adds build's input, spec doc, steps and review settings.

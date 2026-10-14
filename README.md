@@ -34,6 +34,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 │   ├── build/scripts/select-panel.py # selector: (phase, signals) → panel JSON
 │   ├── build/scripts/check-spec.py   # S2 spec structure + AC coverage check
 │   ├── build/scripts/ci-verdict.py   # publishing: one commit's CI checks → verifier verdict
+│   ├── build/scripts/pr.py           # publishing: draft PR start / push / spec / finish, as JSON
 │   ├── build/scripts/resolve-branch.py # S1: resume / stay / reuse / create / stop, as JSON
 │   ├── build/scripts/_frontmatter.py # parser shared with dev lint
 │   └── light-build/SKILL.md      # skill; /autopilot:light-build  — low-ceremony
@@ -118,7 +119,10 @@ pushes and opens a draft PR, and each round lets CI verify the reviewed commit w
 other reviewers read it. Ask for a pull request in the requirement (e.g. `… and open a
 PR`) and it also pushes each task commit as it lands, build posts the reviewed spec as a
 comment, and on convergence the PR body gets the final report and the PR is marked ready.
-Without the ask, the PR stays a draft for you or your caller to adopt. A CI failure enters
+Without the ask, the PR stays a draft for you or your caller to adopt; a PR that was
+already ready is drafted for the run and made ready again on convergence, so nobody merges
+it mid-review. CI that hasn't finished an hour after the first check stops the run; it
+never falls back to a local full suite. A CI failure enters
 the same fix loop as any blocker. A PR that conflicts with its base gets no CI, so the run
 merges the base in (never rebases) and re-runs the round. With no CI, or a refused push,
 the checks run locally.

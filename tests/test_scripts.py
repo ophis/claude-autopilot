@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -25,6 +26,7 @@ SELECT_PANEL = os.path.join(REPO, "skills", "build", "scripts", "select-panel.py
 CHECK_SPEC = os.path.join(REPO, "skills", "build", "scripts", "check-spec.py")
 CI_VERDICT = os.path.join(REPO, "skills", "build", "scripts", "ci-verdict.py")
 RESOLVE_BRANCH = os.path.join(REPO, "skills", "build", "scripts", "resolve-branch.py")
+PR_SCRIPT = os.path.join(REPO, "skills", "build", "scripts", "pr.py")
 LINT_ROSTER = os.path.join(SCRIPTS, "lint-roster.py")
 REVIEW_ROUND = os.path.join(REPO, "workflows", "review-round.js")
 SKILLS = os.path.join(REPO, "skills")
@@ -393,10 +395,10 @@ class LintRosterTests(unittest.TestCase):
         for token in ("**CI mode.**", "`verification=ci`", "<ci_script>",
                       "Exit 4 means checks are still running", "first NON-BLOCKING item",
                       "return its verdict and run nothing else, with the re-review lines below on a re-review",
-                      "On exit 5 (the PR conflicts with its base, so CI will not run), emit `VERDICT: FAIL` with the script's `CONFLICT:` line as the only BLOCKING item",
+                      "On exit 5 (the PR conflicts with its base) or 6 (CI missed its deadline), emit `VERDICT: FAIL` with the script's line as the only BLOCKING item, prefixed `VERIFICATION_UNAVAILABLE: ` on exit 6, and run nothing else",
                       "--sha <reviewed_sha> --plan-doc <plan_doc>",
                       "Run each check unpiped", "`set -o pipefail`",
-                      "tests run and failed", "A test command that ran 0 tests is BLOCKING"):
+                      "tests run and failed", "including a test command that ran 0 tests, goes in BLOCKING"):
             self.assertIn(token, verifier)
 
     def test_verification_reviewer_runs_in_frozen_worktree_without_clone(self):
@@ -688,35 +690,37 @@ class SkillContractTests(unittest.TestCase):
             "git merge --squash",
             "git -C <worktree> diff <pre-fix HEAD>..HEAD",
             "VERIFICATION_UNAVAILABLE:", "autopilot:verification-reviewer",
-            "`verification=local` or `verification=ci`", "exit code", "<lens>#<n>",
+            "exit code", "<lens>#<n>",
             "autopilot-result", "converged", "capped-without-pass", "stopped",
             "oscillation", "unfixable", "requirements-conflict",
             "root-contradiction", "phase-failure", "destructive-op",
             "spawn_agent", "ci-verdict.py", "## Publish",
-            "git -C <worktree> push -u origin <branch> > <log> 2>&1; echo push=$?",
-            "gh pr create --draft", "gh pr ready <url>", '"pr": ""', "no planning skill", "### Task N",
+            
+            '"pr": ""', "no planning skill", "### Task N",
             "git -C <worktree> log --oneline <base_ref>..HEAD", "Notes", ".autopilot/",
             "Fix causes, not symptoms", "<slug>-plan.md",
             "or at `phase=done`, is an earlier run's", "set RESUME `phase=done` before the result block",
             "every lens passing means the phase converged: advance",
             "If HEAD moved, take safety stop 3",
-            "Until `pr=` is recorded, repeat the S1 lookup before each push",
-            "Push** at each S6 pin, and with `pr` also after each S5 task commit",
-            "push with `publish=pr` (Publish)", "never a local full-suite run",
-            "`ci`: otherwise, when that check succeeds and the resolver's `ci_workflows` is non-empty",
-            "with `ci`, set `publish=none`, log `decision(publish)`, and verify locally",
-            "With `ci`, leave the PR as it is", "`publish=` from S1",
+            
+            
+            "never a local full-suite run",
+            
+            
+            
+            
+            
             "`CONFLICT:` means merge the base and re-run the round (Publish)",
             "`git -C <worktree> merge origin/<base>` (never rebase)",
             "Set RESUME `base_ref` to `git -C <worktree> merge-base HEAD origin/<base>`",
-            "re-run the round whole at the same number", "safety stop 3 naming the conflicting files",
+            "re-run the round like an interrupted one", "**Targeted checks.**", "safety stop 3 naming the conflicting files",
             "**Real exit codes.**", "`set -o pipefail`", "`CI checks: [<names>]`",
             "`CI checks: []` if none runs them",
-            "`verification=ci` when the run publishes and the plan doc's `CI checks:` names a check, else `verification=local`",
+            
             "tests first, run red (each new test fails because the behavior is missing, not because the test is broken)",
             "red=<tests failing before the code, or none>", "tests=12, failures=0",
             "3 rounds",
-            "gh pr comment <url> --body-file <spec doc>", "Never post it twice",
+            
             "the run stays on it", "uncommitted changes there are the user's",
             "matched by RESUME `input_sha`",
             "never dirties the worktree", "**Review items.**",
@@ -736,22 +740,19 @@ class SkillContractTests(unittest.TestCase):
         for rel in paths:
             self.assertTrue(os.path.exists(os.path.join(refs, rel)), rel)
 
-    def test_publish_is_set_at_s1(self):
+    def test_publish_steps_go_through_pr_py(self):
         text = flat(skill_text("light-build"))
-        self.assertIn("`pr`: the requirement asks for a pull request. Needs `gh auth status --hostname <origin's host>` to succeed; else safety stop 3.", text)
-        self.assertIn("name it in the task-list header at S4", text)
-        self.assertIn("then create the plan doc at `plan_doc`", text)
-        self.assertIn("RESUME. Then set `publish` (Publish).", text)
-        self.assertIn("when publishing the PR a continued branch updates (Publish)", text)
-        self.assertLess(text.index("Then set `publish`"), text.index("## Task list (S4)"))
-
-    def test_reused_pr_goes_back_to_draft(self):
-        text = flat(skill_text("light-build"))
-        self.assertIn("gh pr ready --undo <url>", text)
-        self.assertLess(text.index("gh pr ready --undo <url>"), text.index("gh pr create --draft"))
-        self.assertIn("after any earlier run's", text)
-        self.assertIn("unless the PR body already holds it", text)
-        self.assertIn("A run that continues a branch updates that PR", text)
+        for token in ("`python3 <abs path of ../skills/build/scripts/pr.py>`",
+                      "RESUME. Then run `pr.py start` (Publish).",
+                      "run `pr.py push --task` (Publish)", "Run `pr.py push` (Publish).",
+                      "`pr.py spec --plan-doc <plan_doc> --spec-doc <spec doc>` at S4",
+                      "`pr.py finish --plan-doc <plan_doc> --report-file <file>`",
+                      "Run `pr.py status --plan-doc <plan_doc>`",
+                      "`verification=ci` when `pr.py` reports `publish` other than `none`",
+                      "exit 3 is safety stop 3 with that reason"):
+            self.assertIn(token, text)
+        self.assertNotIn("gh pr ", text)
+        self.assertLess(text.index("Then run `pr.py start`"), text.index("## Task list (S4)"))
 
     def test_plan_doc_names_never_collide(self):
         text = flat(skill_text("build"))
@@ -1077,8 +1078,11 @@ def commit_status(context, state, created="2999-01-01T00:00:00Z"):
 
 class CiVerdictTests(unittest.TestCase):
     def run_ci(self, frames, *extra, **scenario):
-        d = tempfile.mkdtemp()
+        d = self.last_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, d)
+        if "first_call" in scenario:
+            with open(os.path.join(d, "ci-%s.json" % SHA[:12]), "w") as fh:
+                json.dump({"sha": SHA, "first_call": scenario.pop("first_call")}, fh)
         bindir = os.path.join(d, "bin")
         os.mkdir(bindir)
         fake = os.path.join(bindir, "gh")
@@ -1230,10 +1234,10 @@ class CiVerdictTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 4, proc.stdout)
         self.assertEqual(state["reruns"], [])
 
-    def test_rerun_of_an_old_check_is_not_judged_by_its_age(self):
+    def test_rerun_of_an_old_check_keeps_waiting(self):
         old = {"check_runs": [check_run("unit", "cancelled", run=7,
                                         started="2000-01-01T00:00:00Z")]}
-        proc, state = self.run_ci([old, old], "--max-age", "60", "--wait", "0")
+        proc, state = self.run_ci([old, old], "--wait", "0")
         self.assertEqual(state["reruns"], ["7"])
         self.assertEqual(proc.returncode, 4, proc.stdout)
 
@@ -1277,12 +1281,24 @@ class CiVerdictTests(unittest.TestCase):
         proc, _ = self.run_ci([{"check_runs": [check_run("unit", "brand_new", status="completed")]}])
         self.assertEqual(proc.returncode, 3, proc.stdout)
 
-    def test_stuck_checks_give_up(self):
-        proc, _ = self.run_ci([{"check_runs": [check_run("unit", status="queued", run=7,
-                                                         started="2000-01-01T00:00:00Z")]}],
-                              "--max-age", "60")
-        self.assertEqual(proc.returncode, 3, proc.stdout)
-        self.assertIn("CI still running after 60", proc.stdout)
+    def test_queued_forever_hits_the_deadline_across_calls(self):
+        queued = [{"check_runs": [check_run("unit", status="queued", run=7, started=None)]}]
+        proc, _ = self.run_ci(queued)
+        self.assertEqual(proc.returncode, 4, proc.stdout)
+        with open(os.path.join(self.last_dir, "ci-%s.json" % SHA[:12])) as fh:
+            self.assertLess(abs(time.time() - json.load(fh)["first_call"]), 60)
+        proc, state = self.run_ci(queued, first_call=time.time() - 3601)
+        self.assertEqual(proc.returncode, 6, proc.stdout)
+        self.assertEqual(proc.stdout.strip(), "TIMEOUT: CI did not finish within 3600s: unit (queued)")
+        self.assertEqual(state["polls"], 1)
+
+    def test_deadline_covers_reruns_but_not_finished_ci(self):
+        cancelled = {"check_runs": [check_run("unit", "cancelled", run=7)]}
+        proc, _ = self.run_ci([cancelled, cancelled], first_call=time.time() - 3601)
+        self.assertEqual(proc.returncode, 6, proc.stdout)
+        proc, _ = self.run_ci([{"check_runs": [check_run("unit", "success", run=7)]}],
+                              first_call=time.time() - 3601)
+        self.assertEqual(proc.returncode, 0, proc.stdout)
 
     def test_gh_failure_means_no_ci(self):
         proc, _ = self.run_ci([{}], fail=True)
@@ -1298,6 +1314,220 @@ class CiVerdictTests(unittest.TestCase):
 
 REQ = "Add a `wordcount(text)` function to textkit; tokens made only of punctuation don't count."
 REQ_SLUG = "add-a-wordcount-text-function-to-textkit"
+
+
+FAKE_GH_PR = r"""#!/usr/bin/env python3
+import json, os, sys
+d = os.environ["FAKE_GH_DIR"]
+sp = os.path.join(d, "gh.json")
+st = json.load(open(sp)) if os.path.exists(sp) else {"prs": [], "calls": [], "comments": []}
+args = sys.argv[1:]
+st["calls"].append(args)
+def opt(flag):
+    return args[args.index(flag) + 1] if flag in args else None
+def done(out="", code=0):
+    json.dump(st, open(sp, "w"))
+    if out:
+        print(out)
+    sys.exit(code)
+def find(url):
+    return next(p for p in st["prs"] if p["url"] == url)
+if args[:2] == ["auth", "status"]:
+    done(code=0 if os.environ.get("FAKE_GH_AUTH", "1") == "1" else 1)
+if args[:2] == ["repo", "view"]:
+    done("main")
+if args[:2] == ["pr", "list"]:
+    done(json.dumps([{"url": p["url"], "isDraft": p["draft"]} for p in st["prs"] if p["head"] == opt("--head")]))
+if args[:2] == ["pr", "create"]:
+    url = "https://github.com/o/r/pull/%d" % (len(st["prs"]) + 1)
+    st["prs"].append({"url": url, "head": opt("--head"), "base": opt("--base"), "draft": "--draft" in args,
+                      "title": opt("--title"), "body": open(opt("--body-file")).read()})
+    done(url)
+if args[:2] == ["pr", "ready"]:
+    find(args[-1])["draft"] = "--undo" in args
+    done()
+if args[:2] == ["pr", "view"]:
+    done(json.dumps({"body": find(args[2])["body"]}))
+if args[:2] == ["pr", "edit"]:
+    find(args[2])["body"] = open(opt("--body-file")).read()
+    done()
+if args[:2] == ["pr", "comment"]:
+    st["comments"].append([args[2], open(opt("--body-file")).read()])
+    done()
+done("fake gh: unsupported " + " ".join(args), 1)
+"""
+
+
+class PrScriptTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        os.mkdir(os.path.join(self.tmp, "bin"))
+        with open(os.path.join(self.tmp, "bin", "gh"), "w") as fh:
+            fh.write(FAKE_GH_PR)
+        os.chmod(os.path.join(self.tmp, "bin", "gh"), 0o755)
+        self.origin = os.path.join(self.tmp, "origin.git")
+        self.git(self.tmp, "init", "-q", "--bare", self.origin)
+        self.repo = os.path.join(self.tmp, "repo")
+        self.git(self.tmp, "init", "-q", "-b", "feat", self.repo)
+        self.git(self.repo, "config", "url.%s.insteadOf" % self.origin, "https://github.com/o/r.git")
+        self.git(self.repo, "remote", "add", "origin", "https://github.com/o/r.git")
+        self.commit("base")
+        os.makedirs(os.path.join(self.repo, ".autopilot"))
+        self.plan = os.path.join(self.repo, ".autopilot", "wc-plan.md")
+        self.body = os.path.join(self.tmp, "body.md")
+        with open(self.body, "w") as fh:
+            fh.write("# Add wordcount\n\nCounts words.\n")
+
+    def git(self, cwd, *args):
+        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-C", cwd, *args],
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    def commit(self, msg, workflow=None):
+        if workflow:
+            wf = os.path.join(self.repo, ".github", "workflows")
+            os.makedirs(wf, exist_ok=True)
+            with open(os.path.join(wf, "ci.yml"), "w") as fh:
+                fh.write(workflow)
+            self.git(self.repo, "add", "-A")
+        self.git(self.repo, "commit", "-q", "--allow-empty", "-m", msg)
+
+    def pr(self, *args, auth=True):
+        env = dict(os.environ, PATH=os.path.join(self.tmp, "bin") + os.pathsep + os.environ["PATH"],
+                   FAKE_GH_DIR=self.tmp, FAKE_GH_AUTH="1" if auth else "0")
+        proc = subprocess.run([sys.executable, PR_SCRIPT, args[0], "--plan-doc", self.plan, *args[1:]],
+                              capture_output=True, text=True, env=env)
+        return proc.returncode, json.loads(proc.stdout) if proc.stdout.strip() else proc.stderr
+
+    def start(self, *extra, auth=True):
+        return self.pr("start", "--worktree", self.repo, "--body-file", self.body, *extra, auth=auth)
+
+    def gh_state(self):
+        with open(os.path.join(self.tmp, "gh.json")) as fh:
+            return json.load(fh)
+
+    def pushed(self):
+        return subprocess.run(["git", "-C", self.origin, "rev-parse", "--verify", "-q", "refs/heads/feat"],
+                              capture_output=True, text=True).stdout.strip()
+
+    def test_publish_follows_the_ask_ci_and_auth(self):
+        self.assertEqual(self.start()[1]["publish"], "none")
+        self.commit("ci", workflow="on: [push, pull_request]\n")
+        self.assertEqual(self.start(auth=False)[1]["publish"], "none")
+        self.assertEqual(self.start()[1]["publish"], "ci")
+        self.assertEqual(self.start("--requested")[1]["publish"], "pr")
+        code, out = self.start("--requested", auth=False)
+        self.assertEqual(code, 3)
+        self.assertIn("not authenticated", out["reason"])
+
+    def test_pull_request_triggers_are_detected_from_head(self):
+        forms = {"on: [push, pull_request]\n": "ci", "on:\n  pull_request:\n    branches: [main]\n": "ci",
+                 "on:\n  - push\n  - pull_request\n": "ci", "'on': pull_request_target\n": "ci",
+                 "on:\n  push:\njobs:\n  a:\n    if: github.event_name == 'pull_request'\n": "none",
+                 "on: [pull_request_review]\n": "none"}
+        for text, want in forms.items():
+            with self.subTest(text=text):
+                self.commit("wf", workflow=text)
+                self.assertEqual(self.start()[1]["publish"], want)
+
+    def test_ci_pushes_at_pins_only_and_opens_one_draft(self):
+        self.commit("ci", workflow="on: pull_request\n")
+        self.start()
+        self.commit("task 1")
+        self.assertEqual(self.pr("push", "--task")[1]["pr"], "")
+        self.assertEqual(self.pushed(), "")
+        code, out = self.pr("push")
+        self.assertEqual((code, out["pr"]), (0, "https://github.com/o/r/pull/1"))
+        self.assertEqual(self.pushed(), self.git(self.repo, "rev-parse", "HEAD"))
+        self.pr("push")
+        prs = self.gh_state()["prs"]
+        self.assertEqual(len(prs), 1)
+        self.assertEqual((prs[0]["title"], prs[0]["body"], prs[0]["draft"], prs[0]["base"]),
+                         ("Add wordcount", "Counts words.", True, "main"))
+        self.pr("finish", "--report-file", self.body)
+        self.assertEqual((self.gh_state()["prs"][0]["draft"], self.gh_state()["prs"][0]["body"]), (True, "Counts words."))
+
+    def test_pr_pushes_each_task_and_posts_the_spec_once(self):
+        spec = os.path.join(self.repo, ".autopilot", "wc-spec.md")
+        with open(spec, "w") as fh:
+            fh.write("# Spec\n")
+        self.start("--requested", "--base", "release/2")
+        self.pr("spec", "--spec-doc", spec)
+        self.assertEqual(self.gh_state()["comments"], [])
+        self.commit("task 1")
+        self.pr("push", "--task")
+        self.pr("push", "--task")
+        self.pr("spec", "--spec-doc", spec)
+        st = self.gh_state()
+        self.assertEqual(st["comments"], [["https://github.com/o/r/pull/1", "# Spec\n"]])
+        self.assertEqual(st["prs"][0]["base"], "release/2")
+        self.assertEqual(self.pushed(), self.git(self.repo, "rev-parse", "HEAD"))
+
+    def test_unsafe_base_stops(self):
+        code, out = self.start("--requested", "--base", "main; rm -rf ~")
+        self.assertEqual(code, 3)
+        self.assertIn("base", out["reason"])
+
+    def test_refused_push_stops_pr_and_drops_ci_to_local(self):
+        hook = os.path.join(self.origin, "hooks", "pre-receive")
+        with open(hook, "w") as fh:
+            fh.write("#!/bin/sh\necho denied >&2\nexit 1\n")
+        os.chmod(hook, 0o755)
+        self.commit("ci", workflow="on: pull_request\n")
+        self.start()
+        code, out = self.pr("push")
+        self.assertEqual((code, out["publish"], out["pr"]), (0, "none", ""))
+        self.assertIn("push refused", out["reason"])
+        self.assertEqual(self.pr("status")[1]["publish"], "none")
+        self.start("--requested")
+        code, out = self.pr("push")
+        self.assertEqual(code, 3)
+        self.assertIn("push refused", out["reason"])
+
+    def test_a_ready_pr_is_drafted_and_restored_only_where_it_was_drafted(self):
+        self.commit("ci", workflow="on: pull_request\n")
+        with open(os.path.join(self.tmp, "gh.json"), "w") as fh:
+            json.dump({"prs": [{"url": "https://github.com/o/r/pull/9", "head": "feat", "base": "main",
+                                "draft": False, "title": "mine", "body": "Mine."}], "calls": [], "comments": []}, fh)
+        report = os.path.join(self.tmp, "report.md")
+        with open(report, "w") as fh:
+            fh.write("All lenses passed.\n")
+        out = self.start()[1]
+        self.assertEqual((out["pr"], out["drafted"], self.gh_state()["prs"][0]["draft"]),
+                         ("https://github.com/o/r/pull/9", True, True))
+        self.pr("finish", "--report-file", report)
+        pr = self.gh_state()["prs"][0]
+        self.assertEqual((pr["draft"], pr["body"]), (False, "Mine."))
+        self.pr("finish", "--report-file", report)
+        self.assertEqual(sum(c[:2] == ["pr", "ready"] and "--undo" not in c for c in self.gh_state()["calls"]), 1)
+
+    def test_pr_finish_appends_the_report_once_and_marks_ready(self):
+        report = os.path.join(self.tmp, "report.md")
+        with open(report, "w") as fh:
+            fh.write("All lenses passed.\n")
+        self.start("--requested")
+        self.pr("push")
+        self.pr("finish", "--report-file", report)
+        self.pr("finish", "--report-file", report)
+        pr = self.gh_state()["prs"][0]
+        head = self.git(self.repo, "rev-parse", "HEAD")
+        self.assertFalse(pr["draft"])
+        self.assertEqual(pr["body"].count("<!-- autopilot-report %s -->" % head), 1)
+        self.assertTrue(pr["body"].startswith("Counts words."))
+        self.assertTrue(pr["body"].rstrip().endswith("All lenses passed."))
+
+    def test_none_touches_nothing(self):
+        self.start()
+        self.commit("task")
+        for args in (("push",), ("push", "--task"), ("finish", "--report-file", self.body)):
+            self.assertEqual(self.pr(*args)[0], 0)
+        self.assertEqual(self.pushed(), "")
+        self.assertEqual([c[:2] for c in self.gh_state()["calls"]], [["auth", "status"]])
+
+    def test_commands_before_start_stop(self):
+        code, out = self.pr("push")
+        self.assertEqual(code, 3)
+        self.assertIn("run start first", out["reason"])
 
 
 class ResolveBranchTests(unittest.TestCase):
@@ -1339,28 +1569,6 @@ class ResolveBranchTests(unittest.TestCase):
                      "\n## Notes\n\nRESUME: phase=S1 input_sha=quoted-in-a-note\n"
                      % (phase, worktree, branch, out["input_sha"], input_text))
         return out["input_sha"]
-
-    def test_ci_workflows_lists_committed_pull_request_triggers(self):
-        self.assertEqual(self.resolve()["ci_workflows"], [])
-        wf = os.path.join(self.repo, ".github", "workflows")
-        os.makedirs(wf)
-        for name, text in {
-                "inline.yml": "on: [push, pull_request]\njobs: {}\n",
-                "block.yml": "name: ci\non:\n  pull_request:\n    branches: [main]\n",
-                "list.yaml": "on:\n  - push\n  - pull_request\n",
-                "target.yml": "'on': pull_request_target\n",
-                "push.yml": "on:\n  push:\n    branches: [main]\njobs:\n  a:\n    if: github.event_name == 'pull_request'\n",
-                "review.yml": "on: [pull_request_review]\n",
-                "notes.txt": "on: pull_request\n"}.items():
-            with open(os.path.join(wf, name), "w") as fh:
-                fh.write(text)
-        self.git(self.repo, "add", "-A")
-        self.git(self.repo, "commit", "-q", "-m", "ci")
-        with open(os.path.join(wf, "later.yml"), "w") as fh:
-            fh.write("on: pull_request\n")
-        self.assertEqual(self.resolve()["ci_workflows"], [
-            ".github/workflows/block.yml", ".github/workflows/inline.yml",
-            ".github/workflows/list.yaml", ".github/workflows/target.yml"])
 
     def test_default_branch_creates_a_worktree_at_head(self):
         out = self.resolve()
