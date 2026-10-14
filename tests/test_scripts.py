@@ -695,32 +695,22 @@ class SkillContractTests(unittest.TestCase):
             "oscillation", "unfixable", "requirements-conflict",
             "root-contradiction", "phase-failure", "destructive-op",
             "spawn_agent", "ci-verdict.py", "## Publish",
-            
             '"pr": ""', "no planning skill", "### Task N",
             "git -C <worktree> log --oneline <base_ref>..HEAD", "Notes", ".autopilot/",
             "Fix causes, not symptoms", "<slug>-plan.md",
             "or at `phase=done`, is an earlier run's", "set RESUME `phase=done` before the result block",
             "every lens passing means the phase converged: advance",
             "If HEAD moved, take safety stop 3",
-            
-            
             "never a local full-suite run",
-            
-            
-            
-            
-            
             "`CONFLICT:` means merge the base and re-run the round (Publish)",
             "`git -C <worktree> merge origin/<base>` (never rebase)",
             "Set RESUME `base_ref` to `git -C <worktree> merge-base HEAD origin/<base>`",
             "re-run the round like an interrupted one", "**Targeted checks.**", "safety stop 3 naming the conflicting files",
             "**Real exit codes.**", "`set -o pipefail`", "`CI checks: [<names>]`",
             "`CI checks: []` if none runs them",
-            
             "tests first, run red (each new test fails because the behavior is missing, not because the test is broken)",
             "red=<tests failing before the code, or none>", "tests=12, failures=0",
             "3 rounds",
-            
             "the run stays on it", "uncommitted changes there are the user's",
             "matched by RESUME `input_sha`",
             "never dirties the worktree", "**Review items.**",
