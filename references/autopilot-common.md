@@ -260,7 +260,8 @@ Run each round in these steps:
    empty. If the only dirty paths are ones the verifier reports as leaked, judge normally;
    the fix removes them. If HEAD moved, take safety stop 3 and list the new commits.
 7. **Check the verifier.** Read its raw BLOCKING items before adding item IDs.
-   `VERIFICATION_UNAVAILABLE:` (after its one retry) triggers safety stop 3.
+   `VERIFICATION_UNAVAILABLE:` (after its one retry) triggers safety stop 3. `CONFLICT:`
+   means merge the base and re-run the round (Publish).
 8. **Label items.** Before deduping for the fix, give every BLOCKING and NON-BLOCKING
    item an ID `<lens>#<n>`, numbered per lens across the phase and never reused. A
    repeated open item keeps its ID (the reviewer prefixes it). Number only new items.
@@ -317,6 +318,14 @@ publishes its branch as a draft PR.
   quote-free title. A base the requirement names must match `[A-Za-z0-9._/-]+`; otherwise
   take safety stop 3. `<base>` is the branch the requirement names, else the repo's default
   branch. Record `pr=<url>` in RESUME.
+- **Conflicts.** A verifier `CONFLICT:` item means the PR conflicts with its base, so CI
+  will not run. With `<base>` from that line: `git -C <worktree> fetch origin <base>`,
+  `git -C <worktree> merge origin/<base>` (never rebase), resolve, run the checks covering
+  the resolved files, commit. Set RESUME `base_ref` to
+  `git -C <worktree> merge-base HEAD origin/<base>`, so reviewers see only this run's
+  changes. Push, re-pin, and re-run the round whole at the same number, like an
+  interrupted one. Unresolvable: `git -C <worktree> merge --abort`, then safety stop 3
+  naming the conflicting files.
 - **Spec** (build, `pr`). Post the spec doc as one PR comment
   (`gh pr comment <url> --body-file <spec doc>`) at S4 if `pr=` is recorded, else right
   after it is recorded, and log `spec posted`. Never post it twice.

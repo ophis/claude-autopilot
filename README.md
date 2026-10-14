@@ -119,7 +119,9 @@ other reviewers read it. Ask for a pull request in the requirement (e.g. `… an
 PR`) and it also pushes each task commit as it lands, build posts the reviewed spec as a
 comment, and on convergence the PR body gets the final report and the PR is marked ready.
 Without the ask, the PR stays a draft for you or your caller to adopt. A CI failure enters
-the same fix loop as any blocker. With no CI, or a refused push, the checks run locally.
+the same fix loop as any blocker. A PR that conflicts with its base gets no CI, so the run
+merges the base in (never rebases) and re-runs the round. With no CI, or a refused push,
+the checks run locally.
 
 At a genuine decision point it convenes a small **expert council** (ad-hoc sub-agents)
 to deliberate, then decides and records — it does not ask you. It stops only to hand off on a

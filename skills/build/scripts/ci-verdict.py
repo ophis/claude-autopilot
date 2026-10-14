@@ -4,7 +4,8 @@
 Run from the repo (or pass --worktree); `gh` must be authenticated. PASS needs each check
 named by the plan doc's `CI checks:` (JSON array of names or globs) to succeed. Exit codes:
 0 PASS and 1 FAIL (the verdict is on stdout), 4 checks still running (call again),
-3 no usable CI result (run the local checks instead; the reason is on stdout).
+3 no usable CI result (run the local checks instead; the reason is on stdout),
+5 the branch's PR conflicts with its base, so GitHub runs no pull_request CI (merge the base).
 """
 
 import argparse
@@ -29,6 +30,10 @@ ACTIONS_URL = re.compile(r"/actions/runs/(\d+)(?:/job/(\d+))?")
 
 
 class NoCI(Exception):
+    pass
+
+
+class Conflict(Exception):
     pass
 
 
@@ -169,9 +174,25 @@ def settle(checks, args):
     return 0
 
 
+def check_mergeable(args, deadline):
+    """Raise Conflict when the branch's PR conflicts with its base; GitHub computes
+    `mergeable` lazily, so retry UNKNOWN until the deadline. No PR: nothing to check."""
+    while True:
+        try:
+            pr = json.loads(gh(["pr", "view", "--json", "url,baseRefName,mergeable"], args.worktree))
+        except (NoCI, ValueError):
+            return
+        if pr.get("mergeable") == "CONFLICTING":
+            raise Conflict("%s conflicts with %s; CI will not run" % (pr.get("url"), pr.get("baseRefName")))
+        if pr.get("mergeable") != "UNKNOWN" or time.monotonic() >= deadline:
+            return
+        time.sleep(args.interval)
+
+
 def verdict(args):
     now = time.monotonic()
     deadline, appear_deadline = now + args.wait, now + args.appear
+    check_mergeable(args, min(deadline, appear_deadline))
     finished = None
     while True:
         checks = fetch_checks(args.sha, args.worktree)
@@ -215,6 +236,9 @@ def main():
     try:
         args.required = required_checks(args.plan_doc)
         return verdict(args)
+    except Conflict as exc:
+        print("CONFLICT: %s" % exc)
+        return 5
     except NoCI as exc:
         print("NO_CI: %s" % exc)
     except Exception as exc:  # exit 1 must only ever mean a real CI failure

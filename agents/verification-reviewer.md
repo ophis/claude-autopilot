@@ -38,10 +38,10 @@ refs, and you verify the same fixed revision the other reviewers inspect.
   (PASS needs the plan doc's `CI checks:` green) with a 10-minute tool
   timeout (Bash `timeout: 600000`). Exit 4 means checks are still running: run it again.
   On exit 0 or 1, return its verdict and run nothing else, with the re-review lines below
-  on a re-review. Any
-  other exit means CI gave no usable
-  result: run the complete checks below instead, and make the script's message your
-  first NON-BLOCKING item.
+  on a re-review. On exit 5 (the PR conflicts with its base, so CI will not run), emit
+  `VERDICT: FAIL` with the script's `CONFLICT:` line as the only BLOCKING item, and run
+  nothing else. Any other exit means CI gave no usable result: run the complete checks
+  below instead, and make the script's message your first NON-BLOCKING item.
 - **Complete checks.** Run the documented verification command from the plan doc, plus
   any checks the repo's `CLAUDE.md`, README or CI require. With no documented command,
   derive the full checks from the build and test manifests. Never weaken, skip or replace

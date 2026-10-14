@@ -393,6 +393,7 @@ class LintRosterTests(unittest.TestCase):
         for token in ("**CI mode.**", "`verification=ci`", "<ci_script>",
                       "Exit 4 means checks are still running", "first NON-BLOCKING item",
                       "return its verdict and run nothing else, with the re-review lines below on a re-review",
+                      "On exit 5 (the PR conflicts with its base, so CI will not run), emit `VERDICT: FAIL` with the script's `CONFLICT:` line as the only BLOCKING item",
                       "--sha <reviewed_sha> --plan-doc <plan_doc>",
                       "Run each check unpiped", "`set -o pipefail`",
                       "tests run and failed", "A test command that ran 0 tests is BLOCKING"):
@@ -705,6 +706,10 @@ class SkillContractTests(unittest.TestCase):
             "`ci`: otherwise, when that check succeeds and the resolver's `ci_workflows` is non-empty",
             "with `ci`, set `publish=none`, log `decision(publish)`, and verify locally",
             "With `ci`, leave the PR as it is", "`publish=` from S1",
+            "`CONFLICT:` means merge the base and re-run the round (Publish)",
+            "`git -C <worktree> merge origin/<base>` (never rebase)",
+            "Set RESUME `base_ref` to `git -C <worktree> merge-base HEAD origin/<base>`",
+            "re-run the round whole at the same number", "safety stop 3 naming the conflicting files",
             "**Real exit codes.**", "`set -o pipefail`", "`CI checks: [<names>]`",
             "`CI checks: []` if none runs them",
             "`verification=ci` when the run publishes and the plan doc's `CI checks:` names a check, else `verification=local`",
@@ -1028,6 +1033,15 @@ if sc.get("garbage"):
 if args[:2] == ["run", "rerun"]:
     st["reruns"].append(args[2])
     done()
+if args[:2] == ["pr", "view"]:
+    if sc.get("no_pr"):
+        print("no pull requests found for branch", file=sys.stderr)
+        done(1)
+    seq = sc.get("mergeable", ["MERGEABLE"])
+    st["views"] = st.get("views", 0) + 1
+    print(json.dumps({"url": "https://github.com/o/r/pull/7", "baseRefName": "main",
+                      "mergeable": seq[min(st["views"] - 1, len(seq) - 1)]}))
+    done()
 path = next(a for a in args if a.startswith("repos/"))
 frames = sc["frames"]
 if "/check-runs" in path:
@@ -1129,6 +1143,22 @@ class CiVerdictTests(unittest.TestCase):
                                                 [check_run("b", "failure", run=2)]]}])
         self.assertEqual(proc.returncode, 1, proc.stdout)
         self.assertIn('CI "b" failure', proc.stdout)
+
+    def test_conflicting_pr_exits_5_without_polling(self):
+        green = [{"check_runs": [check_run("unit", "success", run=7)]}]
+        proc, state = self.run_ci(green, "--appear", "5", "--wait", "5", mergeable=["UNKNOWN", "CONFLICTING"])
+        self.assertEqual(proc.returncode, 5, proc.stdout)
+        self.assertEqual(proc.stdout.strip(),
+                         "CONFLICT: https://github.com/o/r/pull/7 conflicts with main; CI will not run")
+        self.assertEqual((state["views"], state["polls"]), (2, 0))
+
+    def test_mergeable_or_no_pr_goes_on_to_poll(self):
+        green = [{"check_runs": [check_run("unit", "success", run=7)]}]
+        for scenario in ({"mergeable": ["UNKNOWN", "MERGEABLE"]}, {"mergeable": ["UNKNOWN"]}, {"no_pr": True}):
+            with self.subTest(**scenario):
+                proc, state = self.run_ci(green, **scenario)
+                self.assertEqual(proc.returncode, 0, proc.stdout)
+                self.assertEqual(state["polls"], 2)
 
     def test_no_checks_means_no_ci(self):
         proc, _ = self.run_ci([{}])
