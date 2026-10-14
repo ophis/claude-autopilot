@@ -9,7 +9,7 @@
     {
       "name": "autopilot",
       "description": "Autonomous end-to-end feature pipeline driven by named expert review teams and Ralph convergence loops.",
-      "version": "1.3.2",
+      "version": "1.4.1",
       "source": "./",
       "author": {
         "name": "Yinze Wang",

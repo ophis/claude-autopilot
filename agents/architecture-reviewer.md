@@ -43,6 +43,12 @@ produces.
   empty list returns" beats "needs more detail".
 - **Blockers are defects.** Apply your lens's blocker rule; preferences go in
   NON-BLOCKING or nowhere.
+- **Report only real findings.** Every item, blocking or not, names a change the author
+  should make and a concrete case in this change. Leave out notes that something is
+  acceptable or fine, run logs that support no finding (a command and its result go
+  inside the finding they support), and minor points another lens owns. A point you
+  cannot show with a concrete case in this change is not a finding. `NON-BLOCKING: none`
+  is the expected result for good work.
 
 ## Architecture checklist
 
@@ -57,6 +63,12 @@ coupling that blocks the likely next change. Taste goes in NON-BLOCKING.
   abstraction with one implementation.
 - **Interfaces.** Contracts between components are explicit, minimal and hard to
   misuse; state ownership and failure modes are part of them.
+- **Validation at the edge.** Validation and error handling sit at system boundaries
+  (CLI, config, network, external APIs); internal code trusts its types instead of
+  re-checking.
+- **No legacy paths.** Unless the requirement or an external user needs the old path, a
+  replaced API has its callers migrated and the old one deleted in the same change, with
+  no compatibility shim.
 
 Name the concrete change that the structure would make hard.
 

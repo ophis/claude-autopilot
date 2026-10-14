@@ -52,7 +52,9 @@ Create or reuse the worktree (common: Worktree (S1)). Hold `worktree`, `branch` 
 ### S4. Task list
 
 Write the task list per common: Task list (S4). S4 always creates the plan doc. A small
-change is one task. Put the full verify command above RESUME.
+change is one task. When the change adds or reshapes state, the header also names the
+data shape: the types or records and the structure that holds them, kept plain when it is
+clear and local. Put the full verify command above RESUME.
 
 ### S5. Produce
 

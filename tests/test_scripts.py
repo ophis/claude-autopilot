@@ -640,6 +640,7 @@ class SkillContractTests(unittest.TestCase):
             ".claude/worktrees/<prefix>-<slug>", "no CI running its full checks",
             "local verification", "no planning skill", "### Task N",
             "git -C <worktree> log --oneline <base_ref>..HEAD", "Notes", ".autopilot/",
+            "Fix causes, not symptoms",
         )
         for skill in self.SKILL_STEPS:
             text = flat(skill_text(skill))
@@ -700,6 +701,7 @@ class SkillContractTests(unittest.TestCase):
             text = fh.read()
         self.assertIn("RESUME: phase=<S[14-8]>", text)
         self.assertIn("## Forks", text)
+        self.assertIn("data shape", text)
         self.assertIn("above RESUME", text)
         self.assertIn("after a PASS", flat(text))
         for lens in ("correctness", "requirement-fidelity", "doc"):
@@ -886,6 +888,7 @@ class CheckSpecTests(unittest.TestCase):
         with open(os.path.join(SKILLS, "build", "spec.md"), encoding="utf-8") as fh:
             guide = fh.read()
         self.assertIn("scripts/check-spec.py", guide)
+        self.assertIn("data shape", guide)
         for name in ("Goal", "Scope", "Acceptance criteria", "Design", "Verification", "Decisions"):
             self.assertIn(f"## {name}", guide)
 

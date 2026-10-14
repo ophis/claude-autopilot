@@ -113,6 +113,7 @@ goes. S3 uses the S6 shapes.
 - Task done: `S5 task 3 done: <commit sha>`.
 - Review round, with the verdict roll-up and one gist per blocker: `S6 r1 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fixing`.
 - Decision, council or solo: `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
+- Deferred pattern match outside the change: `deferred(<pattern>): <file:line>`.
 - At the end: the residual NON-BLOCKING items.
 
 The blocker gists prime re-reviews. The log line holds only the gist; the full BLOCKING
@@ -255,6 +256,12 @@ advance. At the cap without a pass, take safety stop 2.
 - Record HEAD before each fix; the re-review diff starts there.
 - Fix all deduped open blockers yourself in one pass, from their full text, their item
   IDs and the files they cite.
+- Fix causes, not symptoms. Reproduce each blocker first (run its case where one exists,
+  else trace it) and fix it where it originates. Fix the same pattern within the change's
+  scope; log matches outside it as `deferred` lines for the S8 report. A guard that
+  silences a symptom is not a fix.
+- If an item stays OPEN after a fix, write down what that fix assumed and check the
+  assumption before the next fix depends on it.
 - Run only the checks covering the files you changed, and commit all product changes
   before the re-review. The re-review then pins the new revision.
 - Docs are fixed here. There is no separate doc phase.
@@ -268,7 +275,7 @@ advance. At the cap without a pass, take safety stop 2.
   trees differ, return to S6.
 - **S8.** Report inline, with no skill: the review history, the final verification
   evidence (the verifier's from the run note, else the freeze's `CI` or `none`), the
-  decisions, and the deferred non-blockers. On a stop, lead with the stop reason. List
+  decisions, and the deferred non-blockers and `deferred` lines. On a stop, lead with the stop reason. List
   the integration options as an informational menu, not a question.
 
 ## Safety stops

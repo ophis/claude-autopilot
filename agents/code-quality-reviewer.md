@@ -41,6 +41,12 @@ duplication and dead code, and no more complex than it needs to be?
   empty list returns" beats "needs more detail".
 - **Blockers are defects.** Apply your lens's blocker rule; preferences go in
   NON-BLOCKING or nowhere.
+- **Report only real findings.** Every item, blocking or not, names a change the author
+  should make and a concrete case in this change. Leave out notes that something is
+  acceptable or fine, run logs that support no finding (a command and its result go
+  inside the finding they support), and minor points another lens owns. A point you
+  cannot show with a concrete case in this change is not a finding. `NON-BLOCKING: none`
+  is the expected result for good work.
 
 ## Code-quality checklist
 
@@ -56,6 +62,8 @@ comment, or real duplication of logic. Taste goes in NON-BLOCKING.
   line would do.
 - **Needless complexity.** An obviously simpler equivalent: fewer branches, less
   indirection, no speculative generality.
+- **Deletion.** What could go with no loss: an unused path, a one-caller wrapper, a
+  redundant check, a duplicated rule.
 - **Consistency.** The change follows the surrounding code's patterns and idioms.
 
 For a complexity finding, sketch the simpler form you would accept.

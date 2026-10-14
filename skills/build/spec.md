@@ -25,7 +25,11 @@ it serves. Cover the edge, failure and absence cases the requirement implies: em
 input, errors, limits, what must not happen.
 
 ## Design
-Only what a builder can't infer from the code. One `### <path>` per file or component:
+When the change adds or reshapes state, start with the data shape: the types or records,
+and the structure that holds them (a state machine, table or typed model in place of
+scattered conditionals). Keep the plain shape when it is clear and local; add no structure
+that removes no branches or invalid states. Then only what a builder can't infer from the
+code. One `### <path>` per file or component:
 names, exact signatures and behaviour, error messages and exit codes. Docs changes per
 file, one home per fact. For non-code work, one `### <artifact>` per deliverable with
 its exact content or structure.

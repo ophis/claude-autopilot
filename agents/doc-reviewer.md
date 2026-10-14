@@ -43,6 +43,12 @@ repo-wide doc audit.
   empty list returns" beats "needs more detail".
 - **Blockers are defects.** Apply your lens's blocker rule; preferences go in
   NON-BLOCKING or nowhere.
+- **Report only real findings.** Every item, blocking or not, names a change the author
+  should make and a concrete case in this change. Leave out notes that something is
+  acceptable or fine, run logs that support no finding (a command and its result go
+  inside the finding they support), and minor points another lens owns. A point you
+  cannot show with a concrete case in this change is not a finding. `NON-BLOCKING: none`
+  is the expected result for good work.
 
 ## Documentation review
 
@@ -84,15 +90,14 @@ behavior that needs docs has them. Flag bloat, redundancy and padding in the edi
   repo-root README.
 - **No package markers:** use the longest common path prefix of the changed files as the
   root.
-- Report the scope reviewed (packages anchored, docs inspected) in NON-BLOCKING.
 
 ### 4. Severity
 
 - An untouched-doc blocker cites the doc `file:line`, the quoted claim, the
   contradicting hunk, and the type: removed, renamed, changed-signature or
   changed-default.
-- NON-BLOCKING: coincidental keyword matches; a doc that only mentions an old name; new
-  code without docs; concision unless egregious; the scope report.
+- NON-BLOCKING: a doc that only mentions an old name; new code without docs; concision
+  unless egregious. Drop coincidental keyword matches.
 - Prefer precision over recall. Grep misses paraphrased docs that never name the symbol;
   accept that miss.
 
