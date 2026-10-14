@@ -392,7 +392,10 @@ class LintRosterTests(unittest.TestCase):
             verifier = flat(fh.read())
         for token in ("**CI mode.**", "`verification=ci`", "<ci_script>",
                       "Exit 4 means checks are still running", "first NON-BLOCKING item",
-                      "with the re-review lines below on a re-review"):
+                      "return its verdict and run nothing else, with the re-review lines below on a re-review",
+                      "--sha <reviewed_sha> --plan-doc <plan_doc>",
+                      "Run each check unpiped", "`set -o pipefail`",
+                      "tests run and failed", "A test command that ran 0 tests is BLOCKING"):
             self.assertIn(token, verifier)
 
     def test_verification_reviewer_runs_in_frozen_worktree_without_clone(self):
@@ -688,9 +691,8 @@ class SkillContractTests(unittest.TestCase):
             "autopilot-result", "converged", "capped-without-pass", "stopped",
             "oscillation", "unfixable", "requirements-conflict",
             "root-contradiction", "phase-failure", "destructive-op",
-            "spawn_agent", "ci-verdict.py", "PR mode",
-            "`verification=ci` in PR mode, else `verification=local`",
-            "git -C <worktree> push -u origin <branch>",
+            "spawn_agent", "ci-verdict.py", "## Publish",
+            "git -C <worktree> push -u origin <branch> > <log> 2>&1; echo push=$?",
             "gh pr create --draft", "gh pr ready <url>", '"pr": ""', "no planning skill", "### Task N",
             "git -C <worktree> log --oneline <base_ref>..HEAD", "Notes", ".autopilot/",
             "Fix causes, not symptoms", "<slug>-plan.md",
@@ -698,7 +700,17 @@ class SkillContractTests(unittest.TestCase):
             "every lens passing means the phase converged: advance",
             "If HEAD moved, take safety stop 3",
             "Until `pr=` is recorded, repeat the S1 lookup before each push",
-            "Push** after each S5 task commit and at each S6 pin", "push in PR mode (PR mode)",
+            "Push** at each S6 pin, and with `pr` also after each S5 task commit",
+            "push with `publish=pr` (Publish)", "never a local full-suite run",
+            "`ci`: otherwise, when that check succeeds and the resolver's `ci_workflows` is non-empty",
+            "with `ci`, set `publish=none`, log `decision(publish)`, and verify locally",
+            "With `ci`, leave the PR as it is", "`publish=` from S1",
+            "**Real exit codes.**", "`set -o pipefail`", "`CI checks: [<names>]`",
+            "`CI checks: []` if none runs them",
+            "`verification=ci` when the run publishes and the plan doc's `CI checks:` names a check, else `verification=local`",
+            "tests first, run red (each new test fails because the behavior is missing, not because the test is broken)",
+            "red=<tests failing before the code, or none>", "tests=12, failures=0",
+            "3 rounds",
             "gh pr comment <url> --body-file <spec doc>", "Never post it twice",
             "the run stays on it", "uncommitted changes there are the user's",
             "matched by RESUME `input_sha`",
@@ -719,13 +731,14 @@ class SkillContractTests(unittest.TestCase):
         for rel in paths:
             self.assertTrue(os.path.exists(os.path.join(refs, rel)), rel)
 
-    def test_pr_mode_is_checked_at_s1(self):
+    def test_publish_is_set_at_s1(self):
         text = flat(skill_text("light-build"))
-        self.assertIn("**Check at S1.** It needs an authenticated `gh` and a GitHub `origin`", text)
+        self.assertIn("`pr`: the requirement asks for a pull request. Needs `gh auth status --hostname <origin's host>` to succeed; else safety stop 3.", text)
         self.assertIn("name it in the task-list header at S4", text)
         self.assertIn("then create the plan doc at `plan_doc`", text)
-        self.assertIn("In PR mode, run its S1 check (PR mode).", text)
-        self.assertIn("in PR mode the PR a continued branch updates (PR mode)", text)
+        self.assertIn("RESUME. Then set `publish` (Publish).", text)
+        self.assertIn("when publishing the PR a continued branch updates (Publish)", text)
+        self.assertLess(text.index("Then set `publish`"), text.index("## Task list (S4)"))
 
     def test_reused_pr_goes_back_to_draft(self):
         text = flat(skill_text("light-build"))
@@ -1058,12 +1071,15 @@ class CiVerdictTests(unittest.TestCase):
         with open(fake, "w") as fh:
             fh.write(FAKE_GH)
         os.chmod(fake, 0o755)
+        plan_doc = os.path.join(d, "plan.md")
+        with open(plan_doc, "w") as fh:
+            fh.write(scenario.pop("plan", "Verify: make test\nCI checks: %s\n" % json.dumps(scenario.pop("required", ["*"]))))
         with open(os.path.join(d, "scenario.json"), "w") as fh:
             json.dump(dict(scenario, frames=frames), fh)
         env = dict(os.environ, PATH=bindir + os.pathsep + os.environ["PATH"], FAKE_GH_DIR=d)
         proc = subprocess.run(
-            [sys.executable, CI_VERDICT, "--sha", SHA, "--worktree", d, "--interval", "0",
-             "--appear", "0", "--wait", "0", *extra],
+            [sys.executable, CI_VERDICT, "--sha", SHA, "--worktree", d, "--plan-doc", plan_doc,
+             "--interval", "0", "--appear", "0", "--wait", "0", *extra],
             capture_output=True, text=True, env=env)
         state = {"polls": 0, "reruns": [], "calls": []}
         if os.path.exists(os.path.join(d, "state.json")):
@@ -1122,7 +1138,46 @@ class CiVerdictTests(unittest.TestCase):
     def test_all_skipped_means_no_ci(self):
         proc, _ = self.run_ci([{"check_runs": [check_run("unit", "skipped", run=7)]}])
         self.assertEqual(proc.returncode, 3, proc.stdout)
-        self.assertIn("all skipped or neutral", proc.stdout)
+        self.assertIn("ran none of *", proc.stdout)
+
+    def test_green_ci_without_the_named_checks_means_no_ci(self):
+        proc, _ = self.run_ci([{"check_runs": [check_run("lint", "success", run=7)],
+                                "statuses": [commit_status("cla", "success")]}], required=["unit*"])
+        self.assertEqual(proc.returncode, 3, proc.stdout)
+        self.assertEqual(proc.stdout.strip(), "NO_CI: CI at abc1234 ran none of unit*, so it did not run "
+                         "the verify command; ran: lint (success), cla (success)")
+
+    def test_named_check_skipped_means_no_ci(self):
+        proc, _ = self.run_ci([{"check_runs": [check_run("unit", "skipped", run=7),
+                                               check_run("lint", "success", run=7)]}], required=["unit"])
+        self.assertEqual(proc.returncode, 3, proc.stdout)
+        self.assertIn("ran none of unit,", proc.stdout)
+
+    def test_glob_covers_matrix_jobs_and_every_name_must_pass(self):
+        frame = {"check_runs": [check_run("test (3.12)", "success", run=7),
+                                check_run("lint", "success", run=7)]}
+        proc, _ = self.run_ci([frame], required=["test*", "lint"])
+        self.assertEqual(proc.returncode, 0, proc.stdout)
+        proc, _ = self.run_ci([frame], required=["test*", "build"])
+        self.assertEqual(proc.returncode, 3, proc.stdout)
+        self.assertIn("ran none of build,", proc.stdout)
+
+    def test_a_failing_unnamed_check_still_fails(self):
+        proc, _ = self.run_ci([{"check_runs": [check_run("unit", "success", run=7),
+                                               check_run("lint", "failure", run=8)]}], required=["unit"])
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn('CI "lint" failure', proc.stdout)
+
+    def test_plan_doc_without_named_checks_means_no_ci(self):
+        green = [{"check_runs": [check_run("unit", "success", run=7)]}]
+        for plan, reason in (("Verify: make test\n", "has no `CI checks:` line"),
+                             ("CI checks: []\n", "`CI checks: []` names no check"),
+                             ("CI checks: unit, lint\n", "`CI checks: unit, lint` names no check")):
+            with self.subTest(plan=plan):
+                proc, state = self.run_ci(green, plan=plan)
+                self.assertEqual(proc.returncode, 3, proc.stdout)
+                self.assertIn(reason, proc.stdout)
+                self.assertEqual(state["polls"], 0)
 
     def test_cancelled_run_is_rerun_once_then_passes(self):
         cancelled = {"check_runs": [check_run("unit", "cancelled", run=7)]}
@@ -1254,6 +1309,28 @@ class ResolveBranchTests(unittest.TestCase):
                      "\n## Notes\n\nRESUME: phase=S1 input_sha=quoted-in-a-note\n"
                      % (phase, worktree, branch, out["input_sha"], input_text))
         return out["input_sha"]
+
+    def test_ci_workflows_lists_committed_pull_request_triggers(self):
+        self.assertEqual(self.resolve()["ci_workflows"], [])
+        wf = os.path.join(self.repo, ".github", "workflows")
+        os.makedirs(wf)
+        for name, text in {
+                "inline.yml": "on: [push, pull_request]\njobs: {}\n",
+                "block.yml": "name: ci\non:\n  pull_request:\n    branches: [main]\n",
+                "list.yaml": "on:\n  - push\n  - pull_request\n",
+                "target.yml": "'on': pull_request_target\n",
+                "push.yml": "on:\n  push:\n    branches: [main]\njobs:\n  a:\n    if: github.event_name == 'pull_request'\n",
+                "review.yml": "on: [pull_request_review]\n",
+                "notes.txt": "on: pull_request\n"}.items():
+            with open(os.path.join(wf, name), "w") as fh:
+                fh.write(text)
+        self.git(self.repo, "add", "-A")
+        self.git(self.repo, "commit", "-q", "-m", "ci")
+        with open(os.path.join(wf, "later.yml"), "w") as fh:
+            fh.write("on: pull_request\n")
+        self.assertEqual(self.resolve()["ci_workflows"], [
+            ".github/workflows/block.yml", ".github/workflows/inline.yml",
+            ".github/workflows/list.yaml", ".github/workflows/target.yml"])
 
     def test_default_branch_creates_a_worktree_at_head(self):
         out = self.resolve()

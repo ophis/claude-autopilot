@@ -33,7 +33,7 @@ claude-autopilot/                 # git repo = marketplace + plugin
 │   ├── build/spec.md             # spec-writing guide for build S2
 │   ├── build/scripts/select-panel.py # selector: (phase, signals) → panel JSON
 │   ├── build/scripts/check-spec.py   # S2 spec structure + AC coverage check
-│   ├── build/scripts/ci-verdict.py   # PR mode: one commit's CI checks → verifier verdict
+│   ├── build/scripts/ci-verdict.py   # publishing: one commit's CI checks → verifier verdict
 │   ├── build/scripts/resolve-branch.py # S1: resume / stay / reuse / create / stop, as JSON
 │   ├── build/scripts/_frontmatter.py # parser shared with dev lint
 │   └── light-build/SKILL.md      # skill; /autopilot:light-build  — low-ceremony
@@ -105,20 +105,21 @@ and it drives, end to end and without asking you questions:
 - **S1 — Worktree:** on any branch but `main`/`master`/the local default branch, stay on it; otherwise create a worktree and branch following the [shared S1 conventions](references/autopilot-common.md#worktree-s1) (`<prefix>` = the ticket ID when the work is for one single ticket, e.g. `TASK-123`, else `autopilot`); create the plan doc (progress + RESUME).
 - **S2 — Spec:** write the spec from the requirement and the affected code (expert council at decision points); `check-spec.py` checks its sections and that every acceptance criterion has a test or check.
 - **S3 — Spec review:** Ralph loop over the spec until the panel passes.
-- **S4 — Task list:** a code-free task list, each task one revertable commit (files, cross-task interfaces, tests first, the checks each task runs, commit message); the full verify command sits at the top of the plan doc, outside the task briefs.
-- **S5 — Produce:** the orchestrator implements each task itself, in order (it may hand a self-contained task to a fresh producer); each task runs only checks covering its changed files, never a full suite; no per-task review (S6 is the gate).
-- **S6 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency and the core `verification-reviewer` checks the same fixed revision as the other reviewers: it runs the full target checks locally, or in PR mode reads the repo's CI result for that commit (running the checks locally when CI gives none). An unavailable environment stops safely after one retry; genuine check failures enter the fix loop.
+- **S4 — Task list:** a code-free task list, each task one revertable commit (files, cross-task interfaces, tests first, the checks each task runs, commit message); the full verify command sits at the top of the plan doc, outside the task briefs, with the CI checks that run its tests when publishing.
+- **S5 — Produce:** the orchestrator implements each task itself, in order (it may hand a self-contained task to a fresh producer); each task's new tests fail before its code exists; each task runs only checks covering its changed files, never a full suite; no per-task review (S6 is the gate).
+- **S6 — Work review:** Ralph loop over the work; the core `doc-reviewer` gates repo-wide doc currency and the core `verification-reviewer` checks the same fixed revision as the other reviewers: it runs the full target checks locally, or when publishing reads the CI checks that run the tests for that commit (running the checks locally when CI gives none). A test run of 0 tests fails. An unavailable environment stops safely after one retry; genuine check failures enter the fix loop.
 - **S7 — Finish:** report + integration menu (a squash merge gives one commit). **Never merges.**
 
 You can also hand `/autopilot:build` a path to an existing spec file instead of free-text requirements — it then skips the spec + spec-review (S2/S3) and plans straight from your spec (`S1 → S4`; e.g. `/autopilot:build path/to/spec.md`).
 
-**PR mode.** Ask for a pull request in the requirement (e.g. `… and open a PR`) and the
-run pushes each task commit as it lands, opening a draft PR on the first push; build also
-posts the reviewed spec there as a comment. Each S6 round pushes the reviewed commit and
-lets the repo's CI verify it while the other reviewers read it. A CI failure enters the
-same fix loop as any blocker, so the PR stays a draft until every reviewer passes. On convergence the PR body gets
-the final report and the PR is marked ready; on a stop it stays a draft. Both skills
-support it; it needs an authenticated `gh` and a GitHub `origin`.
+**CI and PR mode.** A repo with CI (a pull_request workflow, a GitHub `origin`, an
+authenticated `gh`) never runs its full suite locally: before the first S6 round the run
+pushes and opens a draft PR, and each round lets CI verify the reviewed commit while the
+other reviewers read it. Ask for a pull request in the requirement (e.g. `… and open a
+PR`) and it also pushes each task commit as it lands, build posts the reviewed spec as a
+comment, and on convergence the PR body gets the final report and the PR is marked ready.
+Without the ask, the PR stays a draft for you or your caller to adopt. A CI failure enters
+the same fix loop as any blocker. With no CI, or a refused push, the checks run locally.
 
 At a genuine decision point it convenes a small **expert council** (ad-hoc sub-agents)
 to deliberate, then decides and records — it does not ask you. It stops only to hand off on a
@@ -166,7 +167,7 @@ without the ceremony. It is a skill (model-invocable / composable), emits the sa
 - **S1 — Worktree:** stay on the current branch unless it is `main`/`master`/the local default branch, else create a worktree and branch following the [shared S1 conventions](references/autopilot-common.md#worktree-s1). **State:** no spec doc; S1 creates the plan doc.
 - **S4 — Task list:** the orchestrator writes a code-free task list (Global Constraints + per-task `### Task N` briefs, each task one revertable commit: files, Consumes/Produces, tests first, commit message) into the plan doc. S5 implements the tasks in order.
 - **S5 — Produce:** the orchestrator implements each S4 task itself, in order from the first not `done`. At a **genuine fork** it convenes the expert council. It may hand a self-contained task to a fresh producer; a producer at a genuine fork returns a `FORK:` marker (options, no guessing) and the orchestrator convenes the council, decides, records, and **re-dispatches the producer with the decision**. Producers never consult the council directly.
-- **S6 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc` + `verification` (full checks at the reviewed SHA, the same revision as other reviewers, run locally or read from the PR's CI) — **capped at 1** fix/re-review cycle after the initial Round 1 (at most Round 2). The verifier runs every round, correctness re-reviews a fix after a verifier FAIL, and other passed lenses carry their PASS. This is the sole correctness gate.
+- **S6 — Work review:** a **pinned** panel — `correctness` + `requirement-fidelity` + `doc` + `verification` (full checks at the reviewed SHA, the same revision as other reviewers, run locally or read from the PR's CI) — **capped at 3 rounds**: Round 1, then up to two fix/re-reviews. The verifier runs every round, correctness re-reviews a fix after a verifier FAIL, and other passed lenses carry their PASS. This is the sole correctness gate.
 - **S7 — Finish:** report + integration menu. **Never merges.**
 
 **No scope gate.** light-build is a harness, not a gatekeeper — it runs whatever it is
@@ -181,7 +182,7 @@ doc, no spec review — just an S4 task list). Choosing the surface is your resp
 Together, `build` → review → re-run `build` to iterate → … is the human-in-the-loop
 cycle. Run the next requirement from the previous run's branch (the session stays in its
 worktree after a run) and it continues that branch: its own plan doc, its review covering
-only its new commits, and in PR mode the same PR.
+only its new commits, and the same PR.
 
 ### Invoking from a workflow
 
@@ -201,7 +202,7 @@ contract, so a review is reproducible and a lens is attributable — unlike anon
 ad-hoc reviewers chosen anew each time. `phase` is when a lens runs — `spec` (S3
 spec-review), `work` (S6 work-review), or `both`. Ordinary reviewers are read-only
 and never run a full suite; the core verification reviewer runs it in the frozen
-source worktree at the reviewed SHA, or in PR mode reads the PR's CI for that SHA.
+source worktree at the reviewed SHA, or when publishing reads the CI checks that run the tests for that SHA.
 
 | File | Lens | Phase | Tier |
 | --- | --- | --- | --- |
@@ -211,7 +212,7 @@ source worktree at the reviewed SHA, or in PR mode reads the PR's CI for that SH
 | `agents/correctness-reviewer.md` | Intent/logic, edge & boundary cases, error paths | work | core |
 | `agents/requirement-fidelity-reviewer.md` | Work realizes the requirement & spec — right thing built, no missing items, no drift/scope creep | work | core |
 | `agents/doc-reviewer.md` | Docs **repo-wide** still accurate after the change (not just touched files); edits concise / not bloated | work | core |
-| `agents/verification-reviewer.md` | Full target checks with commands, exit codes, failure counts and diagnostics, or the PR's CI result | work | core |
+| `agents/verification-reviewer.md` | Full target checks with commands, exit codes, test and failure counts and diagnostics, or the CI checks that run them | work | core |
 | `agents/code-quality-reviewer.md` | Readability, naming, duplication, dead code, needless complexity, comment quality | work | optional |
 | `agents/test-reviewer.md` | Tests meaningful & assert the spec; coverage of new/changed code | work | optional |
 | `agents/performance-reviewer.md` | Complexity, N+1, allocation, resource leaks, hotspots | work | optional |
@@ -275,8 +276,7 @@ fall back to native dispatch.
 
 Build allows three total rounds per phase (S3 spec review and S6 work review):
 initial Round 1, then up to two fix/re-reviews in Rounds 2–3. To change a cap for
-one run, state it in the requirement. Light-build allows one fix/re-review cycle
-(Rounds 1–2).
+one run, state it in the requirement. Light-build has the same cap in S6.
 
 ## Local development
 

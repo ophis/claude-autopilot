@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Read the CI checks GitHub reports for one commit and print a verification verdict.
 
-Run from the repo (or pass --worktree); `gh` must be authenticated. Exit codes:
+Run from the repo (or pass --worktree); `gh` must be authenticated. PASS needs each check
+named by the plan doc's `CI checks:` (JSON array of names or globs) to succeed. Exit codes:
 0 PASS and 1 FAIL (the verdict is on stdout), 4 checks still running (call again),
 3 no usable CI result (run the local checks instead; the reason is on stdout).
 """
 
 import argparse
+import fnmatch
 import json
 import re
 import subprocess
@@ -28,6 +30,20 @@ ACTIONS_URL = re.compile(r"/actions/runs/(\d+)(?:/job/(\d+))?")
 
 class NoCI(Exception):
     pass
+
+
+def required_checks(plan_doc):
+    with open(plan_doc, encoding="utf-8") as fh:
+        found = re.search(r"^CI checks: (.*)$", fh.read(), re.M)
+    if not found:
+        raise NoCI("the plan doc has no `CI checks:` line")
+    try:
+        required = json.loads(found.group(1))
+    except ValueError:
+        required = None
+    if not (isinstance(required, list) and required and all(isinstance(n, str) and n for n in required)):
+        raise NoCI("the plan doc's `CI checks: %s` names no check" % found.group(1).strip())
+    return required
 
 
 def gh(args, cwd):
@@ -144,8 +160,11 @@ def settle(checks, args):
         if rerun_or_pending(infra, args.worktree):
             return None
         raise NoCI("CI unavailable at %s: %s" % (sha, names(infra)))
-    if not any(c["outcome"] == "success" for c in passed):
-        raise NoCI("no CI check ran at %s (all skipped or neutral): %s" % (sha, names(passed)))
+    missing = [p for p in args.required
+               if not any(c["outcome"] == "success" and fnmatch.fnmatchcase(c["name"] or "", p) for c in passed)]
+    if missing:
+        raise NoCI("CI at %s ran none of %s, so it did not run the verify command; ran: %s"
+                   % (sha, ", ".join(missing), names(passed) or "nothing"))
     print_verdict("PASS", [], ["CI at %s passed: %s" % (sha, names(passed))])
     return 0
 
@@ -187,12 +206,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--sha", required=True, help="the reviewed commit")
     parser.add_argument("--worktree", default=".", help="repo checkout to run gh in")
+    parser.add_argument("--plan-doc", required=True, help="the run's plan doc, holding `CI checks:`")
     parser.add_argument("--wait", type=float, default=540, help="seconds to wait in this call")
     parser.add_argument("--appear", type=float, default=180, help="seconds to wait for a first check")
     parser.add_argument("--interval", type=float, default=20, help="seconds between polls")
     parser.add_argument("--max-age", type=float, default=3600, help="give up on checks running longer")
     args = parser.parse_args()
     try:
+        args.required = required_checks(args.plan_doc)
         return verdict(args)
     except NoCI as exc:
         print("NO_CI: %s" % exc)

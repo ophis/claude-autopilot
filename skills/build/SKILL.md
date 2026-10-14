@@ -1,6 +1,6 @@
 ---
 name: build
-description: "Use to build a new work product from a requirement, end to end: work on the current feature branch or a new isolated worktree, write and review a spec, write a task list, implement, and review-loop to a single review-ready branch, or a draft PR when asked (never merges). Pass the requirement text, or a path to an existing spec file."
+description: "Use to build a new work product from a requirement, end to end: work on the current feature branch or a new isolated worktree, write and review a spec, write a task list, implement, and review-loop to a single review-ready branch, plus a draft PR when the repo has CI or you ask for one (never merges). Pass the requirement text, or a path to an existing spec file."
 argument-hint: "<requirements|spec-file-path>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Agent, Task, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite
 ---

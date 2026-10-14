@@ -44,7 +44,7 @@ The two surfaces — `skills/build/SKILL.md` and `skills/light-build/SKILL.md` �
 step inside a larger skill/workflow); users still type `/autopilot:build` /
 `/autopilot:light-build`. `light-build` is the low-ceremony surface: a harness
 (S1 → S4 → S5 → S6 → S7) with no spec doc and no spec review; S6 is a pinned panel
-capped at 2 rounds
+capped at 3 rounds
 (correctness + requirement-fidelity + doc + verification). It does not gate scope — surface choice is
 the user's responsibility. When invoked, the *main-session agent implements the work itself* (S5 tasks and S6 fixes,
 optionally handing a self-contained task to a fresh producer) while independent reviewer
@@ -56,10 +56,12 @@ reading those three files plus `agents/` and the bundled `skills/build/scripts/`
 - **Shared spine.** `build` runs a single **S1–S7** pipeline: S1 worktree → S2 spec →
   S3 spec-review → S4 task list → S5 produce → S6 work-review → S7 finish.
   `light-build` skips S2, S3 (same number = same step).
-  **It never merges** — the deliverable is a review-ready branch, plus a draft-then-ready
-  PR in PR mode (the requirement asks for a PR; each commit is pushed as it lands, build
-  posts the reviewed spec as a PR comment, and the repo's CI is the verifier's backend,
-  read by `skills/build/scripts/ci-verdict.py`).
+  **It never merges** — the deliverable is a review-ready branch, plus a draft PR when
+  publishing (S1 `publish`): `pr` when the requirement asks for a PR (each commit pushed
+  as it lands, build posts the reviewed spec, ready on convergence), `ci` when the repo
+  has a pull_request workflow (pushed at S6 pins, left a draft). Either way the repo's CI
+  is the verifier's backend, read by `skills/build/scripts/ci-verdict.py`; a full suite
+  never runs locally while CI can run it.
 
 - **Ralph convergence loops (S3, S6).** review → fix → re-review until the frozen
   review panel all-PASSes or a per-phase cap (build: 3 total rounds) is hit. Convergence is decided
@@ -67,12 +69,13 @@ reading those three files plus `agents/` and the bundled `skills/build/scripts/`
   grammar — never from the orchestrator's opinion. Rounds are batched (wait for every
   verdict, one fix, one re-review); the orchestrator never overrides a verdict. Round 1
   short-circuits if all-PASS. Build counts it toward its 3-round cap (override in
-  the requirement); light-build permits one subsequent fix/re-review cycle.
+  the requirement); light-build has the same 3-round cap.
 
 - **Named review roster (`agents/`).** Each reviewer has a single lens. Ordinary reviewers
   are read-only and never run the full test suite; the core work-phase verification
   reviewer runs the complete checks in the frozen source worktree at the reviewed SHA, or
-  in PR mode reads the PR's CI for that SHA and falls back to local checks. Each
+  when publishing reads the CI checks the plan doc names as running the tests for that
+  SHA and falls back to local checks. Each
   agent has **self-describing** frontmatter (`lens` / `phase` / `tier` /
   `applies_to`) so the selector can route it with no code change. `reviewer-contract.md`
   is an authoring-time template (selector-inert: no `phase`) copied verbatim into ordinary reviewers (a test enforces it);
