@@ -15,6 +15,7 @@ to this file's directory.
 - **Producer**: a fresh subagent you hand one self-contained task to (see Produce (S5)).
 - **Lens**: one reviewer agent. The **panel** is the set of lenses for a phase.
 - **Round**: one parallel review of the panel, numbered `r1`, `r2`, ….
+- **PR mode**: the requirement asks you to open a pull request (see PR mode).
 - **Genuine fork**: two or more viable approaches with materially different trade-offs,
   or a choice that shapes architecture, data model, interface or scope, is costly to
   reverse, or that a later review might miss.
@@ -35,7 +36,7 @@ to this file's directory.
 - **Pin every write to the worktree.** Give each subagent the absolute worktree path and
   branch. You and it use absolute paths and `git -C <worktree>`, never the inherited cwd.
   Before any write, assert `git -C <worktree> branch --show-current` is the run branch, never
-  main/master.
+  a default branch (Worktree (S1)).
 - **Batch steps.** Every tool call re-sends your whole context. Combine independent shell
   steps into one command, and make independent calls together in one parallel batch.
 - **End at a review-ready branch.** Never merge.
@@ -58,23 +59,26 @@ to this file's directory.
 
 ## State and resume
 
-- **Resume first.** On start, look for this run's plan doc (in a found worktree, check
-  `.autopilot/` too). If found, check that its
-  worktree, branch and base_ref exist on disk, then continue from its `phase`. If not,
-  start at S1.
+- **Resume first.** On start, look for this run's plan doc: the one that records this
+  `input` (check `.autopilot/` in the current checkout and in a found worktree). A plan doc for another input
+  belongs to an earlier run; leave it alone. If found, check that its worktree, branch
+  and base_ref exist on disk, then continue from its `phase`. If not, start at S1.
 - Place the plan doc where the user's or project's convention says (AGENTS.md /
   CLAUDE.md, existing repo patterns). With no convention, use an `.autopilot/` directory
-  in the worktree that holds a `.gitignore` of `*`.
-- The plan doc's first line is `Rules: <abs SKILL.md path> <abs path of this file>`.
+  in the worktree that holds a `.gitignore` of `*`. Name each run's files by its `<slug>`
+  (Worktree (S1)), as in `<slug>-plan.md`, adding `-2`, `-3`, … when that name holds
+  another input's plan doc, so a later run in the same worktree adds its own.
+- The plan doc's first line is `Rules: <abs SKILL.md path> <abs path of this file>`; the
+  next records `input` verbatim.
 - Once the plan doc exists, rewrite RESUME `phase=` at every phase change and
   `review_round=` every loop iteration.
 - Re-run an interrupted review round whole: the frozen panel, on its recorded transport
   and round number.
 - From S6, keep RESUME, the frozen panel, the verdicts with each round's full BLOCKING
-  items, the reviewed SHA and tree, and the verifier's exact commands and results (exit codes, failure counts, diagnostics) in an
-  ignored run note. An ignored plan doc can serve as the run note, with that content above the task
+  items, the reviewed SHA, the verifier's exact commands and results (exit codes, failure counts, diagnostics),
+  and in PR mode `pr=<url>` in an ignored run note. An ignored plan doc can serve as the run note, with that content above the task
   list; a tracked plan doc links to the note before it is committed for review.
-- Resume at S7 or S8 only with all-PASS evidence for the current tree. Otherwise restart S6.
+- Resume at S7 only with all-PASS evidence for HEAD. Otherwise restart S6.
 - **Notes.** Once the plan doc exists, write each durable fact you learn to its Notes
   section as one line: key files and entry points, repo patterns and commands, gotchas,
   and anything a later task depends on. A context summary drops these; the plan doc
@@ -109,7 +113,7 @@ A short audit log, one line per event, not a transcript. The skill says where ea
 goes. S3 uses the S6 shapes.
 
 - Panel freeze: the skill's freeze line, ending `transport=Workflow`. Append `->Task` or
-  `-><actual native tool>` if the fallback fires. In S6 without the verifier, write `verification=CI` or `verification=none`.
+  `-><actual native tool>` if the fallback fires. In S6 it names the verifier's backend, `verification=local` or `verification=ci`.
 - Task done: `S5 task 3 done: <commit sha>`.
 - Review round, with the verdict roll-up and one gist per blocker: `S6 r1 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fixing`.
 - Decision, council or solo: `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
@@ -131,10 +135,16 @@ Outside a genuine fork, decide solo and log it. Review catches a wrong guess.
 
 ## Worktree (S1)
 
-1. Already in an isolated worktree, not on `main`/`master`: reuse it, with `base_ref` =
-   current local HEAD. Do not nest another.
-2. Otherwise resolve the host-specific `<branch>` before lookup or creation, and use this
-   same branch for reuse and resume:
+1. A **default branch** is `main`, `master`, or the local branch of `origin`'s default
+   (`git symbolic-ref --short refs/remotes/origin/HEAD` without `origin/`; if that is
+   unset, run `git remote set-head origin -a` first, and if that fails too, only `main` and
+   `master` count). On any other branch, stay on it:
+   this checkout is the worktree and `base_ref` is its current HEAD. Skip steps 2-5 except
+   `<slug>` (step 2), which still names the run's files. A later requirement continues an
+   earlier run's branch this way. Uncommitted changes here are the user's: take safety
+   stop 3 rather than mix them in.
+2. On a default branch or a detached HEAD, resolve the host-specific `<branch>` before
+   lookup or creation, and use this same branch for reuse and resume:
    - `<prefix>`: the ticket ID when the work is for one ticket (e.g. Linear `TASK-123`),
      else `autopilot`.
    - `<slug>`: `input` lowercased, non-alphanumerics turned into hyphens, at most 40
@@ -142,9 +152,10 @@ Outside a genuine fork, decide solo and log it. Review catches a wrong guess.
      ticket ID again).
    - Follow the repo's worktree and branch conventions, else the host defaults. Make sure
      the worktree directory is gitignored.
-3. The branch exists from a prior run: reuse it with its commits, never a numbered copy.
-   Enter its worktree (`git worktree list`; if none, `git worktree add <path> <branch>`)
-   and set `base_ref` = `git merge-base HEAD <branch>`. A plan doc there means resume.
+3. The branch exists and holds no plan doc for another input: reuse it with its commits,
+   never a numbered copy. Enter its worktree (`git worktree list`; if none,
+   `git worktree add <path> <branch>`) and set `base_ref` = `git merge-base HEAD <branch>`.
+   This run's plan doc there means resume.
 4. Otherwise create the worktree on local HEAD:
    - On a collision with another requirement's worktree or branch, add `-2`, `-3`, … to
      the slug and resolve path and branch again.
@@ -153,20 +164,28 @@ Outside a genuine fork, decide solo and log it. Review catches a wrong guess.
 5. Enter the worktree (`EnterWorktree({path: <path>})`). Run every later command there,
    and give workers its absolute path.
 
+Once the branch is settled, in PR mode run its S1 check (PR mode).
+
 ## Task list (S4)
 
 Write the task list yourself and invoke no planning skill. It is code-free and is the
 plan doc's last section. The skill says what else goes in the header and where the full
 verify command goes; it never goes in the task-list header.
 
-- **Header**: Global Constraints (exact values the tasks need).
+- **Header**: Global Constraints (exact values the tasks need), and in PR mode the PR a
+  continued branch updates (PR mode).
+- **One task is one commit** that can be reverted on its own: one purpose (a behavior
+  change with its tests, or one mechanical change such as a rename, move, reformat or
+  generated update, never both), split by behavior rather than layer, ordered so removals
+  and prep come first. Split a task that mixes purposes; fold one with no purpose of its
+  own into the task it serves.
 - **One `### Task N: <name>` heading per task.** A brief runs to the next task heading,
   so a producer can be handed one alone. Each brief lists:
   - Files.
   - Consumes / Produces: exact names and signatures that cross tasks.
   - Tests to write first, including edge cases.
   - The checks it runs: only those its change affects, never a full suite. The verifier
-    or CI runs that.
+    runs that.
   - Commit message.
 
 ## Produce (S5)
@@ -202,20 +221,23 @@ the decision in its prompt: `DECISION: <chosen option + one-line rationale>; pro
 The skill sets the panel, the cap (total rounds, `r1` included), the re-review set, and
 the doc fields of the run-input prompt.
 
-**Verifier rule.** Add `autopilot:verification-reviewer` to an S6 panel only when the repo
-has no CI running its full checks or the requirement asks for local verification. The
-verifier runs the complete checks in the frozen source worktree every round it is on the
-panel. Ordinary reviewers read the source at HEAD and leave full checks to the verifier
-or CI.
+**Verifier.** Every S6 panel includes `autopilot:verification-reviewer`. Freeze its
+backend in `r1`: `verification=ci` in PR mode, else `verification=local`. With `local` it
+runs the complete checks in the frozen source worktree; with `ci` it reads the repo's CI
+checks for `reviewed_sha`, and runs the local checks when CI gives no usable result. It
+runs every round. Ordinary reviewers read the source at HEAD and leave full checks to it.
 
 Run each round in these steps:
 
 1. **Freeze.** In `r1`, log the panel. Reuse it for every round of the phase.
 2. **Pin the revision (S6).** Require a clean committed source worktree:
    `git -C <worktree> status --porcelain` is empty. Set `reviewed_sha=<HEAD>` from
-   `git -C <worktree> rev-parse HEAD`. Leave HEAD alone until every verdict is back.
+   `git -C <worktree> rev-parse HEAD`. In PR mode, push it (PR mode). Leave HEAD alone
+   until every verdict is back.
 3. **Write prompts.** Each member gets only its run-input prompt:
    `PHASE=<spec|work>. Inputs: worktree=…, base_ref=…, <doc fields>, requirement=…, focus=…, reviewed_sha=<HEAD> (S6 only). Output ONLY the verdict, no extra prose.`
+   The verifier's prompt adds `verification=<local|ci>` and, with `ci`,
+   `ci_script=<abs path of ../skills/build/scripts/ci-verdict.py>`.
    `focus=` names only what the requirement, spec or a logged decision asks the lens to
    weigh. It never claims the work is correct and never narrows the lens's checklist.
    A re-reviewed lens also gets its prior items as `<lens>#<n> "<gist>"`. In S6 it also
@@ -258,25 +280,45 @@ advance. At the cap without a pass, take safety stop 2.
   IDs and the files they cite.
 - Fix causes, not symptoms. Reproduce each blocker first (run its case where one exists,
   else trace it) and fix it where it originates. Fix the same pattern within the change's
-  scope; log matches outside it as `deferred` lines for the S8 report. A guard that
+  scope; log matches outside it as `deferred` lines for the S7 report. A guard that
   silences a symptom is not a fix.
 - If an item stays OPEN after a fix, write down what that fix assumed and check the
   assumption before the next fix depends on it.
-- Run only the checks covering the files you changed, and commit all product changes
-  before the re-review. The re-review then pins the new revision.
+- Run only the checks covering the files you changed, and commit the round's fix as one
+  commit, `fix(r<N>): <item IDs>`, before the re-review. The re-review then pins it.
 - Docs are fixed here. There is no separate doc phase.
 
-## Squash and finish (S7, S8)
+## PR mode
 
-- **S7.** Squash to one commit with `git`, idempotently: skip when the branch is already
-  exactly 1 commit ahead of `base_ref`. Commit or ignore the run's notes per the
-  project's convention; force neither. Before S8, require a clean worktree and
-  `git rev-parse HEAD^{tree}` equal to `git rev-parse <reviewed_sha>^{tree}`. If the
-  trees differ, return to S6.
-- **S8.** Report inline, with no skill: the review history, the final verification
-  evidence (the verifier's from the run note, else the freeze's `CI` or `none`), the
-  decisions, and the deferred non-blockers and `deferred` lines. On a stop, lead with the stop reason. List
-  the integration options as an informational menu, not a question.
+The run publishes its branch as a draft pull request, and the repo's CI is the verifier.
+
+- **Check at S1.** It needs an authenticated `gh` and a GitHub `origin`; without them,
+  take safety stop 3. Look up the branch's open PR
+  (`gh pr list --head <branch> --state open --json url,isDraft`). A run that continues a
+  branch updates that PR: log it as a decision and name it in the task-list header at S4,
+  so reviewers know the requirement's PR is this one.
+- **Push** each S6 round's `reviewed_sha` before dispatch:
+  `git -C <worktree> push -u origin <branch>`. Never force; a rejected push is safety
+  stop 3.
+- **One draft PR.** Before the first push, turn a ready open PR back into a draft
+  (`gh pr ready --undo <url>`); an earlier run on this branch may have marked it ready.
+  With none, open a draft after the first push:
+  `gh pr create --draft --base <base> --head <branch>`, titled and described from the
+  requirement. `<base>` is the branch the requirement names, else the repo's default
+  branch. Record `pr=<url>` in the run note.
+- **Finish.** Converged: unless the PR body already holds it, add the S7 report, headed
+  with HEAD's SHA, after any earlier run's (`gh pr view <url> --json body`, then
+  `gh pr edit <url> --body-file <file>`). Then mark the PR ready (`gh pr ready <url>`).
+  On a stop, leave the draft. Report the URL.
+
+## Finish (S7)
+
+Require a clean worktree with HEAD equal to the last all-PASS `reviewed_sha`; otherwise
+return to S6. The branch keeps its task and fix commits. In PR mode, finish the PR (PR
+mode). Report inline, with no skill: the review history, the final verification evidence
+from the run note, the decisions, and the deferred non-blockers and `deferred` lines. On a
+stop, lead with the stop reason. List the integration options, a squash merge
+(`git merge --squash`) among them, as an informational menu, not a question.
 
 ## Safety stops
 
@@ -295,18 +337,19 @@ Stop and hand off the state and exact next step only in these cases:
 
 ## Result handoff
 
-On every terminal path, S8 or any safety stop, end with exactly one fenced
+On every terminal path, S7 or any safety stop, end with exactly one fenced
 `autopilot-result` block holding one JSON object, so a caller reads the outcome without
 parsing prose:
 
 ```autopilot-result
-{ "status": "converged", "branch": "<prefix>-<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
+{ "status": "converged", "branch": "<prefix>-<slug>", "base_ref": "<sha>", "head": "<sha>", "pr": "", "blockers": [], "reason": "" }
 ```
 
-- `status`: `converged` (reached S8), `capped-without-pass` (a review loop hit its cap),
+- `status`: `converged` (reached S7), `capped-without-pass` (a review loop hit its cap),
   or `stopped` (any other safety stop).
 - `branch`, `base_ref`, `head`: the branch name, its base SHA, and its final commit SHA
   (`head` = `base_ref` if nothing was produced).
+- `pr`: the pull request URL in PR mode, else empty.
 - `blockers`: the residual open BLOCKING items as strings when not converged, else `[]`.
 - `reason`: empty when converged. Otherwise the classification plus detail: for a cap,
   `oscillation`, `unfixable` or `requirements-conflict`; for a stop, `root-contradiction`,

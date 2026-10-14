@@ -33,7 +33,8 @@ claude --plugin-dir .
 Also run the [contributor smoke protocol](CONTRIBUTING.md#smoke-protocol).
 
 There is no build step. `tests/test_scripts.py` exercises `skills/build/scripts/select-panel.py`,
-`skills/build/scripts/check-spec.py` and `scripts/lint-roster.py` as CLIs via subprocess (they have hyphenated names,
+`skills/build/scripts/check-spec.py`, `skills/build/scripts/ci-verdict.py` (against a fake `gh` on `PATH`) and
+`scripts/lint-roster.py` as CLIs via subprocess (they have hyphenated names,
 so they're not importable — the CLI is the contract).
 
 ## Architecture (the big picture)
@@ -42,9 +43,9 @@ The two surfaces — `skills/build/SKILL.md` and `skills/light-build/SKILL.md` �
 **orchestrator prompts**, not code. They are **skills** (model-invocable, so composable as a
 step inside a larger skill/workflow); users still type `/autopilot:build` /
 `/autopilot:light-build`. `light-build` is the low-ceremony surface: a harness
-(S1 → S4 → S5 → S6 → S7 → S8) with no spec doc and no spec review. S4 always
+(S1 → S4 → S5 → S6 → S7) with no spec doc and no spec review. S4 always
 materializes a plan doc holding the task list; S6 is a pinned cap-1 panel
-(correctness + requirement-fidelity + doc, plus verification when relevant). It does not gate scope — surface choice is
+(correctness + requirement-fidelity + doc + verification). It does not gate scope — surface choice is
 the user's responsibility. When invoked, the *main-session agent implements the work itself* (S5 tasks and S6 fixes,
 optionally handing a self-contained task to a fresh producer) while independent reviewer
 subagents judge it; only their verdicts decide. Both read `references/autopilot-common.md` first: the rules they share (disciplines,
@@ -52,10 +53,12 @@ state, council, worktree, review round, fixes, safety stops, result block); each
 keeps only its own input, state, steps and review settings. Understanding the system means
 reading those three files plus `agents/` and the bundled `skills/build/scripts/` helpers together:
 
-- **Shared spine.** `build` runs a single **S1–S8** pipeline: S1 worktree → S2 spec →
-  S3 spec-review → S4 task list → S5 produce → S6 work-review (verification optional) → S7 squash → S8 finish.
+- **Shared spine.** `build` runs a single **S1–S7** pipeline: S1 worktree → S2 spec →
+  S3 spec-review → S4 task list → S5 produce → S6 work-review → S7 finish.
   `light-build` skips S2, S3 (same number = same step).
-  **It never merges** — the deliverable is a review-ready branch.
+  **It never merges** — the deliverable is a review-ready branch, plus a draft-then-ready
+  PR in PR mode (the requirement asks for a PR; S6 pushes each reviewed commit and the
+  repo's CI is the verifier's backend, read by `skills/build/scripts/ci-verdict.py`).
 
 - **Ralph convergence loops (S3, S6).** review → fix → re-review until the frozen
   review panel all-PASSes or a per-phase cap (build: 3 total rounds) is hit. Convergence is decided
@@ -66,8 +69,9 @@ reading those three files plus `agents/` and the bundled `skills/build/scripts/`
   the requirement); light-build permits one subsequent fix/re-review cycle.
 
 - **Named review roster (`agents/`).** Each reviewer has a single lens. Ordinary reviewers
-  are read-only and never run the full test suite; the optional work-phase verification
-  reviewer runs the complete checks in the frozen source worktree at the reviewed SHA. Each
+  are read-only and never run the full test suite; the core work-phase verification
+  reviewer runs the complete checks in the frozen source worktree at the reviewed SHA, or
+  in PR mode reads the PR's CI for that SHA and falls back to local checks. Each
   agent has **self-describing** frontmatter (`lens` / `phase` / `tier` /
   `applies_to`) so the selector can route it with no code change. `reviewer-contract.md`
   is an authoring-time template (selector-inert: no `phase`) copied verbatim into ordinary reviewers (a test enforces it);
@@ -81,8 +85,8 @@ reading those three files plus `agents/` and the bundled `skills/build/scripts/`
   **Both surfaces** run the convergence loop natively in the orchestrator (Round 1 + fix →
   re-review until all-PASS or the per-phase cap). The orchestrator owns the loop, the fix
   (made by the orchestrator itself), and the re-review set: S3 the full panel; S6 the
-  lenses that failed plus every core lens and any verifier (light-build: failed lenses
-  plus any verifier every round). The skills' S6 rule says when the verifier runs.
+  lenses that failed plus every core lens, the verifier included (light-build: failed
+  lenses plus the verifier every round, and correctness after a verifier FAIL).
 
 - **Selection stage (`skills/build/scripts/select-panel.py`).** Deterministic, stdlib-only router:
   `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every
@@ -101,7 +105,9 @@ reading those three files plus `agents/` and the bundled `skills/build/scripts/`
   Contract in README "Plugin workflow".
 
 - **Disk-backed state.** A run persists a **spec doc** and a **plan doc** (task list +
-  a progress section + a `RESUME:` block). The RESUME block
+  a progress section + a `RESUME:` block), one per requirement: named by slug and
+  identified by the `input` it records, so a later run in the same worktree continues
+  the branch without resuming an earlier run. The RESUME block
   (`phase=… worktree=… branch=… base_ref=… review_round=…`) lets a run survive
   compaction and resume from the current phase; an interrupted review round re-runs whole.
   The progress section records each S5 task done (a resume continues from the next), the

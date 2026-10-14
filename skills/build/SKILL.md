@@ -1,6 +1,6 @@
 ---
 name: build
-description: "Use to build a new work product from a requirement, end to end: create an isolated worktree, write and review a spec, write a task list, implement, and review-loop to a single review-ready branch (never merges). Pass the requirement text, or a path to an existing spec file."
+description: "Use to build a new work product from a requirement, end to end: work on the current feature branch or a new isolated worktree, write and review a spec, write a task list, implement, and review-loop to a single review-ready branch, or a draft PR when asked (never merges). Pass the requirement text, or a path to an existing spec file."
 argument-hint: "<requirements|spec-file-path>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Agent, Task, Workflow, Skill, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite, ScheduleWakeup
 ---
@@ -9,13 +9,13 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Agent, Task, Workflow, Skill
 
 Paths are relative to this skill's directory.
 
-Drive one requirement through S1–S8 to a single review-ready branch, autonomously. You
+Drive one requirement through S1–S7 to a single review-ready branch, autonomously. You
 implement the work; independent reviewer subagents judge it.
 
 **On start, before anything else (a resume included), read [`../../references/autopilot-common.md`](../../references/autopilot-common.md) in full.**
 It holds the rules build shares with light-build: disciplines, hosts, state and resume,
-progress log, council, worktree, task list, produce, review round, S6 fixes, squash and
-finish, safety stops, and the result block. This file adds build's input, state, steps and review settings.
+progress log, council, worktree, task list, produce, review round, S6 fixes, finish,
+safety stops, and the result block. This file adds build's input, state, steps and review settings.
 
 ## Input
 
@@ -36,7 +36,7 @@ The run persists two docs so it survives compaction:
   last section.
 
 ```
-RESUME: phase=<S[1-8]> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> spec_file=<path>
+RESUME: phase=<S[1-7]> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> spec_file=<path>
 ```
 
 The progress section holds the progress log and the full verify command. From S6, the
@@ -76,13 +76,9 @@ Per common: Produce (S5). Non-code work follows the same steps.
 
 Run the review loop over the work with the S6 settings below. Fix per common: S6 fixes.
 
-### S7. Squash
+### S7. Finish
 
-Per common: Squash and finish (S7, S8).
-
-### S8. Finish
-
-Per common: Squash and finish (S7, S8). Then emit the result block.
+Per common: Finish (S7). Then emit the result block.
 
 ## Review settings
 
@@ -90,12 +86,12 @@ Per common: Squash and finish (S7, S8). Then emit the result block.
 | --- | --- | --- |
 | Panel source | `python3 scripts/select-panel.py --phase spec --spec-file <spec doc>` | `python3 scripts/select-panel.py --phase work --worktree <worktree> --base <base_ref>` |
 | Cap | 3 rounds | 3 rounds |
-| Re-review set | the full panel, on the whole spec | the lenses that failed, plus every core lens and any verifier |
+| Re-review set | the full panel, on the whole spec | the lenses that failed, plus every core lens (the verifier is one) |
 | Prompt doc fields | `spec_doc=…, plan_doc=…` | `spec_doc=…, plan_doc=…` |
 | Advance to | S4 | S7 |
-| Freeze line | `S3 panel: core=[…] +optional=[…] transport=Workflow` | `S6 panel: core=[…] +optional=[…] transport=Workflow` |
+| Freeze line | `S3 panel: core=[…] +optional=[…] transport=Workflow` | `S6 panel: core=[…] +optional=[…] verification=<local\|ci> transport=Workflow` |
 
 - The selector returns a `selected` list of `{agent, subagent_type, tier, matched}`.
 - The panel is every `core` agent, plus the `optional` agents you judge relevant; you may
-  drop a marginal optional one. In S6, apply the verifier rule.
+  drop a marginal optional one. In S6, freeze the verifier's backend per common: Review round.
 - Change a cap only when the requirement says so, and only for this run.
