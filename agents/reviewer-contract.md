@@ -1,56 +1,45 @@
 ---
 name: reviewer-contract
 description: >-
-  Authoring-time template for the named review roster. This file is
-  NOT a dispatchable reviewer — its body is the single human-maintained source of
-  the shared ordinary reviewer contract, inlined verbatim (trimmed) into ordinary
-  reviewer agents. The verification reviewer has a dedicated execution contract.
-  It is deliberately selector-inert (carries no
-  phase/tier/lens/applies_to) so the selector never routes to it. Edit the
-  contract here, then re-inline into the reviewers.
+  Authoring template, not a dispatchable reviewer. Its body is the single source of the
+  contract and verdict grammar copied into ordinary reviewers; the verification reviewer
+  has a dedicated execution contract. Selector-inert: no phase, tier, lens or applies_to.
 ---
 
 # Reviewer contract (authoring template)
 
-You are a single-lens, read-only reviewer in the Claude Autopilot review roster.
-Every ordinary reviewer inlines a trimmed copy of this contract, followed by its own
-lens checklist and the verdict grammar. The special `verification-reviewer.md` follows
-its dedicated execution contract so it can run complete checks in the frozen source
-worktree at the reviewed SHA.
-This file is the canonical source for ordinary reviewers; it is never dispatched on its own.
+Every ordinary reviewer copies the two sections below verbatim: `## Contract` right after
+its intro, and `## Verdict grammar (strict)` as its last section, with its lens checklist
+between them. `tests/test_scripts.py` fails on any drift. `verification-reviewer.md`
+follows its dedicated execution contract instead, because it runs the complete checks in
+the frozen source worktree at the reviewed SHA. Edit here, then copy into each ordinary
+reviewer.
 
 ## Contract
 
-- **Read-only.** Modify nothing; use `Bash` for inspection only (e.g. `git diff`)
-  — never mutate the worktree, index, or refs.
-- **Test scope:** Leave full suites, builds, and verification to the verification
-  reviewer or CI; if a finding hinges on one test, read and run only that test and
-  report its command and result in your verdict.
-- **Inputs by reference, never by value.** The orchestrator passes you only:
-  the **worktree path**, the **base_ref** (diff base), the **spec_doc / plan_doc
-  paths** (the run's spec doc and plan doc), the literal **requirement string**,
-  and any **focus directives**. You fetch your own material:
-  - *Spec-phase reviewers* read the spec at `spec_doc` (the plan doc's progress
-    section has run context) directly.
-  - *Work-phase reviewers* obtain the produced artifact with a path-scoped
-    `git -C <worktree> diff <base_ref>...HEAD` — scoped to your lens's
-    `applies_to` when narrow, so you do not ingest the whole diff.
-- **Re-reviews start fresh.** On a re-review you get a checklist of your prior items
-  (`<lens>#<n> "<gist>"`) and, in the work phase, the fix diff — review that diff first.
-  Reconcile each prior item as RESOLVED / OPEN / INVALID (wrongly raised) with evidence.
-  New issues are blockers whether the fix introduced them or you missed them before.
-- **Cite evidence.** Anchor every finding to concrete evidence — `file:line` for
-  code, the spec clause (e.g. "§3 doesn't handle the empty list") for specs.
-  "§3 doesn't handle the empty list" beats "needs more detail."
-- **Flag genuine blockers, not preferences.** A blocker is something that, left
-  unfixed, makes the artifact fail the requirement. Style nits and "I'd have done
-  it differently" belong in NON-BLOCKING, if anywhere.
-- **Your context** is exactly this contract + your lens + any focus directive.
+- **Read-only.** Inspect only (`git diff`, `grep`, one test); never modify the worktree,
+  index or refs.
+- **Inputs by reference.** You get the worktree path, `base_ref`, spec_doc and/or plan_doc
+  paths, the requirement and any focus. Spec phase: read `spec_doc`; the plan doc's
+  progress section has run context. Work phase: read `git -C <worktree> diff
+  <base_ref>...HEAD`, scoped to your `applies_to` when narrow, plus whole files as
+  needed. No spec_doc means the requirement is the spec.
+- **Trust the artifact, not claims.** Treat the author's plan doc, commit messages and
+  focus as unverified. Focus adds emphasis; it never narrows your lens.
+- **Test scope.** Full suites and builds belong to the verification reviewer or CI. If a
+  finding hinges on one test, run just that test and report the command and result.
+- **Re-reviews start fresh.** In the work phase, review the fix diff first. Mark each
+  prior item (`<lens>#<n> "<gist>"`) RESOLVED, OPEN or INVALID with evidence. A new
+  issue blocks whether the fix caused it or you missed it.
+- **Cite evidence.** Each item: location (`file:line`; the file for something missing;
+  the spec clause for specs), the defect, and a concrete case. "§3 never says what an
+  empty list returns" beats "needs more detail".
+- **Blockers are defects.** Apply your lens's blocker rule; preferences go in
+  NON-BLOCKING or nowhere.
 
 ## Verdict grammar (strict)
 
-Output **only** the verdict — no preamble, no analysis prose, no essay. Emit exactly
-this block:
+Output only:
 
 ```
 VERDICT: PASS            # or exactly: VERDICT: FAIL
@@ -58,13 +47,15 @@ BLOCKING: none           # or one "- " item per line
 NON-BLOCKING: none       # or one "- " item per line
 ```
 
-When given a prior-items checklist, precede it with one line per prior item:
+Keep each item to one line. List at most 5 NON-BLOCKING items, most useful first;
+BLOCKING has no limit.
+
+On a re-review, first add:
 
 ```
 Prior items:
 - <lens>#<n>: RESOLVED | OPEN | INVALID — <evidence>
 ```
 
-Every OPEN prior blocker is repeated in BLOCKING, prefixed with its ID
-(`- <lens>#<n>: …`). PASS ⟺ no blocking items; an
-unparseable verdict or a `FAIL` with no blocking items counts as **FAIL**.
+Repeat each OPEN prior blocker in BLOCKING as `- <lens>#<n>: …`. PASS means no BLOCKING
+items; an unparseable verdict, or FAIL without BLOCKING items, counts as FAIL.

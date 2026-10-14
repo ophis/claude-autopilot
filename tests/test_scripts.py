@@ -9,8 +9,10 @@ so they aren't importable as modules, and the CLI is the real contract anyway).
 Fixtures are synthetic agent files + a throwaway git repo, so the tests don't
 depend on the live roster.
 """
+import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -20,6 +22,7 @@ import unittest
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(REPO, "scripts")
 SELECT_PANEL = os.path.join(REPO, "skills", "build", "scripts", "select-panel.py")
+CHECK_SPEC = os.path.join(REPO, "skills", "build", "scripts", "check-spec.py")
 LINT_ROSTER = os.path.join(SCRIPTS, "lint-roster.py")
 REVIEW_ROUND = os.path.join(REPO, "workflows", "review-round.js")
 SKILLS = os.path.join(REPO, "skills")
@@ -560,101 +563,157 @@ Body.
         self.assertIn("tier", proc.stdout)
 
 
-class SkillWorktreePinTests(unittest.TestCase):
-    """Every orchestrator skill must require worktree-pinned subagent dispatch."""
-    def test_claude_tool_forms_and_action_guards_are_preserved(self):
-        markers = (
-            "EnterWorktree({path", "by its id (`SendMessage`)", "`autopilot:<name>` via the Agent tool",
-            "never one at a time", "ONLY that prompt",
-            'Workflow({name: "autopilot:autopilot-review-round"', "**Workflow (default):**",
+def skill_text(skill):
+    """SKILL.md plus every plugin reference file it points to."""
+    with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
+        text = fh.read()
+    parts = [text]
+    for ref in sorted(set(re.findall(r"\.\./\.\./(references/[\w.-]+\.md)", text))):
+        with open(os.path.join(REPO, ref), encoding="utf-8") as fh:
+            parts.append(fh.read())
+    return "\n".join(parts)
+
+
+def flat(text):
+    return " ".join(text.split())
+
+
+def step(text, n):
+    """The body of pipeline step S<n>, up to the next step or heading."""
+    m = re.search(rf"(?m)^(?:#+ |- \*\*)S{n}\b", text)
+    rest = text[m.end():]
+    nxt = re.search(r"(?m)^(?:#+ |- \*\*S\d)", rest)
+    return rest[:nxt.start()] if nxt else rest
+
+
+class SkillContractTests(unittest.TestCase):
+    """Both skills keep their pipeline shape and the exact tokens a run must use."""
+    SKILL_STEPS = {"build": [1, 2, 3, 4, 5, 6, 7, 8], "light-build": [1, 4, 5, 6, 7, 8]}
+
+    def test_pipeline_steps_in_order(self):
+        for skill, steps in self.SKILL_STEPS.items():
+            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
+                text = fh.read()
+            found = [int(n) for n in re.findall(r"(?m)^(?:#+ |- \*\*)S(\d)\b", text)]
+            self.assertEqual(sorted(set(found)), steps, skill)
+            self.assertEqual(found, sorted(found), skill)
+
+    def test_skills_point_to_the_shared_reference(self):
+        pointer = "../../references/autopilot-common.md"
+        for skill in self.SKILL_STEPS:
+            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
+                self.assertIn(pointer, fh.read(), skill)
+        with open(os.path.join(REPO, "references", "autopilot-common.md"), encoding="utf-8") as fh:
+            common = fh.read()
+        self.assertFalse(common.startswith("---"), "shared reference must not look like a skill")
+
+    def test_common_pointers_name_real_headings(self):
+        with open(os.path.join(REPO, "references", "autopilot-common.md"), encoding="utf-8") as fh:
+            headings = set(re.findall(r"(?m)^## (.+)$", fh.read()))
+        for skill in self.SKILL_STEPS:
+            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
+                text = flat(fh.read())
+            rests = [text[m.end():m.end() + 60] for m in re.finditer(r"common: ", text)]
+            self.assertTrue(rests, skill)
+            for rest in rests:
+                with self.subTest(skill=skill, pointer=rest[:30]):
+                    self.assertTrue(any(rest.startswith(h) and rest[len(h):len(h) + 1] in ").," for h in headings), rest)
+
+    def test_exact_tokens_survive(self):
+        tokens = (
+            "EnterWorktree({path", "`autopilot:<name>`", "Agent tool",
+            'Workflow({name: "autopilot:autopilot-review-round"', "resumeFromRunId", "synthetic",
             "force-push", "write outside the worktree", "history rewrite beyond this branch",
-            "rm/reset of uncommitted work", "unless the session runs with automatic approval",
-            "Claude: Auto Mode", "Stop and hand off (state + exact next step)",
+            "rm/reset of uncommitted work", "Auto Mode",
+            "branch --show-current", "main/master",
+            "git worktree add <path> <branch>", "git worktree add <path> -b <branch> HEAD",
+            "git merge-base HEAD <branch>",
+            "git -C <worktree> status --porcelain", "git -C <worktree> rev-parse HEAD",
+            "reviewed_sha", "HEAD^{tree}", "<reviewed_sha>^{tree}",
+            "git -C <worktree> diff <pre-fix HEAD>..HEAD",
+            "VERIFICATION_UNAVAILABLE:", "autopilot:verification-reviewer",
+            "`verification=CI` or `verification=none`", "exit code", "<lens>#<n>",
+            "autopilot-result", "converged", "capped-without-pass", "stopped",
+            "oscillation", "unfixable", "requirements-conflict",
+            "root-contradiction", "phase-failure", "destructive-op",
+            "spawn_agent", ".codex/worktrees/<prefix>-<slug>", "codex/<prefix>-<slug>",
+            ".claude/worktrees/<prefix>-<slug>", "no CI running its full checks",
+            "local verification", "no planning skill", "### Task N",
+            "git -C <worktree> log --oneline <base_ref>..HEAD", "Notes", ".autopilot/",
         )
-        for skill in ("build", "light-build"):
-            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
-                text = " ".join(fh.read().split())
-            for marker in markers:
-                with self.subTest(skill=skill, marker=marker):
-                    self.assertTrue(marker in text, f"{skill}: missing {marker}")
+        for skill in self.SKILL_STEPS:
+            text = flat(skill_text(skill))
+            for token in tokens:
+                with self.subTest(skill=skill, token=token):
+                    self.assertIn(token, text)
 
-    def test_all_skills_pin_subagents_to_worktree(self):
-        for skill in ("build", "light-build"):
+    def test_s5_has_no_per_task_review(self):
+        with open(os.path.join(REPO, "references", "autopilot-common.md"), encoding="utf-8") as fh:
+            common = fh.read()
+        produce = common[common.index("## Produce (S5)"):]
+        produce = produce[:produce.index("\n## ", 1)]
+        self.assertIn("### Task N", produce)
+        self.assertNotIn("review", produce.lower())
+        for skill in self.SKILL_STEPS:
             with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
-                text = fh.read()
-            self.assertIn("Worktree-pinned dispatch", text, skill)
-            self.assertIn("never** main/master", text, skill)
-            self.assertIn("branch --show-current", text, skill)
-
-    def test_s1_reuses_prior_run_worktree_before_creating(self):
-        for skill in ("build", "light-build"):
-            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
-                text = fh.read()
-            s1 = text[text.index("- **S1 — worktree.**"):text.index("- **S", text.index("- **S1 — worktree.**") + 1)]
-            resolve = s1.index("host-specific `<branch>` before lookup or creation")
-            reuse = s1.index("resolved `<branch>` exists from a prior run, reuse it with its commits")
-            self.assertLess(resolve, reuse, skill)
-            self.assertLess(reuse, s1.index("Else create worktree"), skill)
-            self.assertIn("same resolved branch for worktree reuse and resume", s1, skill)
-            self.assertIn("Follow repo worktree/branch conventions", s1, skill)
-            self.assertNotIn("`<prefix>-<slug>` branch", s1, skill)
-            self.assertIn("git worktree add <path> <branch>", s1, skill)
-            self.assertIn("collision with another requirement's", s1, skill)
-
-    def test_build_s5_fresh_producer_per_task_without_review(self):
-        with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
-            text = fh.read()
-        s5 = " ".join(text[text.index("- **S5 — produce.**"):text.index("- **S6 — work review.**")].split())
-        self.assertIn("one fresh producer subagent on the task list header and its `### Task N` brief", s5)
-        self.assertIn("only the checks its brief names that cover its changed files", s5)
-        self.assertIn("never the full verify command or full suite", s5)
-        self.assertIn("log the task `done`", s5)
-        self.assertNotIn("review", s5)
+                s5 = step(fh.read(), 5)
+            self.assertIn("Produce (S5)", s5, skill)
+            self.assertNotIn("review", s5.lower(), skill)
         for doc in ("skills/build/SKILL.md", "README.md", "CLAUDE.md"):
             with open(os.path.join(REPO, doc), encoding="utf-8") as fh:
                 self.assertNotIn("subagent-driven", fh.read(), doc)
 
-    def test_light_build_s5_fresh_producer_per_task_without_review(self):
-        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
-            text = fh.read()
-        s5 = " ".join(text[text.index("- **S5 — produce.**"):text.index("- **S6 — work review.**")].split())
-        self.assertIn("one fresh producer subagent", s5)
-        self.assertIn("task list header", s5)
-        self.assertIn("`### Task N` brief", s5)
-        self.assertIn("only the checks its brief names that cover its changed files", s5)
-        self.assertIn("never the full verify command or full suite", s5)
-        self.assertIn("log the task `done`", s5)
-        self.assertNotIn("review", s5)
+    def test_orchestrator_authors_and_reviewers_judge(self):
+        with open(os.path.join(REPO, "references", "autopilot-common.md"), encoding="utf-8") as fh:
+            common = fh.read()
+        def section(title):
+            body = common[common.index(title):]
+            return body[:body.index("\n## ", 1)]
+        produce = section("## Produce (S5)")
+        self.assertIn("Implement it yourself", produce)
+        self.assertNotIn("never edit the work product", common)
+        self.assertIn("FORK:", produce)
+        fixes = section("## S6 fixes")
+        self.assertIn("yourself", fixes)
+        self.assertNotIn("SendMessage", fixes)
+        self.assertNotIn("thin orchestrator", common.lower())
+        self.assertIn("### Re-hydrate after compaction", common)
+        self.assertIn("Never act as your own reviewer or verifier", common)
 
-    def test_light_build_s4_task_list_in_state_file(self):
-        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
-            text = fh.read()
-        s4 = " ".join(text[text.index("- **S4 — task list.**"):text.index("- **S5 — produce.**")].split())
-        self.assertIn("Global Constraints", s4)
-        self.assertIn("### Task N", s4)
-        self.assertIn("always materializes the state file", s4)
-        self.assertIn("the checks it runs (only those its change affects, never a full suite", s4)
-
-    def test_light_build_pipeline_legend_includes_s4(self):
-        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
-            text = fh.read()
-        self.assertIn("S1 → S4 → S5 → S6 → S7 → S8", text)
-
-    def test_build_has_no_dependency_preflight_and_plans_itself(self):
+    def test_build_specifics(self):
         with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
-        self.assertNotIn("## Preflight", text)
-        self.assertNotIn("Load config", text)
-        self.assertIn("invoke no planning skill", " ".join(text.split()))
-
-    def test_build_s2_follows_its_spec_guide(self):
-        with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
-            text = fh.read()
-        s2 = text[text.index("- **S2 — spec."):text.index("- **S3 — spec review.")]
-        self.assertIn("[spec.md](spec.md)", s2)
+        self.assertIn("[spec.md](spec.md)", step(text, 2))
         tracked = subprocess.run(["git", "-C", REPO, "ls-files", "skills/build/spec.md"],
                                  capture_output=True, text=True, check=True).stdout.split()
         self.assertEqual(tracked, ["skills/build/spec.md"])
+        self.assertIn("select-panel.py", text)
+        self.assertIn("RESUME: phase=<S[1-8]>", text)
+        self.assertIn("spec_file=", text)
+        self.assertIn("every core lens", flat(text))
+        self.assertIn("progress section", text)
+        self.assertNotIn("## Preflight", text)
+        self.assertNotIn("Load config", text)
+
+    def test_light_build_specifics(self):
+        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertIn("RESUME: phase=<S[14-8]>", text)
+        self.assertIn("## Forks", text)
+        self.assertIn("above RESUME", text)
+        self.assertIn("after a PASS", flat(text))
+        for lens in ("correctness", "requirement-fidelity", "doc"):
+            self.assertIn(f"autopilot:{lens}-reviewer", text, lens)
+        self.assertNotIn("select-panel", text)
+
+    def test_retired_shapes_stay_gone(self):
+        for skill in self.SKILL_STEPS:
+            text = skill_text(skill)
+            self.assertFalse("S6 — verify" in text, skill)
+            self.assertFalse("S9" in text, skill)
+            self.assertFalse("clone" in text.lower(), skill)
+        with open(os.path.join(REPO, "README.md"), encoding="utf-8") as fh:
+            self.assertNotIn("S6 — Verify", fh.read())
 
     def test_plugin_never_mentions_superpowers(self):
         files = subprocess.run(["git", "-C", REPO, "ls-files"], capture_output=True,
@@ -665,70 +724,24 @@ class SkillWorktreePinTests(unittest.TestCase):
             with open(os.path.join(REPO, f), encoding="utf-8", errors="ignore") as fh:
                 self.assertNotIn("superpowers", fh.read().lower(), f)
 
-    def test_s6_work_review_includes_verification_without_standalone_verify(self):
-        for skill in ("build", "light-build"):
-            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
-                text = fh.read()
-            flat = " ".join(text.split())
-            self.assertNotIn("- **S6 — verify.**", text, skill)
-            self.assertIn("- **S6 — work review.**", text, skill)
-            self.assertIn("- **S7 — squash.**", text, skill)
-            self.assertIn("- **S8 — finish.**", text, skill)
-            self.assertNotIn("- **S9 —", text, skill)
-            self.assertIn("autopilot:verification-reviewer", text, skill)
-            self.assertIn("reviewed_sha=<HEAD>", text, skill)
-            self.assertIn("HEAD still equals", flat, skill)
-            self.assertIn("HEAD^{tree}", text, skill)
-            self.assertIn("<reviewed_sha>^{tree}", text, skill)
-            self.assertIn("Wait for every verdict", text, skill)
-            self.assertIn("raw BLOCKING items before adding item IDs", flat, skill)
-            self.assertIn("VERIFICATION_UNAVAILABLE:", text, skill)
-            self.assertIn("only checks covering the files it changes", flat, skill)
-            self.assertIn("never the full verify command or full suite", flat, skill)
-            self.assertIn("verify command outside the task-list header", flat, skill)
-            self.assertIn("exit code", text, skill)
-        with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
-            build = fh.read()
-        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
-            light = fh.read()
-        self.assertIn("every core lens and any verifier", build)
-        self.assertIn("every round, including after a PASS", light)
-        self.assertIn("three cores; add `autopilot:verification-reviewer`", " ".join(light.split()))
-        for text in (build, light):
-            flat = " ".join(text.split())
-            self.assertIn("only when the repo has no CI running its full checks or the "
-                          "requirement asks for local verification", flat)
-            self.assertIn("`verification=CI` or `verification=none`", flat)
-        self.assertIn("progress section", build)
-        self.assertIn("above RESUME", light)
-        self.assertIn("legacy S1–S9", build + light)
-        with open(os.path.join(REPO, "README.md"), encoding="utf-8") as fh:
-            self.assertNotIn("S6 — Verify", fh.read())
-
-    def test_s6_dispatch_uses_clean_committed_source_and_fixed_revision(self):
-        for skill in ("build", "light-build"):
-            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
-                text = " ".join(fh.read().split())
-            marker = ("Dispatch the whole round together" if skill == "build"
-                      else "Dispatch** each round's members together")
-            dispatch = text[text.index(marker):text.index("Wait for every verdict")]
-            self.assertIn("git -C <worktree> status --porcelain", dispatch, skill)
-            self.assertIn("clean committed source worktree", dispatch, skill)
-            self.assertIn("ordinary reviewers read source head", dispatch.lower(), skill)
-            self.assertIn("verification reviewer runs full checks in the frozen source worktree",
-                          dispatch, skill)
-            self.assertNotIn("clone", dispatch.lower(), skill)
-
-    def test_s6_fix_commits_and_rechecks_source_before_rereview(self):
-        for skill in ("build", "light-build"):
-            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
-                text = " ".join(fh.read().split())
-            s6 = text[text.index("S6 — work review."):text.index("S7 — squash.")]
-            self.assertIn("fix producer must commit", s6, skill)
-            self.assertIn("before re-review under the dispatch rules above", s6, skill)
-            dispatch = text[text.index("- **Dispatch"):text.index("- **Wait for every verdict")]
-            self.assertIn("git -C <worktree> status --porcelain", dispatch, skill)
-            self.assertIn("git -C <worktree> rev-parse HEAD", dispatch, skill)
+    def test_ordinary_reviewers_copy_the_template_verbatim(self):
+        def sections(path):
+            with open(path, encoding="utf-8") as fh:
+                body = fh.read()
+            parts = re.split(r"(?m)^(?=## )", body)
+            heads = [p.splitlines()[0] for p in parts if p.startswith("## ")]
+            self.assertEqual(len(heads), len(set(heads)), path)
+            return {p.splitlines()[0]: p.rstrip() for p in parts if p.startswith("## ")}
+        template = sections(os.path.join(REPO, "agents", "reviewer-contract.md"))
+        shared = ("## Contract", "## Verdict grammar (strict)")
+        for path in sorted(glob.glob(os.path.join(REPO, "agents", "*-reviewer.md"))):
+            name = os.path.basename(path)
+            if name == "verification-reviewer.md":
+                continue
+            mine = sections(path)
+            for title in shared:
+                with self.subTest(reviewer=name, section=title):
+                    self.assertEqual(mine.get(title), template[title])
 
     def test_reviewer_template_exempts_verification_contract(self):
         with open(os.path.join(REPO, "agents", "reviewer-contract.md"), encoding="utf-8") as fh:
@@ -749,13 +762,133 @@ class SkillWorktreePinTests(unittest.TestCase):
         self.assertEqual(readme.count("inlined into ordinary reviewers"), 2)
         self.assertIn("dedicated execution contract", readme)
 
-    def test_resume_phase_regexes_cover_only_valid_stages(self):
-        with open(os.path.join(SKILLS, "build", "SKILL.md"), encoding="utf-8") as fh:
-            build = fh.read()
-        with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
-            light = fh.read()
-        self.assertIn("RESUME: phase=<S[1-8]>", build)
-        self.assertIn("RESUME: phase=<S[14-8]>", light)
+GOOD_SPEC = """# Spec: TASK-1 add wordcount
+Requirement: quoted below; it overrides any other input.
+
+## Goal
+Count words.
+
+## Scope
+In: wordcount. Out: none.
+
+## Acceptance criteria
+`AC1`: `wordcount("a b")` is 2.
+`AC2`: `wordcount("")` is 0.
+`AC3`: punctuation-only tokens don't count.
+
+## Design
+### textkit/core.py
+`wordcount(text) -> int`.
+
+## Verification
+| AC | Test or check |
+| --- | --- |
+| AC1–AC2 | tests/test_core.py::test_wordcount |
+| AC3 | tests/test_core.py::test_punctuation |
+
+## Decisions
+`D1`: whitespace means `str.split()`.
+"""
+
+
+class CheckSpecTests(unittest.TestCase):
+    """check-spec.py enforces spec.md's header, required sections and AC coverage."""
+
+    def run_check(self, text, encoding="utf-8"):
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding=encoding) as fh:
+            fh.write(text)
+        self.addCleanup(os.unlink, fh.name)
+        return subprocess.run([sys.executable, CHECK_SPEC, fh.name], capture_output=True,
+                              text=True, timeout=30)
+
+    def assertProblems(self, proc, *lines):
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        for line in lines:
+            self.assertIn(line, proc.stdout.splitlines())
+
+    def test_good_spec_passes(self):
+        proc = self.run_check(GOOD_SPEC)
+        self.assertEqual((proc.returncode, proc.stdout.strip()), (0, "OK"))
+
+    def test_every_range_form_covers_its_criteria(self):
+        for span in ("AC1–AC3", "AC1-AC3", "AC1 — AC3", "`AC1`–`AC3`", "AC1..AC3", "AC1 to AC3",
+                     "AC1 through AC3", "AC1-3"):
+            with self.subTest(span=span):
+                spec = GOOD_SPEC.replace("| AC1–AC2 |", f"| {span} |").replace(
+                    "| AC3 | tests/test_core.py::test_punctuation |\n", "")
+                proc = self.run_check(spec)
+                self.assertEqual((proc.returncode, proc.stdout.strip()), (0, "OK"))
+
+    def test_dash_after_an_id_in_criteria_is_not_a_range(self):
+        spec = GOOD_SPEC.replace("`AC2`: `wordcount(\"\")` is 0.", "`AC2` — 0 for empty input; AC3 - 404 never.")
+        proc = self.run_check(spec)
+        self.assertEqual((proc.returncode, proc.stdout.strip()), (0, "OK"))
+
+    def test_bullet_list_ids_are_not_a_range(self):
+        spec = GOOD_SPEC.replace("| AC1–AC2 | tests/test_core.py::test_wordcount |\n", "- AC1\n").replace(
+            "| AC3 | tests/test_core.py::test_punctuation |\n", "- AC3\n")
+        self.assertProblems(self.run_check(spec), "AC2: no Verification row")
+
+    def test_reversed_range_covers_its_criteria(self):
+        spec = GOOD_SPEC.replace("| AC1–AC2 |", "| AC3–AC1 |").replace("| AC3 | tests/test_core.py::test_punctuation |\n", "")
+        proc = self.run_check(spec)
+        self.assertEqual((proc.returncode, proc.stdout.strip()), (0, "OK"))
+
+    def test_huge_range_is_capped(self):
+        proc = self.run_check(GOOD_SPEC.replace("| AC3 |", "| AC3–AC1000000000 |"))
+        self.assertProblems(proc, "AC1000000000: cited in Verification but not defined")
+        self.assertLess(len(proc.stdout.splitlines()), 5)
+
+    def test_uncovered_criterion_fails(self):
+        proc = self.run_check(GOOD_SPEC.replace("| AC3 | tests/test_core.py::test_punctuation |\n", ""))
+        self.assertProblems(proc, "AC3: no Verification row")
+
+    def test_undefined_criterion_in_verification_fails(self):
+        proc = self.run_check(GOOD_SPEC.replace("| AC3 |", "| AC3, AC4 |"))
+        self.assertProblems(proc, "AC4: cited in Verification but not defined")
+
+    def test_headings_inside_fences_are_ignored(self):
+        spec = GOOD_SPEC.replace("| --- | --- |\n", "| --- | --- |\n```\n## note\n```\n").replace(
+            "### textkit/core.py\n", "### textkit/core.py\n```\n## Verification\n| AC9 | x |\n```\n")
+        proc = self.run_check(spec)
+        self.assertEqual((proc.returncode, proc.stdout.strip()), (0, "OK"))
+
+    def test_bad_header_fails(self):
+        proc = self.run_check(GOOD_SPEC.replace("# Spec: TASK-1", "# TASK-1"))
+        self.assertProblems(proc, "header: first line must be '# Spec: <ticket or slug> <one-line outcome>'")
+
+    def test_missing_section_fails(self):
+        proc = self.run_check(GOOD_SPEC.replace("## Decisions", "## Notes"))
+        self.assertProblems(proc, "missing section: ## Decisions")
+
+    def test_missing_criteria_section_skips_coverage(self):
+        proc = self.run_check(GOOD_SPEC.replace("## Acceptance criteria", "## Requirements"))
+        self.assertProblems(proc, "missing section: ## Acceptance criteria")
+        self.assertNotIn("cited in Verification", proc.stdout)
+
+    def test_heading_case_and_suffix_are_tolerated_and_bom_ok(self):
+        spec = "﻿" + GOOD_SPEC.replace("## Acceptance criteria", "## Acceptance Criteria (AC)")
+        proc = self.run_check(spec)
+        self.assertEqual((proc.returncode, proc.stdout.strip()), (0, "OK"))
+
+    def test_criteria_without_ids_fail(self):
+        proc = self.run_check(GOOD_SPEC.replace("`AC1`:", "-").replace("`AC2`:", "-").replace("`AC3`:", "-"))
+        self.assertProblems(proc, "Acceptance criteria: no line starts with an AC1, AC2, ... id")
+
+    def test_usage_and_read_errors_exit_2(self):
+        for args in ([], ["a.md", "b.md"], ["/nonexistent/spec.md"]):
+            with self.subTest(args=args):
+                proc = subprocess.run([sys.executable, CHECK_SPEC, *args], capture_output=True, text=True)
+                self.assertEqual(proc.returncode, 2)
+                self.assertNotIn("Traceback", proc.stderr)
+
+    def test_spec_guide_points_to_the_checker(self):
+        with open(os.path.join(SKILLS, "build", "spec.md"), encoding="utf-8") as fh:
+            guide = fh.read()
+        self.assertIn("scripts/check-spec.py", guide)
+        for name in ("Goal", "Scope", "Acceptance criteria", "Design", "Verification", "Decisions"):
+            self.assertIn(f"## {name}", guide)
+
 
 class ReviewRoundScriptTests(unittest.TestCase):
     """Static contract + syntax gate for workflows/review-round.js.

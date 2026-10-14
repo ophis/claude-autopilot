@@ -31,8 +31,8 @@ REQUIRED_KEYS = (
 VALID_PHASES = {"spec", "work", "both"}
 VALID_TIERS = {"core", "optional"}
 READONLY_TOOLS = {"Read", "Grep", "Glob", "Bash"}
-# Contract markers each reviewer inlines; presence check, not byte-equality
-# (reviewers trim the contract). See agents/reviewer-contract.md.
+# Contract markers each reviewer inlines. tests/test_scripts.py also checks the
+# real roster copies agents/reviewer-contract.md's sections verbatim.
 CONTRACT_MARKERS = (
     "Read-only",
     "Inputs by reference",

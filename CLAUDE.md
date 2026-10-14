@@ -32,8 +32,8 @@ claude --plugin-dir .
 
 Also run the [contributor smoke protocol](CONTRIBUTING.md#smoke-protocol).
 
-There is no build step. `tests/test_scripts.py` exercises `skills/build/scripts/select-panel.py`
-and `scripts/lint-roster.py` as CLIs via subprocess (they have hyphenated names,
+There is no build step. `tests/test_scripts.py` exercises `skills/build/scripts/select-panel.py`,
+`skills/build/scripts/check-spec.py` and `scripts/lint-roster.py` as CLIs via subprocess (they have hyphenated names,
 so they're not importable — the CLI is the contract).
 
 ## Architecture (the big picture)
@@ -43,12 +43,14 @@ The two surfaces — `skills/build/SKILL.md` and `skills/light-build/SKILL.md` �
 step inside a larger skill/workflow); users still type `/autopilot:build` /
 `/autopilot:light-build`. `light-build` is the low-ceremony surface: a harness
 (S1 → S4 → S5 → S6 → S7 → S8) with no spec doc and no spec review. S4 always
-materializes a state file holding the task list; S6 is a pinned cap-1 panel
+materializes a plan doc holding the task list; S6 is a pinned cap-1 panel
 (correctness + requirement-fidelity + doc, plus verification when relevant). It does not gate scope — surface choice is
-the user's responsibility. When invoked, the *main-session agent becomes a thin
-orchestrator*: it dispatches subagents and judges their structured output, and never
-edits the work product itself. Understanding the system means reading those two skill
-files plus `agents/` and the bundled `skills/build/scripts/` helpers together:
+the user's responsibility. When invoked, the *main-session agent implements the work itself* (S5 tasks and S6 fixes,
+optionally handing a self-contained task to a fresh producer) while independent reviewer
+subagents judge it; only their verdicts decide. Both read `references/autopilot-common.md` first: the rules they share (disciplines,
+state, council, worktree, review round, fixes, safety stops, result block); each SKILL.md
+keeps only its own input, state, steps and review settings. Understanding the system means
+reading those three files plus `agents/` and the bundled `skills/build/scripts/` helpers together:
 
 - **Shared spine.** `build` runs a single **S1–S8** pipeline: S1 worktree → S2 spec →
   S3 spec-review → S4 task list → S5 produce → S6 work-review (verification optional) → S7 squash → S8 finish.
@@ -68,7 +70,7 @@ files plus `agents/` and the bundled `skills/build/scripts/` helpers together:
   reviewer runs the complete checks in the frozen source worktree at the reviewed SHA. Each
   agent has **self-describing** frontmatter (`lens` / `phase` / `tier` /
   `applies_to`) so the selector can route it with no code change. `reviewer-contract.md`
-  is an authoring-time template (selector-inert: no `phase`) inlined into ordinary reviewers;
+  is an authoring-time template (selector-inert: no `phase`) copied verbatim into ordinary reviewers (a test enforces it);
   `verification-reviewer.md` follows its dedicated execution contract.
   Both skills use neutral actions with Claude tool forms in parentheses.
   Claude reviewers run as `autopilot:<name>` with configured models;
@@ -78,7 +80,7 @@ files plus `agents/` and the bundled `skills/build/scripts/` helpers together:
   the phase falls back to a native host dispatch batch of the same members and prompts.
   **Both surfaces** run the convergence loop natively in the orchestrator (Round 1 + fix →
   re-review until all-PASS or the per-phase cap). The orchestrator owns the loop, the fix
-  (a fixer continued across rounds), and the re-review set: S3 the full panel; S6 the
+  (made by the orchestrator itself), and the re-review set: S3 the full panel; S6 the
   lenses that failed plus every core lens and any verifier (light-build: failed lenses
   plus any verifier every round). The skills' S6 rule says when the verifier runs.
 
@@ -103,10 +105,11 @@ files plus `agents/` and the bundled `skills/build/scripts/` helpers together:
   (`phase=… worktree=… branch=… base_ref=… review_round=…`) lets a run survive
   compaction and resume from the current phase; an interrupted review round re-runs whole.
   The progress section records each S5 task done (a resume continues from the next), the
-  review transport, per-lens blocker gists, and the full verify command outside producer
-  briefs. In light-build, the command sits above RESUME in the state file. From S6, both
+  review transport, per-lens blocker gists, and the full verify command outside the task
+  briefs. A Notes section keeps durable codebase facts, and after a compaction the
+  orchestrator re-hydrates from the plan doc and `git log` (common: Re-hydrate after compaction). In light-build, the command sits above RESUME in the plan doc. From S6, both
   skills keep mutable RESUME, verdicts, and verification evidence in an ignored run note
-  (or an ignored plan/state file).
+  (or an ignored plan doc).
 
 - **No plugin dependencies.** Both surfaces use only native tools, the plugin's own
   scripts, or inline logic; neither invokes another plugin's skill or preflights for one.
@@ -120,7 +123,7 @@ files plus `agents/` and the bundled `skills/build/scripts/` helpers together:
   the plugin is reloaded/updated — a fresh agent can't be dispatched natively in the
   same run that creates it (dispatch it ad-hoc via `general-purpose` until shipped).
   The same applies to the `skills/build` + `skills/light-build` skills: edits to a
-  `SKILL.md` (and `/autopilot:build` / `/autopilot:light-build` by-name invocability) go live only after `/reload-plugins`.
+  `SKILL.md` or `references/autopilot-common.md` (and `/autopilot:build` / `/autopilot:light-build` by-name invocability) go live only after `/reload-plugins`.
 - **Give a subagent the worktree-absolute path for `CLAUDE.md` edits.** Told to edit
   `CLAUDE.md` in a worktree, one edited the repo-root copy loaded in its context;
   `git -C <worktree> add -A` doesn't see it, so the edit strands on `main`.

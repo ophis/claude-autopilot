@@ -1,237 +1,93 @@
 ---
 name: light-build
-description: "Self-contained, autonomous, low-ceremony build harness: create an isolated worktree, write an S4 task list, produce the work with a fresh producer per task, and run a capped correctness + requirement-fidelity + doc review (+ verification when relevant) to a single review-ready branch (never merges). Has no plugin dependency — runs with nothing else installed. For simple tasks, or as a lighter-than-build option when you want autonomy + expert-council-at-forks without the spec/review rigor — for that rigor use build. Pass the requirement text."
+description: "Low-ceremony autonomous build: create an isolated worktree, write a task list, implement each task itself, and run a capped correctness + requirement-fidelity + doc review (plus verification when relevant) to a single review-ready branch (never merges). No spec doc or spec review, and no other plugin needed. Use for simple tasks, or when you want autonomy and expert-council decisions without build's spec rigor. Pass the requirement text."
 argument-hint: "<requirements>"
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Agent, Task, SendMessage, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite
+allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Agent, Task, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite
 ---
 
 # Autopilot: light-build
 
 Paths are relative to this skill's directory.
 
-Autonomous light-build run. Drive the pipeline end to end: dispatch and judge; no scope
-gate. **Self-contained: name or invoke no external plugin skill; no dependency preflight.**
+Drive one requirement through S1 → S4 → S5 → S6 → S7 → S8 to a single review-ready branch,
+autonomously. Step numbers match build's; light-build skips build's spec (S2) and spec
+review (S3). You implement the work; independent reviewer subagents judge it.
 
-## Your input
+- **The requirement is the spec.**
+- **No scope gate.** Run whatever you are given; choosing the surface is the user's call.
+- **Self-contained.** Name or invoke no external plugin skill, and run no dependency
+  preflight.
 
-`input` is Claude Code's substituted `$ARGUMENTS` or Codex's invoking user request /
-explicit caller input; an unresolved placeholder is absent. It is the single source of
-intent: free-text requirements. **The requirement IS the spec.** Empty input → STOP with a handoff asking for requirements.
+**On start, before anything else (a resume included), read [`../../references/autopilot-common.md`](../../references/autopilot-common.md) in full.**
+It holds the rules light-build shares with build: disciplines, hosts, state and resume,
+progress log, council, worktree, task list, produce, review round, S6 fixes, squash and
+finish, safety stops, and the result block. This file adds light-build's input, state, steps, review settings
+and forks.
 
-## Operating disciplines
+## Input
 
-- **Autonomous — never ask user.** At a decision point, **convene expert
-  council or decide solo** (see "Deciding at decision points").
-- **Thin orchestrator.** Dispatch by reference and judge structured output. Never hoard
-  whole files, diffs, or logs in main thread; read only bounded slices when you must
-  inspect something yourself.
-- **Resources.** Resolve bundled paths to absolute paths for tools and worker briefs without
-  changing the target worktree cwd. Read applicable AGENTS.md / CLAUDE.md in the target
-  repo/worktree and pass their paths and constraints to workers.
-- **Native agents.** Use exposed spawn, continue and wait tools with documented arguments.
-  Request fresh context when supported, supplying the brief and applicable constraints.
-  Dispatch rounds in parallel, queuing remaining members at available concurrency
-  capacity; collect every verdict before judging or fixing; status alone is no verdict.
-- **Host tools.** Claude tool forms appear in parentheses; use the session's exposed
-  equivalents elsewhere. Workflow is Claude-only; without it use the Task fallback.
-  Worktree defaults: Claude `.claude/worktrees/<prefix>-<slug>`
-  / `<prefix>-<slug>`; Codex `.codex/worktrees/<prefix>-<slug>` / `codex/<prefix>-<slug>`.
-  Claude named reviewers keep `model:` / `effort:` and tools from `../../agents/*.md`.
-  When named dispatch is unavailable, give a fresh generic reviewer the canonical
-  `../../agents/<name>.md` body plus its run-input prompt; preserve the body's
-  verdict grammar and tool/test boundaries. Codex uses these generic reviewers,
-  inheriting the session model with no `model` override to `spawn_agent`.
-- **Worktree-pinned dispatch.** Give every subagent absolute worktree path + branch and
-  have it act only there — absolute paths / `git -C <worktree>`, never inherited cwd — and
-  **before any write assert** `git -C <worktree> branch --show-current` is the run branch;
-  **never** main/master.
-- **No merge.** The run ends at a review-ready branch.
+`input` (common: Terms) is a free-text requirement. If it is empty, stop with a handoff asking for
+requirements.
 
-## Resume & state
+## State
 
-**On start, resume first.** Look for an existing **state file** with a RESUME block in the
-project's convention location. If found: reconcile worktree/branch/base_ref existence on
-disk, then continue from `phase`. An interrupted S6 review round re-runs with the whole
-frozen panel, on its recorded transport and round number. **No state file → start at S1.**
-
-**The state file** (materialized in S4) holds the requirement and full verify command
-above RESUME, then the task list:
+The plan doc is created at S4. Until then, hold `worktree`, `branch` and `base_ref` in
+context. In order, the plan doc holds the `Rules:` line, the requirement, the full verify command, the
+RESUME block, the progress section, Notes, and the task list as the last section.
 
 ```
 RESUME: phase=<S[14-8]> worktree=<path> branch=<name> base_ref=<sha> review_round=<n>
 ```
 
-Advance RESUME's `phase=` with the run. From S6, persist RESUME, the frozen panel and
-verdicts, reviewed SHA/tree, and the verifier's exact commands and results (exit codes, failure
-counts, diagnostics) in an ignored run note; reuse an ignored state file, or link the note from
-a tracked state file before committing it for review. Resume S7/S8 only with all-PASS evidence for the current
-tree; otherwise restart S6. For legacy S1–S9 states, restart old S6–S9 at S6, keeping task progress.
+Task `done` marks and decisions go in the progress section; hold a decision made before
+S4 in context and log it at S4. The S6 panel, verdicts and evidence go in the run note.
 
-**Location follows the user's / project's convention** — honor AGENTS.md / CLAUDE.md and existing repo
-patterns.
+## Pipeline
 
-## Deciding at decision points (expert council)
+### S1. Worktree
 
-- At a genuine fork — two-plus viable approaches with materially different trade-offs, or a
-  choice shaping architecture / data model / interface / scope, costly to reverse, or one a
-  later review might miss — **convene a council**: 2–4 ad-hoc expert personas in one parallel
-  subagent batch (`Task`), each returning a concise position (recommendation, rationale, trade-offs,
-  dissent). You **synthesize, decide, and record** a brief decision (see **Working-note
-  shapes**) — the decider, breaking ties.
-- Otherwise decide solo and record (a wrong guess is caught by review). Never fabricate
-  personas to hit a count — fewer than two real lenses → solo.
+Create or reuse the worktree (common: Worktree (S1)). Hold `worktree`, `branch` and
+`base_ref` (HEAD) in context.
 
-## The S5 FORK mechanism (producer → orchestrator → council → re-dispatch)
+### S4. Task list
 
-Producers do **NOT** consult the council directly. On a **genuine fork** (the council
-trigger above) the producer stops and returns a `FORK:` marker naming the options. Shape:
+Write the task list per common: Task list (S4). S4 always creates the plan doc. A small
+change is one task. Put the full verify command above RESUME.
 
-```
-FORK: <one-line question>
-- option A: <terse description + trade-off>
-- option B: <terse description + trade-off>
-```
+### S5. Produce
 
-On a `FORK:` return the orchestrator **convenes the expert council** (above), **decides**,
-**records** the brief decision, and **re-dispatches the producer** with the decision baked
-into its prompt ("DECISION: <chosen option + one-line rationale>; proceed — do not re-fork on
-this"). A trivial/low-stakes ambiguity is NOT a fork — the producer picks the obvious default
-(a wrong guess is caught by S6).
+Per common: Produce (S5). A delegated producer is dispatched with `Task` and also gets the
+requirement.
 
-## S6 — correctness + requirement-fidelity + doc review (+ verification)
+### S6. Work review
 
-- **Panel:** pin `autopilot:correctness-reviewer`, `autopilot:requirement-fidelity-reviewer`
-  AND `autopilot:doc-reviewer`: three cores; add `autopilot:verification-reviewer`
-  only when the repo has no CI running its full checks or the requirement asks for
-  local verification; no other optionals.
-  Freeze it in the run note (see **Working-note shapes**); reuse it every round.
-- **Dispatch** each round's members together, never one at a time (the re-review too).
-  Dispatch every member of the round in parallel as a subagent (`autopilot:<name>` via the Agent tool),
-  each given ONLY that prompt — its run-input prompt below.
-  Require a clean committed source worktree (`git -C <worktree> status --porcelain` empty);
-  set `reviewed_sha=<HEAD>` with `git -C <worktree> rev-parse HEAD`. Keep it unchanged
-  until all verdicts return; check HEAD still equals `reviewed_sha` and status remains
-  empty before judging (dirty only with paths the verifier reports as leaked → judge
-  normally; the fix removes them). Ordinary reviewers read source HEAD; the verification
-  reviewer runs full checks in the frozen source worktree every round it is on the panel.
-  Ordinary reviewers leave full checks to it or CI. Each member's run-input prompt:
-  "PHASE=work. Inputs: worktree=…, base_ref=…, state_file=…, requirement=…, focus=…,
-  reviewed_sha=<HEAD>. Output ONLY the verdict, no extra prose."
-  A re-reviewed lens adds prior items
-  (`<lens>#<n> "<gist>"`, from the run note) + the fix diff `git -C <worktree> diff <pre-fix HEAD>..HEAD` (record the
-  pre-fix HEAD before the fix).
-  - **Workflow (default):** per round, one
-    `Workflow({name: "autopilot:autopilot-review-round", args: {phase: "work", members: [{agent, subagent_type, prompt}, …]}})`
-    → `{phase, verdicts: [{agent, VERDICT, BLOCKING, NON_BLOCKING, synthetic}, …]}` in member
-    order; never pass `resumeFromRunId`. Re-dispatch a `synthetic: true` member once as
-    a fresh subagent (`Task`) with its prompt; still no verdict → FAIL.
-  - **Task (fallback):** if `Workflow` is unavailable or the call fails, dispatch the same members fresh as
-    one parallel subagent batch (`Task`) with the same prompts, and stay on that fallback for the phase (freeze
-    note `->Task` or `-><actual native tool>`). PASS only with no BLOCKING; no or unparseable verdict → FAIL.
-- **Wait for every verdict** — never poll or judge early. Inspect the verifier's raw
-  BLOCKING items before adding item IDs: `VERIFICATION_UNAVAILABLE:` (after its one
-  retry) triggers Safety stop 3. Otherwise ONE fix over all blockers, then the re-review.
-- **Item IDs:** before deduping for the fixer, label every BLOCKING / NON-BLOCKING item
-  `<lens>#<n>` (per lens, continuing across the phase, never reused); a repeated OPEN
-  item keeps its ID (reviewers prefix it) — number only new items.
-- **Loop** (orchestrator-run, cap = 1 fix/re-review cycle):
-  - **Round 1** (`r1`) = the pinned panel; consumes no fix budget.
-  - **Fix:** the first fix is ONE fresh producer (`Task`) primed with the deduped
-    open blockers (with item IDs) + cited files only; keep its agent ID in context; later
-    fixes continue the same subagent by its id (`SendMessage`); use a continuation
-    that starts it when idle (unknown ID / error → fresh producer, whose ID
-    replaces it). A fix-time genuine fork goes through the **S5 FORK → council**
-    mechanism, not an in-loop council. Full blocker text primes the fix transiently; only
-    a concise gist is logged.
-  - **Re-review** (Round 2, the one fix/re-review cycle the cap allows) = failed lenses plus
-    any `autopilot:verification-reviewer`, every round, including after a PASS; other passed
-    lenses carry their PASS.
-  - **Advance** when every panel lens is PASS with no open BLOCKING → S6→S7. Cap hit
-    without convergence → Safety stop 2. Only reviewers' own verdicts decide
-    convergence: never override one, downgrade a blocker, or mark an item INVALID yourself.
+Run the review loop over the work with the settings below. Fix per common: S6 fixes. Settle
+a genuine fork during a fix with the council.
 
-## Working-note shapes
+### S7. Squash
 
-Track these for S8 (S6 verdicts/evidence in the run note, other notes in context),
-plus residual NON-BLOCKING items:
+Per common: Squash and finish (S7, S8).
 
-- **Panel freeze:** `S6 panel: pinned=[correctness,requirement-fidelity,doc] +verification transport=Workflow` (append `->Task` or `-><actual native tool>` if the fallback fires; without the verifier, `verification=CI` or `verification=none`).
-- **Each completed S5 task** (from the state file's done marks): `S5 task <N> done: <commit sha>` — feeds the S8 report.
-- **Each review round** (VERDICT roll-up + a concise gist per blocker, with item IDs): `S6 r1 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, failures=0) -> correctness#1 off-by-one in slice bound; fix dispatched`.
-- **Each decision** (council or solo, incl. a resolved S5 FORK): `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
+### S8. Finish
 
-## Pipeline (S1, S4–S8)
+Per common: Squash and finish (S7, S8). Then emit the result block.
 
-Legend: **S#** = build's step S# (numbering shared with `build`). Pipeline:
-**S1 → S4 → S5 → S6 → S7 → S8** — light skips S2 (spec), S3 (spec review).
+## Review settings (S6)
 
-- **S1 — worktree.**
-  - If already in an isolated worktree (not on `main`/`master`), reuse it — do not nest another. `base_ref` is current local HEAD.
-  - Else resolve the requirement's host-specific `<branch>` before lookup or creation; use this same resolved branch for worktree reuse and resume:
-    - `<prefix>` = the ticket ID when the work is for one single ticket (e.g. Linear `TASK-123`), else `autopilot`.
-    - `<slug>` = `input` lowercased, non-alphanumerics → hyphens, collapsed to <=40 chars; with a ticket prefix, a short feature description instead (not the ticket ID again).
-    - Follow repo worktree/branch conventions, otherwise the session defaults above. Ensure the worktree directory is gitignored.
-    - If this requirement's resolved `<branch>` exists from a prior run, reuse it with its commits — do not create a numbered one: enter its worktree (`git worktree list`; if none, `git worktree add <path> <branch>`), `base_ref` = `git merge-base HEAD <branch>`; a state file there → resume from it.
-    - Else create worktree on local HEAD, then enter:
-      - On collision with another requirement's worktree/branch: retry with a uniquified slug (`-2`, …) and resolve `<path>` and `<branch>` again.
-      - Use an exposed host worktree tool only if it honors the exact local HEAD base and resolved branch; otherwise `git worktree add <path> -b <branch> HEAD`. Use the absolute worktree directory for commands and workers.
-  - Switch into the worktree; run every later command there (`EnterWorktree({path: <path>})`).
-  - Hold `worktree`, `branch`, `base_ref` (HEAD) in context.
-- **S4 — task list.** Write the task list yourself (invoke no planning skill): a code-free
-  task list into the state file — S4 always materializes the state file. The task list is
-  the state file's last section; the RESUME block goes above it (a brief runs to the next
-  `### Task N` heading):
-  - Header: Global Constraints (exact values producers need). Put the full verify
-    command outside the task-list header, above RESUME in the state file.
-  - Per task, a `### Task N: <name>` heading (its S5 producer reads its brief by it) with:
-    Files; Consumes/Produces (exact names/signatures crossing tasks); tests to write
-    first, incl. edge cases; the checks it runs (only those its change affects, never a
-    full suite: the S6 verification reviewer or CI runs that); commit message.
-  - A small change is one task.
-- **S5 — produce.** Per S4 task, in order from the first not `done`, dispatch one
-  fresh producer subagent (`Task`) on the requirement, the task list header and
-  its `### Task N` brief: tests first, then the code; run only the checks its brief
-  names that cover its changed files (never the full verify command or full suite);
-  commit with the brief's message; log the task `done`
-  in the state file.
-  `FORK:` → the **S5 FORK mechanism**. The orchestrator never edits the work product itself.
-- **S6 — work review.** Run the review above; genuine check failures block. Each fix
-  producer runs only checks covering the files it changes; the fix producer must commit
-  all product changes before re-review under the dispatch rules above.
-- **S7 — squash.** Idempotent squash to one commit **via `git` (`Bash`)** — **skip
-  if already exactly 1 ahead of `base_ref`**. The state file is committed or
-  ignored per the project's convention — do not force either. Require a clean worktree
-  and matching `git rev-parse HEAD^{tree}` / `git rev-parse <reviewed_sha>^{tree}`
-  before S8; if trees differ, return to S6.
-- **S8 — finish.** Inline: report review history, final verification evidence (the
-  verifier's from the run note, else the freeze's `CI` or `none`), decisions, deferred non-blockers (stop-reason first if stopped);
-  offer integration options as an informational report menu, NOT a question.
+- **Panel**: pin `autopilot:correctness-reviewer`, `autopilot:requirement-fidelity-reviewer`
+  and `autopilot:doc-reviewer`. Add `autopilot:verification-reviewer` under the verifier
+  rule. Add no other optional lens.
+- **Freeze line**: `S6 panel: pinned=[correctness,requirement-fidelity,doc] +verification transport=Workflow`.
+- **Cap**: 2 rounds, `r1` plus one fix and re-review.
+- **Re-review set**: the lenses that failed, plus any verifier every round, including
+  after a PASS. Other lenses carry their PASS.
+- **Prompt doc fields**: `plan_doc=…`.
+- **Advance to**: S7.
 
-## Safety stops (handoffs, not questions)
+## Forks
 
-Stop and hand off (state + exact next step) only on the cases below.
-1. **Destructive op — unless the session runs with automatic approval (Claude: Auto Mode).**
-   Before any force-push, write outside the worktree, history rewrite beyond this branch,
-   or rm/reset of uncommitted work, stop and hand off the state and exact next step.
-   Follow the session's permission rules; report a denied action and its reason.
-2. **Non-convergence at cap** — the S6 review hits its cap without convergence (with the
-   classification).
-3. **Non-review phase failure / missing required capability** — one retry, then STOP
-   with the failure or missing capability and exact next step; never replace a required worker yourself.
-4. **Root-contradiction** — the core requirement is self-contradictory; cite the two
-   clauses.
+A genuine fork you hit while implementing or fixing goes straight to the council. A
+delegated producer's `FORK:` return follows common: Produce (S5).
 
-## Result handoff (always emit last)
-
-On **every** terminal path — S8 finish AND any safety-stop handoff — emit as the final
-output exactly one fenced `autopilot-result` block (one JSON object) so a caller consumes
-the outcome without parsing prose:
-
-```autopilot-result
-{ "status": "converged", "branch": "<prefix>-<slug>", "base_ref": "<sha>", "head": "<sha>", "blockers": [], "reason": "" }
-```
-
-- `status` — `converged` (reached S8) | `capped-without-pass` (the S6 loop hit its cap) | `stopped` (any other safety stop).
-- `branch` / `base_ref` / `head` — branch name, its base SHA, its final commit SHA (`head` = `base_ref` if nothing was produced).
-- `blockers` — residual open BLOCKING items (strings) when `status != converged`, else `[]`.
-- `reason` — empty when converged; else classification + detail (cap → oscillation | unfixable | requirements-conflict; stop → root-contradiction | phase-failure | destructive-op).
+A trivial or low-stakes ambiguity is not a fork. Pick the obvious default (a producer does
+the same); S6 catches a wrong guess.
