@@ -24,6 +24,7 @@ SCRIPTS = os.path.join(REPO, "scripts")
 SELECT_PANEL = os.path.join(REPO, "skills", "build", "scripts", "select-panel.py")
 CHECK_SPEC = os.path.join(REPO, "skills", "build", "scripts", "check-spec.py")
 CI_VERDICT = os.path.join(REPO, "skills", "build", "scripts", "ci-verdict.py")
+RESOLVE_BRANCH = os.path.join(REPO, "skills", "build", "scripts", "resolve-branch.py")
 LINT_ROSTER = os.path.join(SCRIPTS, "lint-roster.py")
 REVIEW_ROUND = os.path.join(REPO, "workflows", "review-round.js")
 SKILLS = os.path.join(REPO, "skills")
@@ -233,6 +234,14 @@ class SelectPanelTests(unittest.TestCase):
         proc = run_select("--phase", "work", "--agents-dir", self.agents)
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("worktree", proc.stderr.lower())
+
+    def test_unknown_base_fails_instead_of_a_core_only_panel(self):
+        repo, _ = make_git_repo(["src/auth.py"])
+        proc = run_select("--phase", "work", "--worktree", repo, "--base", "deadbeef",
+                          "--agents-dir", self.agents)
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertEqual(proc.stdout, "")
+        self.assertIn("git diff against deadbeef failed", proc.stderr)
 
     def test_bad_agents_dir_errors(self):
         proc = run_select("--phase", "spec", "--agents-dir",
@@ -520,11 +529,30 @@ NON-BLOCKING: none
     def test_map_form_tier_accepted(self):
         reviewer = GOOD_REVIEWER.format(name="r1").replace(
             "tier: core", 'tier: {"spec": "core", "work": "optional"}'
-        )
+        ).replace("phase: work", "phase: both")
         self._reviewer("r1", reviewer=reviewer)
         proc = run_lint(self.agents)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("OK r1", proc.stdout)
+
+    def test_lint_rejects_what_the_selector_would_drop(self):
+        repo, base = make_git_repo(["src/auth.py"])
+        for old, new in (('applies_to: ["**"]', "applies_to: [auth, *.py]"),
+                         ('applies_to: ["**"]', 'applies_to: ["*.py",]'),
+                         ("phase: work\ntier: core", 'phase: work\ntier: {"both": "core"}'),
+                         ("phase: work\ntier: core", 'phase: both\ntier: {"spec": "core"}'),
+                         ("phase: work\ntier: core", 'phase: work\ntier: {"spec": "core", "work": "core"}')):
+            with self.subTest(new=new):
+                reviewer = GOOD_REVIEWER.format(name="r1").replace(old, new)
+                self.assertNotEqual(reviewer, GOOD_REVIEWER.format(name="r1"))
+                self._reviewer("r1", reviewer=reviewer)
+                work = run_select("--phase", "work", "--worktree", repo, "--base", base,
+                                  "--agents-dir", self.agents)
+                spec = run_select("--phase", "spec", "--agents-dir", self.agents)
+                picked = [e["agent"] for out in (work, spec)
+                          for e in json.loads(out.stdout)["selected"]]
+                proc = run_lint(self.agents)
+                self.assertNotEqual(proc.returncode, 0, new + " passed lint; selector picked %s" % picked)
 
     def test_map_form_tier_bad_value_rejected(self):
         reviewer = GOOD_REVIEWER.format(name="r1").replace(
@@ -642,14 +670,15 @@ class SkillContractTests(unittest.TestCase):
 
     def test_exact_tokens_survive(self):
         tokens = (
-            "EnterWorktree({path", "`autopilot:<name>`", "Agent tool",
+            "EnterWorktree({path: <worktree>})", "`autopilot:<name>`", "Agent tool",
             'Workflow({name: "autopilot:autopilot-review-round"', "resumeFromRunId", "synthetic",
             "force-push", "write outside the worktree", "history rewrite beyond this branch",
             "rm/reset of uncommitted work", "Auto Mode",
-            "branch --show-current", "never a default branch", "git remote set-head origin -a",
-            "if that fails too, only `main` and `master` count",
-            "git worktree add <path> <branch>", "git worktree add <path> -b <branch> HEAD",
-            "git merge-base HEAD <branch>",
+            "branch --show-current", "never a default branch",
+            "git worktree add <worktree> <branch>", "git worktree add <worktree> -b <branch> HEAD",
+            "resolve-branch.py", "--input-file <file>", "never through the", "input_sha=<sha>",
+            "write `.autopilot/.gitignore` (`*`)", "with `resume_line` as its", "--body-file <file>",
+            "RESUME as the second line", "Single-quote every value taken from the requirement",
             "git -C <worktree> status --porcelain", "git -C <worktree> rev-parse HEAD",
             "reviewed_sha", "One task is one commit", "fix(r<N>): <item IDs>",
             "git merge --squash",
@@ -659,16 +688,20 @@ class SkillContractTests(unittest.TestCase):
             "autopilot-result", "converged", "capped-without-pass", "stopped",
             "oscillation", "unfixable", "requirements-conflict",
             "root-contradiction", "phase-failure", "destructive-op",
-            "spawn_agent", ".codex/worktrees/<prefix>-<slug>", "codex/<prefix>-<slug>",
-            ".claude/worktrees/<prefix>-<slug>", "ci-verdict.py", "PR mode",
+            "spawn_agent", "ci-verdict.py", "PR mode",
             "`verification=ci` in PR mode, else `verification=local`",
             "git -C <worktree> push -u origin <branch>",
             "gh pr create --draft", "gh pr ready <url>", '"pr": ""', "no planning skill", "### Task N",
             "git -C <worktree> log --oneline <base_ref>..HEAD", "Notes", ".autopilot/",
-            "Fix causes, not symptoms", "records this `input`", "<slug>-plan.md",
-            "refs/remotes/origin/HEAD", "stay on it", "Uncommitted changes here are the user's",
-            "check `.autopilot/` in the current checkout and in a found worktree",
-            "Skip steps 2-5 except `<slug>`",
+            "Fix causes, not symptoms", "<slug>-plan.md",
+            "or at `phase=done`, is an earlier run's", "set RESUME `phase=done` before the result block",
+            "every lens passing means the phase converged: advance",
+            "If HEAD moved, take safety stop 3",
+            "Until `pr=` is recorded, repeat the S1 lookup before each push",
+            "the run stays on it", "uncommitted changes there are the user's",
+            "matched by RESUME `input_sha`",
+            "never dirties the worktree", "**Review items.**",
+
         )
         for skill in self.SKILL_STEPS:
             text = flat(skill_text(skill))
@@ -688,7 +721,8 @@ class SkillContractTests(unittest.TestCase):
         text = flat(skill_text("light-build"))
         self.assertIn("**Check at S1.** It needs an authenticated `gh` and a GitHub `origin`", text)
         self.assertIn("name it in the task-list header at S4", text)
-        self.assertIn("Once the branch is settled, in PR mode run its S1 check (PR mode).", text)
+        self.assertIn("then create the plan doc at `plan_doc`", text)
+        self.assertIn("In PR mode, run its S1 check (PR mode).", text)
         self.assertIn("in PR mode the PR a continued branch updates (PR mode)", text)
 
     def test_reused_pr_goes_back_to_draft(self):
@@ -701,7 +735,14 @@ class SkillContractTests(unittest.TestCase):
 
     def test_plan_doc_names_never_collide(self):
         text = flat(skill_text("build"))
-        self.assertIn("adding `-2`, `-3`, … when that name holds another input's plan doc", text)
+        self.assertIn("created at S1 where the resolver names it", text)
+
+    def test_resume_line_has_one_source(self):
+        common = flat(skill_text("build")).split("# Autopilot common rules", 1)[1]
+        self.assertIn("RESUME: phase=<step|done> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> input_sha=<sha>", common)
+        for skill in self.SKILL_STEPS:
+            with open(os.path.join(SKILLS, skill, "SKILL.md"), encoding="utf-8") as fh:
+                self.assertNotIn("RESUME: phase=", fh.read(), skill)
 
     def test_s5_has_no_per_task_review(self):
         with open(os.path.join(REPO, "references", "autopilot-common.md"), encoding="utf-8") as fh:
@@ -744,21 +785,16 @@ class SkillContractTests(unittest.TestCase):
                                  capture_output=True, text=True, check=True).stdout.split()
         self.assertEqual(tracked, ["skills/build/spec.md"])
         self.assertIn("select-panel.py", text)
-        self.assertIn("RESUME: phase=<S[1-7]>", text)
         self.assertIn("spec_file=", text)
         self.assertIn("every core lens", flat(text))
-        self.assertIn("progress section", text)
+        self.assertIn("only with a logged `decision(panel)` line", flat(text))
         self.assertNotIn("## Preflight", text)
         self.assertNotIn("Load config", text)
 
     def test_light_build_specifics(self):
         with open(os.path.join(SKILLS, "light-build", "SKILL.md"), encoding="utf-8") as fh:
             text = fh.read()
-        self.assertIn("RESUME: phase=<S[14-7]>", text)
-        self.assertIn("## Forks", text)
         self.assertIn("data shape", text)
-        self.assertIn("above RESUME", text)
-        self.assertIn("after a PASS", flat(text))
         self.assertIn("correctness after a verifier FAIL", flat(text))
         for lens in ("correctness", "requirement-fidelity", "doc"):
             self.assertIn(f"autopilot:{lens}-reviewer", text, lens)
@@ -1173,13 +1209,294 @@ class CiVerdictTests(unittest.TestCase):
         self.assertIn("repos/{owner}/{repo}/commits/%s/status?per_page=100" % SHA, paths)
 
 
-class ReviewRoundScriptTests(unittest.TestCase):
-    """Static contract + syntax gate for workflows/review-round.js.
+REQ = "Add a `wordcount(text)` function to textkit; tokens made only of punctuation don't count."
+REQ_SLUG = "add-a-wordcount-text-function-to-textkit"
 
-    The script runs only inside the Workflows runtime, so there is no behavioral
-    harness here; these tests pin its args/return contract and verdict schema
-    (README "Plugin workflow"), and the no-ambient-authority posture.
+
+class ResolveBranchTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.repo = self.new_repo("repo")
+
+    def new_repo(self, name, branch="main"):
+        path = os.path.join(self.tmp, name)
+        self.git(self.tmp, "init", "-q", "-b", branch, path)
+        self.git(path, "commit", "-q", "--allow-empty", "-m", "base")
+        return path
+
+    def git(self, cwd, *args):
+        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-C", cwd, *args],
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    def run_resolver(self, cwd, text, *args):
+        fd, path = tempfile.mkstemp(dir=self.tmp)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(text)
+        return subprocess.run([sys.executable, RESOLVE_BRANCH, "--repo", cwd, "--input-file", path, *args],
+                              capture_output=True, text=True)
+
+    def resolve(self, cwd=None, text=REQ, *args):
+        proc = self.run_resolver(cwd or self.repo, text, *args)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return json.loads(proc.stdout)
+
+    def plan_doc(self, worktree, name, input_text=REQ, phase="S5", branch="b"):
+        out = self.resolve(worktree, input_text)
+        os.makedirs(os.path.join(worktree, ".autopilot"), exist_ok=True)
+        with open(os.path.join(worktree, ".autopilot", ".gitignore"), "w") as fh:
+            fh.write("*\n")
+        with open(os.path.join(worktree, ".autopilot", name), "w") as fh:
+            fh.write("Rules: x y\nRESUME: phase=%s worktree=%s branch=%s base_ref=abc review_round=0 input_sha=%s\n%s\n"
+                     "\n## Notes\n\nRESUME: phase=S1 input_sha=quoted-in-a-note\n"
+                     % (phase, worktree, branch, out["input_sha"], input_text))
+        return out["input_sha"]
+
+    def test_default_branch_creates_a_worktree_at_head(self):
+        out = self.resolve()
+        self.assertEqual(out["mode"], "create")
+        self.assertEqual(out["branch"], "autopilot-" + REQ_SLUG)
+        self.assertEqual(out["worktree"], os.path.join(self.repo, ".claude", "worktrees", "autopilot-" + REQ_SLUG))
+        self.assertEqual(out["base_ref"], self.git(self.repo, "rev-parse", "HEAD"))
+        self.assertEqual(out["plan_doc"], os.path.join(out["worktree"], ".autopilot", REQ_SLUG + "-plan.md"))
+
+    def test_codex_names_and_ticket_prefix(self):
+        out = self.resolve(None, REQ, "--host", "codex", "--prefix", "TASK-7", "--slug", "word-count-helper")
+        self.assertEqual(out["branch"], "codex/TASK-7-word-count-helper")
+        self.assertEqual(out["worktree"], os.path.join(self.repo, ".codex", "worktrees", "TASK-7-word-count-helper"))
+
+    def test_slug_collapses_and_caps(self):
+        self.assertEqual(self.resolve(None, "  ***Fix: the `x`---bug!!  ")["slug"], "fix-the-x-bug")
+        self.assertEqual(len(self.resolve(None, "word " * 30)["slug"]), 39)
+        self.assertEqual(self.resolve(None, "!!!")["slug"], "run")
+
+    def test_feature_branch_stays_in_place(self):
+        self.git(self.repo, "checkout", "-q", "-b", "feature/wc")
+        out = self.resolve()
+        self.assertEqual((out["mode"], out["branch"], out["worktree"]), ("stay", "feature/wc", self.repo))
+        self.assertEqual(out["base_ref"], self.git(self.repo, "rev-parse", "HEAD"))
+        self.assertEqual(out["plan_doc"], os.path.join(self.repo, ".autopilot", REQ_SLUG + "-plan.md"))
+
+    def test_dirty_feature_branch_stops(self):
+        self.git(self.repo, "checkout", "-q", "-b", "feature/wc")
+        with open(os.path.join(self.repo, "notes.txt"), "w") as fh:
+            fh.write("wip\n")
+        out = self.resolve()
+        self.assertEqual(out["mode"], "stop")
+        self.assertIn("notes.txt", out["reason"])
+
+    def test_dirty_check_covers_the_whole_repo(self):
+        self.git(self.repo, "checkout", "-q", "-b", "feature/wc")
+        os.makedirs(os.path.join(self.repo, "sub"))
+        with open(os.path.join(self.repo, "sub", "keep.txt"), "w") as fh:
+            fh.write("x\n")
+        self.git(self.repo, "add", "-A")
+        self.git(self.repo, "commit", "-q", "-m", "sub")
+        with open(os.path.join(self.repo, "top.txt"), "w") as fh:
+            fh.write("wip\n")
+        out = self.resolve(os.path.join(self.repo, "sub"))
+        self.assertEqual(out["mode"], "stop")
+        self.assertTrue(out["reason"].endswith("are the user's: top.txt"), out["reason"])
+
+    def test_detached_head_creates(self):
+        self.git(self.repo, "checkout", "-q", "--detach")
+        self.assertEqual(self.resolve()["mode"], "create")
+
+    def test_origin_default_counts_as_default(self):
+        origin = self.new_repo("origin", branch="develop")
+        clone = os.path.join(self.tmp, "clone")
+        self.git(self.tmp, "clone", "-q", origin, clone)
+        self.assertEqual(self.git(clone, "branch", "--show-current"), "develop")
+        self.assertEqual(self.resolve(clone)["mode"], "create")
+        self.git(clone, "remote", "set-head", "origin", "--delete")
+        self.assertEqual(self.resolve(clone)["mode"], "create")
+
+    def test_without_origin_only_main_and_master_count(self):
+        self.git(self.repo, "checkout", "-q", "-b", "develop")
+        self.assertEqual(self.resolve()["mode"], "stay")
+
+    def test_resumes_the_unfinished_run_for_this_input(self):
+        wt = os.path.join(self.tmp, "wt")
+        self.git(self.repo, "worktree", "add", "-q", "-b", "autopilot-x", wt)
+        self.plan_doc(wt, REQ_SLUG + "-plan.md", branch="autopilot-x")
+        out = self.resolve()
+        self.assertEqual((out["mode"], out["worktree"], out["branch"]), ("resume", wt, "autopilot-x"))
+        self.assertEqual(out["plan_doc"], os.path.join(wt, ".autopilot", REQ_SLUG + "-plan.md"))
+
+    def test_finished_run_is_left_alone(self):
+        self.git(self.repo, "checkout", "-q", "-b", "feature/wc")
+        self.plan_doc(self.repo, REQ_SLUG + "-plan.md", phase="done")
+        out = self.resolve()
+        self.assertEqual(out["mode"], "stay")
+        self.assertEqual(out["plan_doc"], os.path.join(self.repo, ".autopilot", REQ_SLUG + "-2-plan.md"))
+
+    def test_another_inputs_branch_collides(self):
+        first = self.resolve()
+        self.git(self.repo, "worktree", "add", "-q", "-b", first["branch"], first["worktree"])
+        self.plan_doc(first["worktree"], REQ_SLUG + "-plan.md", input_text=REQ + " (older)")
+        out = self.resolve()
+        self.assertEqual(out["mode"], "create")
+        self.assertEqual(out["branch"], first["branch"] + "-2")
+
+    def test_finished_branch_without_its_worktree_is_not_reused(self):
+        branch = "autopilot-" + REQ_SLUG
+        wt = os.path.join(self.tmp, "old")
+        self.git(self.repo, "worktree", "add", "-q", "-b", branch, wt)
+        self.git(wt, "commit", "-q", "--allow-empty", "-m", "run1 work")
+        self.git(self.repo, "worktree", "remove", wt)
+        out = self.resolve()
+        self.assertEqual((out["mode"], out["branch"]), ("create", branch + "-2"))
+
+    def test_branch_behind_head_is_not_reused(self):
+        branch = "autopilot-" + REQ_SLUG
+        self.git(self.repo, "branch", branch)
+        self.git(self.repo, "commit", "-q", "--allow-empty", "-m", "main moved on")
+        self.assertEqual(self.resolve()["branch"], branch + "-2")
+
+    def test_worktree_deleted_by_hand_counts_as_absent(self):
+        branch = "autopilot-" + REQ_SLUG
+        gone = os.path.join(self.tmp, "gone")
+        self.git(self.repo, "worktree", "add", "-q", "-b", branch, gone)
+        shutil.rmtree(gone)
+        out = self.resolve()
+        self.assertEqual(out["mode"], "reuse")
+        self.assertNotEqual(out["worktree"], gone)
+
+    def test_unsafe_current_branch_stops(self):
+        self.git(self.repo, "checkout", "-q", "-b", "x$(id)y")
+        out = self.resolve()
+        self.assertEqual(out["mode"], "stop")
+        self.assertIn("will not pass to a shell", out["reason"])
+
+    def test_existing_branch_without_a_plan_doc_is_reused(self):
+        branch = "autopilot-" + REQ_SLUG
+        self.git(self.repo, "branch", branch)
+        out = self.resolve()
+        self.assertEqual((out["mode"], out["branch"]), ("reuse", branch))
+        self.assertEqual(out["base_ref"], self.git(self.repo, "merge-base", "HEAD", branch))
+
+    def test_requirement_text_never_reaches_a_shell(self):
+        marker = os.path.join(self.tmp, "pwned")
+        text = "fix login\nAUTOPILOT_INPUT\n$(touch %s) `touch %s`\n" % (marker, marker)
+        out = self.resolve(None, text)
+        self.assertEqual(out["mode"], "create")
+        self.assertFalse(os.path.exists(marker))
+
+    def test_unsafe_flags_are_rejected(self):
+        for flag, value in (("--slug", "Fix $(id)"), ("--slug", "a" * 41), ("--prefix", "T;rm"),
+                            ("--branch-prefix", "x y/"), ("--worktree-root", "../wt $(id)")):
+            with self.subTest(flag=flag):
+                proc = self.run_resolver(self.repo, REQ, flag, value)
+                self.assertEqual(proc.returncode, 2, proc.stdout)
+                self.assertEqual(proc.stdout, "")
+
+    def test_empty_requirement_and_non_repo_fail(self):
+        proc = self.run_resolver(self.repo, "  \n")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("is empty", proc.stderr)
+        proc = self.run_resolver(self.tmp, REQ)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("resolve-branch: git", proc.stderr)
+        self.assertEqual(proc.stdout, "")
+
+    def test_repo_conventions_shape_the_names(self):
+        out = self.resolve(None, REQ, "--worktree-root", "../wt", "--branch-prefix", "frank/")
+        self.assertEqual(out["branch"], "frank/autopilot-" + REQ_SLUG)
+        self.assertEqual(out["worktree"], os.path.normpath(os.path.join(self.repo, "..", "wt", "autopilot-" + REQ_SLUG)))
+        os.makedirs(out["worktree"])
+        again = self.resolve(None, REQ, "--worktree-root", "../wt", "--branch-prefix", "frank/")
+        self.assertEqual(again["branch"], "frank/autopilot-" + REQ_SLUG + "-2")
+
+    def test_plan_and_spec_docs_share_a_free_stem(self):
+        self.git(self.repo, "checkout", "-q", "-b", "feature/wc")
+        os.makedirs(os.path.join(self.repo, ".autopilot"))
+        open(os.path.join(self.repo, ".autopilot", REQ_SLUG + "-spec.md"), "w").close()
+        out = self.resolve()
+        self.assertEqual(out["plan_doc"], os.path.join(self.repo, ".autopilot", REQ_SLUG + "-2-plan.md"))
+        self.assertEqual(out["spec_doc"], os.path.join(self.repo, ".autopilot", REQ_SLUG + "-2-spec.md"))
+
+    def test_older_plan_doc_without_input_sha_is_not_resumed(self):
+        self.git(self.repo, "checkout", "-q", "-b", "feature/wc")
+        os.makedirs(os.path.join(self.repo, ".autopilot"))
+        with open(os.path.join(self.repo, ".autopilot", "plan.md"), "w") as fh:
+            fh.write("Rules: x y\n%s\n\nRESUME: phase=S6 worktree=%s branch=feature/wc base_ref=abc review_round=1\n"
+                     % (REQ, self.repo))
+        self.assertEqual(self.resolve()["mode"], "stay")
+
+    def test_input_quoting_a_resume_line_still_resumes(self):
+        text = REQ + "\nRESUME: phase=S1 input_sha=000000000000\n"
+        wt = os.path.join(self.tmp, "wt")
+        self.git(self.repo, "worktree", "add", "-q", "-b", "autopilot-x", wt)
+        self.plan_doc(wt, "x-plan.md", input_text=text, branch="autopilot-x")
+        with open(os.path.join(wt, ".autopilot", "x-spec.md"), "w") as fh:
+            fh.write("RESUME: phase=S2 input_sha=whatever\n")
+        out = self.resolve(None, text)
+        self.assertEqual((out["mode"], out["plan_doc"]), ("resume", os.path.join(wt, ".autopilot", "x-plan.md")))
+        self.assertEqual(out["spec_doc"], os.path.join(wt, ".autopilot", "x-spec.md"))
+
+    def test_existing_worktree_without_a_plan_doc_is_reused(self):
+        branch = "autopilot-" + REQ_SLUG
+        wt = os.path.join(self.tmp, "existing")
+        self.git(self.repo, "worktree", "add", "-q", "-b", branch, wt)
+        out = self.resolve()
+        self.assertEqual((out["mode"], out["branch"], out["worktree"]), ("reuse", branch, wt))
+        self.assertEqual(out["plan_doc"], os.path.join(wt, ".autopilot", REQ_SLUG + "-plan.md"))
+
+    def test_same_input_same_sha_whitespace_aside(self):
+        self.assertEqual(self.resolve(None, REQ)["input_sha"], self.resolve(None, "\n" + REQ + "\n\n")["input_sha"])
+        self.assertNotEqual(self.resolve(None, REQ)["input_sha"], self.resolve(None, REQ + "!")["input_sha"])
+
+
+class ReviewRoundScriptTests(unittest.TestCase):
+    """Contract, syntax and behavior of workflows/review-round.js. The runtime
+    runs the body inside an async function with `args`, `phase`, `log`,
+    `parallel` and `agent` in scope; the behavior test supplies stubs for them.
     """
+
+    def run_round(self, args_js, verdicts):
+        body = self.text.replace("export const meta", "const meta", 1)
+        script = (
+            "async function _wf(args, phase, log, parallel, agent) {\n%s\n}\n"
+            "const verdicts = %s;\n"
+            "const out = await _wf(%s, () => {}, () => {},\n"
+            "  fns => Promise.all(fns.map(f => f())),\n"
+            "  async (prompt, opts) => verdicts[opts.label]);\n"
+            "console.log(JSON.stringify(out));\n"
+        ) % (body, json.dumps(verdicts), args_js)
+        with tempfile.TemporaryDirectory() as td:
+            mjs = os.path.join(td, "round.mjs")
+            with open(mjs, "w", encoding="utf-8") as fh:
+                fh.write(script)
+            proc = subprocess.run(["node", mjs], capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return json.loads(proc.stdout)
+
+    @unittest.skipUnless(shutil.which("node"), "node not installed")
+    def test_round_normalizes_every_verdict(self):
+        members = [{"agent": a, "subagent_type": "autopilot:" + a, "prompt": "p"}
+                   for a in ("silent", "pass-with-blocker", "clean", "fail")]
+        verdicts = {
+            "pass-with-blocker": {"VERDICT": "PASS", "BLOCKING": ["x.py:1 off by one"], "NON_BLOCKING": []},
+            "clean": {"VERDICT": "PASS", "BLOCKING": [], "NON_BLOCKING": ["nit", 7]},
+            "fail": {"VERDICT": "FAIL", "BLOCKING": ["y"], "NON_BLOCKING": []},
+        }
+        args = {"phase": "work", "members": members}
+        for args_js in (json.dumps(args), json.dumps(json.dumps(args))):
+            with self.subTest(args_js=args_js[:20]):
+                out = self.run_round(args_js, verdicts)
+                self.assertEqual(out["phase"], "work")
+                got = {v["agent"]: (v["VERDICT"], v["BLOCKING"], v["NON_BLOCKING"], v["synthetic"])
+                       for v in out["verdicts"]}
+                self.assertEqual([v["agent"] for v in out["verdicts"]], [m["agent"] for m in members])
+                self.assertEqual(got["silent"], ("FAIL", ["no verdict returned (skip/terminal error)"], [], True))
+                self.assertEqual(got["pass-with-blocker"], ("FAIL", ["x.py:1 off by one"], [], False))
+                self.assertEqual(got["clean"], ("PASS", [], ["nit"], False))
+                self.assertEqual(got["fail"], ("FAIL", ["y"], [], False))
+
+    @unittest.skipUnless(shutil.which("node"), "node not installed")
+    def test_unparseable_args_dispatch_nothing(self):
+        out = self.run_round(json.dumps("{not json"), {})
+        self.assertEqual(out["verdicts"], [])
 
     @classmethod
     def setUpClass(cls):

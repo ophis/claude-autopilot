@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Lint the Claude Autopilot review roster (A3): validate every ``agents/*.md``
+"""Lint the Claude Autopilot review roster: validate every ``agents/*.md``
 so a malformed reviewer fails loudly at authoring/CI time instead of mis-routing
 the selector. CLI: ``python3 scripts/lint-roster.py [--agents-dir DIR]``,
 non-zero exit on any failure. Stdlib only.
 """
 import argparse
 import glob
-import json
 import os
 import re
 import sys
@@ -14,7 +13,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "skills", "build", "scripts"))
 
-from _frontmatter import iter_kv, split_frontmatter
+from _frontmatter import PHASES_OF, iter_kv, parse_applies_to, parse_tier, split_frontmatter
 
 REQUIRED_KEYS = (
     "name",
@@ -28,7 +27,7 @@ REQUIRED_KEYS = (
     "tier",
     "applies_to",
 )
-VALID_PHASES = {"spec", "work", "both"}
+VALID_PHASES = set(PHASES_OF)
 VALID_TIERS = {"core", "optional"}
 READONLY_TOOLS = {"Read", "Grep", "Glob", "Bash"}
 # Contract markers each reviewer inlines. tests/test_scripts.py also checks the
@@ -53,11 +52,9 @@ def parse_agent(path):
     """Read an agent markdown file into (frontmatter dict, body str), or
     ``(None, "")`` if it has no well-formed frontmatter block.
 
-    Unlike the selector, the lint captures EVERY key with its own typing:
-      * simple ``key: value``                                   -> string;
-      * comma/flow list (``tools``, ``applies_to``)             -> list;
-      * flow map (polymorphic ``tier``; scalar ``tier`` stays a string) -> dict;
-      * block scalar (``description: >-``)                      -> "" (presence only).
+    Every key is captured. ``applies_to`` and ``tier`` go through the parsers the
+    selector uses (``None`` when they reject the value); ``tools`` is a comma or
+    flow list; a block scalar (``description: >-``) reads as present-but-empty.
     """
     try:
         with open(path, "r", encoding="utf-8") as fh:
@@ -71,10 +68,12 @@ def parse_agent(path):
 
     fm = {}
     for key, value in iter_kv(fm_lines):
-        if key in ("applies_to", "tools"):
+        if key == "applies_to":
+            fm[key] = parse_applies_to(value)
+        elif key == "tier":
+            fm[key] = parse_tier(value)
+        elif key == "tools":
             fm[key] = _parse_list(value)
-        elif key == "tier" and value.strip().startswith("{"):
-            fm[key] = _parse_map(value)
         else:
             # Block-scalar indicator reads as present-but-empty, not literal ">-".
             if value in (">-", ">", "|", ">+", "|-", "|+"):
@@ -104,19 +103,6 @@ def _parse_list(value):
     return [p.strip() for p in value.split(",") if p.strip()]
 
 
-def _parse_map(value):
-    """Parse a single-line JSON flow-map (the polymorphic ``tier``) into a dict.
-
-    Returns the raw string on parse failure / non-dict so the validator rejects
-    it loudly instead of treating it as a malformed scalar.
-    """
-    try:
-        parsed = json.loads(value.strip())
-    except (ValueError, TypeError):
-        return value.strip()
-    return parsed if isinstance(parsed, dict) else value.strip()
-
-
 def lint_reviewer(stem, fm, body):
     """Return a list of failure reasons for a reviewer file (empty = OK)."""
     reasons = []
@@ -134,22 +120,19 @@ def lint_reviewer(stem, fm, body):
     if "tier" in fm:
         tier = fm["tier"]
         if isinstance(tier, dict):
-            bad_phases = [p for p in tier if p not in VALID_PHASES]
             bad_tiers = [t for t in tier.values() if t not in VALID_TIERS]
-            if not tier:
-                reasons.append("tier map must not be empty")
-            if bad_phases:
-                reasons.append(
-                    "tier map phase(s) %s not in {spec, work, both}"
-                    % ", ".join(map(str, bad_phases))
-                )
             if bad_tiers:
                 reasons.append(
                     "tier map value(s) %s not in {core, optional}"
                     % ", ".join(map(str, bad_tiers))
                 )
+            if phase in PHASES_OF and set(tier) != set(PHASES_OF[phase]):
+                reasons.append(
+                    "tier map keys %s must be exactly the phases this lens runs in: %s"
+                    % (sorted(map(str, tier)), ", ".join(PHASES_OF[phase]))
+                )
         elif tier not in VALID_TIERS:
-            reasons.append("tier '%s' not in {core, optional}" % tier)
+            reasons.append("tier must be core, optional or a JSON object of phase -> tier, got '%s'" % tier)
 
     if "maxTurns" in fm:
         mt = fm.get("maxTurns")
@@ -160,10 +143,8 @@ def lint_reviewer(stem, fm, body):
         except (TypeError, ValueError):
             reasons.append("maxTurns must be a positive int, got '%s'" % mt)
 
-    if "applies_to" in fm:
-        applies_to = fm["applies_to"]
-        if not isinstance(applies_to, list) or not applies_to:
-            reasons.append("applies_to must be a non-empty list")
+    if "applies_to" in fm and fm["applies_to"] is None:
+        reasons.append('applies_to must be a JSON array of non-empty strings, e.g. ["*.py"]')
 
     if "name" in fm and fm.get("name") != stem:
         reasons.append(
@@ -246,7 +227,7 @@ def lint_file(path):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description="Lint the Claude Autopilot review roster (A3)."
+        description="Lint the Claude Autopilot review roster."
     )
     default_agents = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "..", "agents"

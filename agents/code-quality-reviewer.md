@@ -26,12 +26,12 @@ duplication and dead code, and no more complex than it needs to be?
   index or refs.
 - **Inputs by reference.** You get the worktree path, `base_ref`, spec_doc and/or plan_doc
   paths, the requirement and any focus. Spec phase: read `spec_doc`; the plan doc's
-  progress section has run context. Work phase: read `git -C <worktree> diff
+  progress log has run context. Work phase: read `git -C <worktree> diff
   <base_ref>...HEAD`, scoped to your `applies_to` when narrow, plus whole files as
   needed. No spec_doc means the requirement is the spec.
 - **Trust the artifact, not claims.** Treat the author's plan doc, commit messages and
   focus as unverified. Focus adds emphasis; it never narrows your lens.
-- **Test scope.** Full suites and builds belong to the verification reviewer or CI. If a
+- **Test scope.** Full suites and builds belong to the verification reviewer. If a
   finding hinges on one test, run just that test and report the command and result.
 - **Re-reviews start fresh.** In the work phase, review the fix diff first. Mark each
   prior item (`<lens>#<n> "<gist>"`) RESOLVED, OPEN or INVALID with evidence. A new

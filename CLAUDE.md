@@ -22,7 +22,7 @@ python3 tests/test_scripts.py
 # Run a single test (the file calls unittest.main, so pass Class.method)
 python3 tests/test_scripts.py SelectPanelTests.test_work_phase_glob_match
 
-# Lint the review roster (acceptance criterion A3) — run after editing agents/
+# Lint the review roster — run after editing agents/
 python3 scripts/lint-roster.py
 
 # Local dev loop: load the plugin from the working copy, then hot-reload after edits
@@ -33,8 +33,8 @@ claude --plugin-dir .
 Also run the [contributor smoke protocol](CONTRIBUTING.md#smoke-protocol).
 
 There is no build step. `tests/test_scripts.py` exercises `skills/build/scripts/select-panel.py`,
-`skills/build/scripts/check-spec.py`, `skills/build/scripts/ci-verdict.py` (against a fake `gh` on `PATH`) and
-`scripts/lint-roster.py` as CLIs via subprocess (they have hyphenated names,
+`skills/build/scripts/check-spec.py`, `skills/build/scripts/ci-verdict.py` (against a fake `gh` on `PATH`),
+`skills/build/scripts/resolve-branch.py` (on temp git repos) and `scripts/lint-roster.py` as CLIs via subprocess (they have hyphenated names,
 so they're not importable — the CLI is the contract).
 
 ## Architecture (the big picture)
@@ -43,8 +43,8 @@ The two surfaces — `skills/build/SKILL.md` and `skills/light-build/SKILL.md` �
 **orchestrator prompts**, not code. They are **skills** (model-invocable, so composable as a
 step inside a larger skill/workflow); users still type `/autopilot:build` /
 `/autopilot:light-build`. `light-build` is the low-ceremony surface: a harness
-(S1 → S4 → S5 → S6 → S7) with no spec doc and no spec review. S4 always
-materializes a plan doc holding the task list; S6 is a pinned cap-1 panel
+(S1 → S4 → S5 → S6 → S7) with no spec doc and no spec review; S6 is a pinned panel
+capped at 2 rounds
 (correctness + requirement-fidelity + doc + verification). It does not gate scope — surface choice is
 the user's responsibility. When invoked, the *main-session agent implements the work itself* (S5 tasks and S6 fixes,
 optionally handing a self-contained task to a fresh producer) while independent reviewer
@@ -98,24 +98,24 @@ reading those three files plus `agents/` and the bundled `skills/build/scripts/`
   topology (any A/D/R/C file in `git diff --name-status`). A file is a "reviewer" iff its
   frontmatter has `phase` (`lint-roster.py` mirrors this rule — keep the two in lockstep).
 
-- **Plugin workflow (`workflows/review-round.js`).** The v0.9.x per-round review transport,
-  restored byte-identical and invoked by name as `autopilot:autopilot-review-round` (the
+- **Plugin workflow (`workflows/review-round.js`).** The per-round review transport,
+  invoked by name as `autopilot:autopilot-review-round` (the
   runtime names plugin workflows `<plugin>:<meta.name>`). The default S3/S6 review-round
   transport when Workflow is exposed; native host dispatch is the fallback.
   Contract in README "Plugin workflow".
 
-- **Disk-backed state.** A run persists a **spec doc** and a **plan doc** (task list +
-  a progress section + a `RESUME:` block), one per requirement: named by slug and
-  identified by the `input` it records, so a later run in the same worktree continues
-  the branch without resuming an earlier run. The RESUME block
-  (`phase=… worktree=… branch=… base_ref=… review_round=…`) lets a run survive
-  compaction and resume from the current phase; an interrupted review round re-runs whole.
-  The progress section records each S5 task done (a resume continues from the next), the
-  review transport, per-lens blocker gists, and the full verify command outside the task
-  briefs. A Notes section keeps durable codebase facts, and after a compaction the
-  orchestrator re-hydrates from the plan doc and `git log` (common: Re-hydrate after compaction). In light-build, the command sits above RESUME in the plan doc. From S6, both
-  skills keep mutable RESUME, verdicts, and verification evidence in an ignored run note
-  (or an ignored plan doc).
+- **S1 resolver (`skills/build/scripts/resolve-branch.py`).** Decides where a run works:
+  resume this input's unfinished plan doc (by `input_sha`), stay on a non-default branch,
+  reuse or create a worktree, or stop on a dirty checkout. It changes nothing but may
+  record origin's default branch, and prints JSON.
+
+- **Disk-backed state.** Each run keeps all its state in one ignored plan doc,
+  `.autopilot/<slug>-plan.md` in its worktree, created at S1 and identified by the
+  `input` it records (build adds a spec doc beside it). It holds the verify command, a
+  `RESUME:` line (schema in common: State and resume), the progress log, every round's
+  review items, Notes and the task list. A run survives compaction by re-hydrating from it and `git log` (common:
+  Re-hydrate after compaction); an interrupted review round re-runs whole. At finish the
+  docs are copied to the project's plan location if its AGENTS.md / CLAUDE.md names one.
 
 - **No plugin dependencies.** Both surfaces use only native tools, the plugin's own
   scripts, or inline logic; neither invokes another plugin's skill or preflights for one.
@@ -149,7 +149,7 @@ failures before committing:
 python3 scripts/lint-roster.py
 ```
 
-It enforces A3 for every reviewer: valid frontmatter (`lens`/`phase`/`tier`/
+It checks every reviewer: valid frontmatter (`lens`/`phase`/`tier`/
 `applies_to` + `maxTurns`), a `tools` allowlist (`Read, Grep, Glob, Bash`),
 the ordinary reviewers' inlined contract or the verification reviewer's dedicated
 execution contract, and the strict verdict block — so a malformed reviewer

@@ -9,9 +9,7 @@ to this file's directory.
 - **Input**: `input` is Claude Code's substituted `$ARGUMENTS`, or Codex's invoking user
   request or explicit caller input. An unresolved placeholder counts as absent. It is the
   single source of intent; the skill lists its forms.
-- **Plan doc**: the run's state file. It holds the RESUME block and the task list; the
-  skill says what else.
-- **Run note**: an ignored file holding S6 state (see State and resume).
+- **Plan doc**: the run's one state file (see State and resume).
 - **Producer**: a fresh subagent you hand one self-contained task to (see Produce (S5)).
 - **Lens**: one reviewer agent. The **panel** is the set of lenses for a phase.
 - **Round**: one parallel review of the panel, numbered `r1`, `r2`, ….
@@ -25,17 +23,15 @@ to this file's directory.
 - **Decide everything yourself.** Never ask the user anything. Settle a genuine fork with
   the council, anything else solo. Every stop is a handoff, not a question.
 - **Author the work; let reviewers judge it.** You implement the S5 tasks and the S6 fixes
-  yourself. Independent reviewer subagents judge the result, and only their verdicts
-  decide.
+  yourself. Independent reviewer subagents judge the result.
 - **Guard your context.** Read only what the current step needs. Send long command output
   to a file and read bounded slices of it. Hand bulk searches and reads to a subagent and
   keep its summary.
-- **Brief workers fully.** Resolve bundled paths to absolute paths for tools and briefs,
-  and keep the target worktree as cwd. Read the target repo's applicable AGENTS.md /
-  CLAUDE.md and pass their paths and constraints to every worker.
-- **Pin every write to the worktree.** Give each subagent the absolute worktree path and
-  branch. You and it use absolute paths and `git -C <worktree>`, never the inherited cwd.
-  Before any write, assert `git -C <worktree> branch --show-current` is the run branch, never
+- **Brief workers fully.** Give every worker the absolute worktree path and branch,
+  bundled paths resolved to absolute, and the target repo's applicable AGENTS.md /
+  CLAUDE.md paths and constraints.
+- **Pin every write to the worktree.** You and every worker use absolute paths and
+  `git -C <worktree>`, never the inherited cwd. Before any write, assert `git -C <worktree> branch --show-current` is the run branch, never
   a default branch (Worktree (S1)).
 - **Batch steps.** Every tool call re-sends your whole context. Combine independent shell
   steps into one command, and make independent calls together in one parallel batch.
@@ -45,11 +41,7 @@ to this file's directory.
 
 - Tool names in parentheses are Claude Code forms. On another host, use the session's
   exposed equivalent.
-- Use the exposed spawn, continue and wait tools with their documented arguments. Request
-  fresh context when supported, and give each worker its brief and constraints.
-- `Workflow` exists only on Claude Code. Without it, use the native fallback (Review round).
-- Default worktree path and branch: Claude `.claude/worktrees/<prefix>-<slug>` and
-  `<prefix>-<slug>`; Codex `.codex/worktrees/<prefix>-<slug>` and `codex/<prefix>-<slug>`.
+- Request fresh context for each worker when the host supports it.
 - On Claude Code, dispatch reviewer `<name>` as `autopilot:<name>` via the Agent tool. It
   keeps the `model:`, `effort:` and tools from `../agents/<name>.md`.
 - Without named dispatch, give a fresh generic agent the full `../agents/<name>.md` body
@@ -59,41 +51,41 @@ to this file's directory.
 
 ## State and resume
 
-- **Resume first.** On start, look for this run's plan doc: the one that records this
-  `input` (check `.autopilot/` in the current checkout and in a found worktree). A plan doc for another input
-  belongs to an earlier run; leave it alone. If found, check that its worktree, branch
-  and base_ref exist on disk, then continue from its `phase`. If not, start at S1.
-- Place the plan doc where the user's or project's convention says (AGENTS.md /
-  CLAUDE.md, existing repo patterns). With no convention, use an `.autopilot/` directory
-  in the worktree that holds a `.gitignore` of `*`. Name each run's files by its `<slug>`
-  (Worktree (S1)), as in `<slug>-plan.md`, adding `-2`, `-3`, … when that name holds
-  another input's plan doc, so a later run in the same worktree adds its own.
-- The plan doc's first line is `Rules: <abs SKILL.md path> <abs path of this file>`; the
-  next records `input` verbatim.
-- Once the plan doc exists, rewrite RESUME `phase=` at every phase change and
-  `review_round=` every loop iteration.
+- **Plan doc.** Each run keeps all its state in one plan doc,
+  `<worktree>/.autopilot/<slug>-plan.md`, created at S1 where the resolver names it
+  (Worktree (S1)). The `.autopilot/` directory holds a `.gitignore` of `*`, so writing
+  the plan doc never dirties the worktree. In order, the plan
+  doc holds the line `Rules: <abs SKILL.md path> <abs path of this file>`, RESUME as the
+  second line, `input` verbatim, the full verify command once known, the progress log, the
+  review items, Notes, and the task list last (from S4).
+- **RESUME** is one line, rewritten at every phase change and loop iteration:
+  `RESUME: phase=<step|done> worktree=<path> branch=<name> base_ref=<sha> review_round=<n> input_sha=<sha>`,
+  plus `spec_file=<path>` when the skill records one and `pr=<url>` in PR mode.
+- **Resume first.** On start, run the resolver (Worktree (S1)) before anything else.
+  `mode: resume` points at this input's unfinished plan doc, matched by RESUME
+  `input_sha`; a plan doc for another input, or at `phase=done`, is an earlier run's and
+  stays untouched. Check that its worktree, branch and base_ref exist on disk, then
+  continue from its `phase`. Any other mode starts S1.
 - Re-run an interrupted review round whole: the frozen panel, on its recorded transport
   and round number.
-- From S6, keep RESUME, the frozen panel, the verdicts with each round's full BLOCKING
-  items, the reviewed SHA, the verifier's exact commands and results (exit codes, failure counts, diagnostics),
-  and in PR mode `pr=<url>` in an ignored run note. An ignored plan doc can serve as the run note, with that content above the task
-  list; a tracked plan doc links to the note before it is committed for review.
+- **Review items.** After each round, append its items in full with their IDs, BLOCKING
+  and NON-BLOCKING, and the verifier's exact commands and results (exit codes, failure
+  counts, diagnostics).
 - Resume at S7 only with all-PASS evidence for HEAD. Otherwise restart S6.
-- **Notes.** Once the plan doc exists, write each durable fact you learn to its Notes
-  section as one line: key files and entry points, repo patterns and commands, gotchas,
-  and anything a later task depends on. A context summary drops these; the plan doc
-  keeps them. From S6, Notes go where S6 log lines go.
+- **Notes.** Write each durable fact you learn to Notes as one line: key files and entry
+  points, repo patterns and commands, gotchas, and anything a later task depends on. A
+  context summary drops these; the plan doc keeps them.
 
 ### Re-hydrate after compaction
 
 After a context compaction, or whenever you are unsure of the run's state, rebuild it
 from disk before you act:
 
-1. Find the plan doc (Resume first) and re-read it: the `Rules:` line, RESUME, progress,
-   Notes and task list. With no plan doc yet, follow Resume first.
+1. Find the plan doc (Resume first) and re-read it whole. With no plan doc yet, follow
+   Resume first.
 2. Re-read the SKILL.md and this file from the `Rules:` paths. If a path is gone, find
    the file by skill name in the installed plugin.
-3. Re-read the spec doc if the run has one, and from S6 the run note.
+3. Re-read the spec doc if the run has one.
 4. Run `git -C <worktree> log --oneline <base_ref>..HEAD` and `git -C <worktree> status`.
    A commit carrying a task's brief message means that task is done; log it if the mark
    is missing.
@@ -102,15 +94,16 @@ from disk before you act:
    - **S3**: if the latest round failed, the spec doc on disk holds any partial fix.
      Finish it against that round's full BLOCKING items, then run the re-review.
    - **S6**: uncommitted changes are the fix in progress. Finish it against the latest
-     round's full BLOCKING items in the run note, with that round's `reviewed_sha` as the
+     round's review items, with that round's `reviewed_sha` as the
      pre-fix HEAD, commit, then run the re-review. A clean tree with HEAD past that
-     `reviewed_sha` means the fix is committed: run the re-review.
+     `reviewed_sha` means the fix is committed: run the re-review. A clean tree with HEAD
+     at that `reviewed_sha` and every lens passing means the phase converged: advance.
 6. Continue from RESUME `phase`.
 
 ## Progress log
 
-A short audit log, one line per event, not a transcript. The skill says where each line
-goes. S3 uses the S6 shapes.
+A short audit log in the plan doc, one line per event, not a transcript. S3 uses the S6
+shapes.
 
 - Panel freeze: the skill's freeze line, ending `transport=Workflow`. Append `->Task` or
   `-><actual native tool>` if the fallback fires. In S6 it names the verifier's backend, `verification=local` or `verification=ci`.
@@ -120,8 +113,7 @@ goes. S3 uses the S6 shapes.
 - Deferred pattern match outside the change: `deferred(<pattern>): <file:line>`.
 - At the end: the residual NON-BLOCKING items.
 
-The blocker gists prime re-reviews. The log line holds only the gist; the full BLOCKING
-items go to the fix and stay on disk until it lands (S6: the run note).
+The blocker gists prime re-reviews; the full items are in the review items.
 
 ## Council
 
@@ -135,42 +127,42 @@ Outside a genuine fork, decide solo and log it. Review catches a wrong guess.
 
 ## Worktree (S1)
 
-1. A **default branch** is `main`, `master`, or the local branch of `origin`'s default
-   (`git symbolic-ref --short refs/remotes/origin/HEAD` without `origin/`; if that is
-   unset, run `git remote set-head origin -a` first, and if that fails too, only `main` and
-   `master` count). On any other branch, stay on it:
-   this checkout is the worktree and `base_ref` is its current HEAD. Skip steps 2-5 except
-   `<slug>` (step 2), which still names the run's files. A later requirement continues an
-   earlier run's branch this way. Uncommitted changes here are the user's: take safety
-   stop 3 rather than mix them in.
-2. On a default branch or a detached HEAD, resolve the host-specific `<branch>` before
-   lookup or creation, and use this same branch for reuse and resume:
-   - `<prefix>`: the ticket ID when the work is for one ticket (e.g. Linear `TASK-123`),
-     else `autopilot`.
-   - `<slug>`: `input` lowercased, non-alphanumerics turned into hyphens, at most 40
-     chars. With a ticket prefix, use a short feature description instead (not the
-     ticket ID again).
-   - Follow the repo's worktree and branch conventions, else the host defaults. Make sure
-     the worktree directory is gitignored.
-3. The branch exists and holds no plan doc for another input: reuse it with its commits,
-   never a numbered copy. Enter its worktree (`git worktree list`; if none,
-   `git worktree add <path> <branch>`) and set `base_ref` = `git merge-base HEAD <branch>`.
-   This run's plan doc there means resume.
-4. Otherwise create the worktree on local HEAD:
-   - On a collision with another requirement's worktree or branch, add `-2`, `-3`, … to
-     the slug and resolve path and branch again.
-   - Use a host worktree tool only if it honors the exact local HEAD base and branch.
-     Otherwise run `git worktree add <path> -b <branch> HEAD`.
-5. Enter the worktree (`EnterWorktree({path: <path>})`). Run every later command there,
-   and give workers its absolute path.
+Write `input` verbatim to a temporary file with the file-write tool, never through the
+shell, and run the resolver from the starting checkout:
 
-Once the branch is settled, in PR mode run its S1 check (PR mode).
+```
+python3 <abs path of ../skills/build/scripts/resolve-branch.py> --host <claude|codex> --input-file <file>
+```
+
+When the work is for one ticket, add `--prefix '<ticket ID>'` (letters, digits, `.`, `_`,
+`-`) and `--slug '<short-feature-slug>'` (lowercase letters, digits and hyphens). A repo
+whose AGENTS.md / CLAUDE.md says where worktrees go or names a branch namespace passes
+`--worktree-root '<dir>'` and `--branch-prefix '<ns/>'`. Single-quote every value taken
+from the requirement or the repo's docs.
+It prints `{mode, branch, worktree, base_ref, plan_doc, spec_doc, input_sha, resume_line,
+reason}`. A **default branch** is `main`, `master` or `origin`'s default; on any other
+branch the run stays on it, which is how a later requirement continues an earlier run's
+branch. Act on `mode`:
+
+- `resume`: continue the plan doc at `plan_doc` (State and resume).
+- `stay`: work in this checkout on its branch.
+- `reuse`: enter the branch's worktree, after `git worktree prune` and
+  `git worktree add <worktree> <branch>` if it has none.
+- `create`: run `git worktree add <worktree> -b <branch> HEAD`, or a host worktree tool
+  only if it honors the exact local HEAD and branch. Keep the worktree directory
+  gitignored.
+- `stop`: take safety stop 3 with its `reason`; uncommitted changes there are the user's.
+
+For `reuse` and `create`, enter the worktree (`EnterWorktree({path: <worktree>})`). Run
+every later command in the worktree. Unless resuming, write `.autopilot/.gitignore` (`*`)
+in it, then create the plan doc at `plan_doc` (State and resume) with `resume_line` as its
+RESUME. In PR mode, run its S1 check (PR mode).
 
 ## Task list (S4)
 
 Write the task list yourself and invoke no planning skill. It is code-free and is the
-plan doc's last section. The skill says what else goes in the header and where the full
-verify command goes; it never goes in the task-list header.
+plan doc's last section. The skill says what else goes in its header; the full verify
+command never does.
 
 - **Header**: Global Constraints (exact values the tasks need), and in PR mode the PR a
   continued branch updates (PR mode).
@@ -193,8 +185,7 @@ verify command goes; it never goes in the task-list header.
 For each task, starting from the first one not `done`:
 
 1. Implement it yourself from its `### Task N` brief: the tests first, then the code.
-2. Run only the checks its brief names that cover your changed files, never the full
-   verify command or full suite.
+2. Run the checks its brief names.
 3. Commit with the brief's message, add Notes for anything a later task needs, and log
    the task `done`.
 
@@ -225,7 +216,7 @@ the doc fields of the run-input prompt.
 backend in `r1`: `verification=ci` in PR mode, else `verification=local`. With `local` it
 runs the complete checks in the frozen source worktree; with `ci` it reads the repo's CI
 checks for `reviewed_sha`, and runs the local checks when CI gives no usable result. It
-runs every round. Ordinary reviewers read the source at HEAD and leave full checks to it.
+runs every round.
 
 Run each round in these steps:
 
@@ -252,18 +243,18 @@ Run each round in these steps:
      is FAIL.
    - **Native fallback:** if `Workflow` is unavailable or the call fails, dispatch the same
      members fresh as one parallel subagent batch (`Task`) with the same prompts. Stay on
-     the fallback for the rest of the phase and note it in the freeze line. A verdict
-     passes only with no BLOCKING items; a missing or unparseable verdict is FAIL.
+     the fallback for the rest of the phase and note it in the freeze line.
 5. **Wait for every verdict.** Never poll or judge early. A status message is not a verdict.
 6. **Recheck the revision (S6).** HEAD still equals `reviewed_sha` and status is still
    empty. If the only dirty paths are ones the verifier reports as leaked, judge normally;
-   the fix removes them.
+   the fix removes them. If HEAD moved, take safety stop 3 and list the new commits.
 7. **Check the verifier.** Read its raw BLOCKING items before adding item IDs.
    `VERIFICATION_UNAVAILABLE:` (after its one retry) triggers safety stop 3.
 8. **Label items.** Before deduping for the fix, give every BLOCKING and NON-BLOCKING
    item an ID `<lens>#<n>`, numbered per lens across the phase and never reused. A
    repeated open item keeps its ID (the reviewer prefixes it). Number only new items.
-9. **Judge and log.** A lens passes with VERDICT PASS and no open BLOCKING. Only the
+9. **Judge and log.** A lens passes with VERDICT PASS and no open BLOCKING; a missing or
+   unparseable verdict is FAIL. Only the
    reviewers' own verdicts decide: never override one, downgrade a blocker, or mark an
    item INVALID yourself. Log the round.
 
@@ -300,12 +291,15 @@ The run publishes its branch as a draft pull request, and the repo's CI is the v
 - **Push** each S6 round's `reviewed_sha` before dispatch:
   `git -C <worktree> push -u origin <branch>`. Never force; a rejected push is safety
   stop 3.
-- **One draft PR.** Before the first push, turn a ready open PR back into a draft
-  (`gh pr ready --undo <url>`); an earlier run on this branch may have marked it ready.
-  With none, open a draft after the first push:
-  `gh pr create --draft --base <base> --head <branch>`, titled and described from the
-  requirement. `<base>` is the branch the requirement names, else the repo's default
-  branch. Record `pr=<url>` in the run note.
+- **One draft PR.** Until `pr=` is recorded, repeat the S1 lookup before each push: adopt
+  the open PR, turning a ready one back into a draft (`gh pr ready --undo <url>`), since an
+  earlier run on this branch may have marked it ready. With none after the push, open a
+  draft:
+  `gh pr create --draft --base '<base>' --head '<branch>' --title '<title>' --body-file <file>`,
+  with the body written from the requirement with the file-write tool and a plain-words,
+  quote-free title. A base the requirement names must match `[A-Za-z0-9._/-]+`; otherwise
+  take safety stop 3. `<base>` is the branch the requirement names, else the repo's default
+  branch. Record `pr=<url>` in RESUME.
 - **Finish.** Converged: unless the PR body already holds it, add the S7 report, headed
   with HEAD's SHA, after any earlier run's (`gh pr view <url> --json body`, then
   `gh pr edit <url> --body-file <file>`). Then mark the PR ready (`gh pr ready <url>`).
@@ -315,14 +309,17 @@ The run publishes its branch as a draft pull request, and the repo's CI is the v
 
 Require a clean worktree with HEAD equal to the last all-PASS `reviewed_sha`; otherwise
 return to S6. The branch keeps its task and fix commits. In PR mode, finish the PR (PR
-mode). Report inline, with no skill: the review history, the final verification evidence
-from the run note, the decisions, and the deferred non-blockers and `deferred` lines. On a
+mode). If the user's or project's convention (AGENTS.md / CLAUDE.md) keeps plans or specs
+somewhere, copy the plan doc and any spec doc there. Report inline, with no skill: the
+review history, the final verification evidence from the plan doc, the decisions, and the deferred non-blockers and `deferred` lines. On a
 stop, lead with the stop reason. List the integration options, a squash merge
-(`git merge --squash`) among them, as an informational menu, not a question.
+(`git merge --squash`) among them, as an informational menu, not a question. On
+convergence, set RESUME `phase=done` before the result block.
 
 ## Safety stops
 
-Stop and hand off the state and exact next step only in these cases:
+Stop and hand off the state and exact next step, recorded in the progress log, only in
+these cases:
 
 1. **Destructive op**, unless the session runs with automatic approval (Claude: Auto
    Mode): any force-push, write outside the worktree, history rewrite beyond this branch,

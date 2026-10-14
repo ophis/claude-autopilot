@@ -13,7 +13,7 @@ import os
 import subprocess
 import sys
 
-from _frontmatter import iter_kv, split_frontmatter
+from _frontmatter import PHASES_OF, iter_kv, parse_applies_to, parse_tier, split_frontmatter, tier_for
 
 _GLOB_CHARS = set("*?[/")
 
@@ -30,10 +30,9 @@ def parse_frontmatter(path):
     """Parse an agent's frontmatter to the selector's keys (``name``, ``phase``,
     ``tier``, ``applies_to``); a file without a frontmatter block yields ``{}``.
 
-    ``applies_to`` is a single-line JSON array; ``tier`` is a scalar string or,
-    in JSON-object form (``{"spec": "core", "work": "optional"}``), a dict.
-    Tolerant by design: unknown keys ignored, unparseable values fall back to
-    empty/raw, malformed files never raise.
+    ``applies_to`` and ``tier`` are read by the shared parsers in
+    ``_frontmatter.py``; a value they reject leaves the agent unselectable,
+    which the roster lint reports. Malformed files never raise.
     """
     try:
         with open(path, "r", encoding="utf-8") as fh:
@@ -47,70 +46,45 @@ def parse_frontmatter(path):
 
     fm = {}
     for key, value in iter_kv(fm_lines):
-        if key not in ("name", "phase", "tier", "applies_to"):
-            continue
         if key == "applies_to":
-            try:
-                parsed = json.loads(value)
-                fm[key] = parsed if isinstance(parsed, list) else []
-            except (ValueError, TypeError):
-                fm[key] = []
-        elif key == "tier" and value.startswith("{"):
-            try:
-                parsed = json.loads(value)
-                fm[key] = parsed if isinstance(parsed, dict) else value
-            except (ValueError, TypeError):
-                fm[key] = value
-        else:
+            fm[key] = parse_applies_to(value) or []
+        elif key == "tier":
+            fm[key] = parse_tier(value)
+        elif key in ("name", "phase"):
             fm[key] = value
     return fm
 
 
-def changed_paths(worktree, base):
-    """Changed paths from ``git -C <worktree> diff --name-only <base>...HEAD``.
+class GitError(Exception):
+    pass
 
-    A git error (e.g. unknown ref) yields ``[]`` rather than raising — an empty
-    diff is a normal, non-error outcome.
-    """
+
+def _git_diff(worktree, base, mode):
     try:
         out = subprocess.run(
-            ["git", "-C", worktree, "diff", "--name-only", "%s...HEAD" % base],
+            ["git", "-C", worktree, "diff", mode, "%s...HEAD" % base],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,
         )
-    except OSError:
-        return []
+    except OSError as exc:
+        raise GitError(str(exc))
     if out.returncode != 0:
-        return []
-    text = out.stdout.decode("utf-8", "replace")
-    return [line for line in text.splitlines() if line.strip()]
+        raise GitError(out.stderr.decode("utf-8", "replace").strip() or "git diff exited %d" % out.returncode)
+    return out.stdout.decode("utf-8", "replace").splitlines()
+
+
+def changed_paths(worktree, base):
+    """Changed paths from ``git -C <worktree> diff --name-only <base>...HEAD``."""
+    return [line for line in _git_diff(worktree, base, "--name-only") if line.strip()]
 
 
 def structural_change(worktree, base):
-    """True iff the diff changed file topology, via
-    ``git -C <wt> diff --name-status <base>...HEAD``.
-
-    Status ``A D R C`` counts; pure ``M`` (in-place edit) does not. A git error
-    yields False rather than raising (same posture as ``changed_paths``).
+    """True iff the diff changed file topology (any A, D, R or C in
+    ``git diff --name-status <base>...HEAD``); a pure in-place edit does not count.
     """
-    try:
-        out = subprocess.run(
-            ["git", "-C", worktree, "diff", "--name-status", "%s...HEAD" % base],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
-    except OSError:
-        return False
-    if out.returncode != 0:
-        return False
-    text = out.stdout.decode("utf-8", "replace")
-    for line in text.splitlines():
-        line = line.strip()
-        if line and line[0] in ("A", "D", "R", "C"):
-            return True
-    return False
+    return any(line.strip()[:1] in ("A", "D", "R", "C") for line in
+               _git_diff(worktree, base, "--name-status") if line.strip())
 
 
 def match_optional(applies_to, phase, paths, spec_text, structural):
@@ -162,14 +136,13 @@ def select(agents_dir, phase, paths, spec_text, structural):
         agent_phase = fm.get("phase")
         if not agent_phase:
             continue  # no phase => selector-inert (e.g. reviewer-contract.md)
-        if agent_phase not in (phase, "both"):
+        if phase not in PHASES_OF.get(agent_phase, ()):
             continue
         name = fm.get("name") or os.path.splitext(os.path.basename(path))[0]
         tier = fm.get("tier")
         applies_to = fm.get("applies_to") or []
 
-        # A map tier yields tier[phase]; the resolved scalar is branched on and emitted.
-        eff_tier = tier.get(phase) if isinstance(tier, dict) else tier
+        eff_tier = tier_for(tier, phase)
 
         if eff_tier == "core":
             matched = "core"
@@ -234,8 +207,12 @@ def main(argv=None):
         # The diff inputs are the only optional-selection signal, so require them.
         if not args.worktree or not args.base:
             parser.error("--phase work requires both --worktree and --base")
-        paths = changed_paths(args.worktree, args.base)
-        structural = structural_change(args.worktree, args.base)
+        try:
+            paths = changed_paths(args.worktree, args.base)
+            structural = structural_change(args.worktree, args.base)
+        except GitError as exc:
+            sys.stderr.write("select-panel: git diff against %s failed: %s\n" % (args.base, exc))
+            return 2
     else:
         # Spec-file optional: without it core still selects, keyword optionals don't.
         if args.spec_file:

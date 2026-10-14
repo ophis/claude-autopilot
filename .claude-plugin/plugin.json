@@ -3,7 +3,7 @@
   "name": "autopilot",
   "displayName": "Claude Autopilot",
   "description": "Autonomous end-to-end feature pipeline: worktree, spec + review loop, plan, orchestrator implementation, tests, code-review loop, docs — driven by named expert review teams and Ralph convergence loops.",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "author": {
     "name": "Yinze Wang",
     "email": "ophis.w@gmail.com"
