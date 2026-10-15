@@ -226,5 +226,6 @@ claude-autopilot/
 │   └── *-reviewer.md             # one lens each
 ├── tests/
 │   └── test_scripts.py           # stdlib unittest for the scripts
+├── AGENTS.md                     # contributor guidance for Claude Code and Codex
 └── README.md
 ```

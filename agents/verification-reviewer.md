@@ -42,7 +42,7 @@ refs, and you verify the same fixed revision the other reviewers inspect.
   `VERIFICATION_UNAVAILABLE: ` on exit 6, and run nothing else. Any other exit means CI gave no usable result: run the complete checks below
   instead, and make the script's message your first NON-BLOCKING item.
 - **Complete checks.** Run the documented verification command from the plan doc, plus
-  any checks the repo's `CLAUDE.md`, README or CI require. With no documented command,
+  any checks the repo's `AGENTS.md` / `CLAUDE.md`, README or CI require. With no documented command,
   derive the full checks from the build and test manifests. Never weaken, skip or replace
   a full check with a targeted test. Attempt every runnable required check and collect
   all results.

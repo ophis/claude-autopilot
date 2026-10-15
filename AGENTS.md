@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 This file provides repository guidance to Claude Code and Codex.
 
@@ -134,8 +134,8 @@ reading those three files plus `agents/` and the bundled `skills/build/scripts/`
   same run that creates it (dispatch it ad-hoc via `general-purpose` until shipped).
   The same applies to the `skills/build` + `skills/light-build` skills: edits to a
   `SKILL.md` or `references/autopilot-common.md` (and `/autopilot:build` / `/autopilot:light-build` by-name invocability) go live only after `/reload-plugins`.
-- **Give a subagent the worktree-absolute path for `CLAUDE.md` edits.** Told to edit
-  `CLAUDE.md` in a worktree, one edited the repo-root copy loaded in its context;
+- **Give a subagent the worktree-absolute path for `AGENTS.md` edits.** Told to edit
+  `AGENTS.md` in a worktree, one edited the repo-root copy loaded in its context;
   `git -C <worktree> add -A` doesn't see it, so the edit strands on `main`.
 - **`dev-docs/` is gitignored** (per-build audit trail
   `dev-docs/<date>-<slug>-{spec,plan}.md`).
