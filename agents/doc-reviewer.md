@@ -78,15 +78,15 @@ behavior that needs docs has them. Flag bloat, redundancy and padding in the edi
 
 - **Anchor** each changed path to its owning package: the nearest dir with a package
   marker (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `BUILD`/`BUILD.bazel`,
-  `pom.xml`, `*.csproj`, …). Read each anchor's nearest ancestor `CLAUDE.md`; the docs it
-  points to are top candidates and mark the subtree boundary.
-- **Candidates**, at most 20 after ranking: the grep hits; docs an ancestor `CLAUDE.md`
-  names; `README*`, `CHANGELOG*` and `docs/**` in each package root; the nearest `docs/`
+  `pom.xml`, `*.csproj`, …). Read each anchor's nearest ancestor `AGENTS.md` / `CLAUDE.md`;
+  the docs it points to are top candidates and mark the subtree boundary.
+- **Candidates**, at most 20 after ranking: the grep hits; docs an ancestor `AGENTS.md` /
+  `CLAUDE.md` names; `README*`, `CHANGELOG*` and `docs/**` in each package root; the nearest `docs/`
   up to one level up; any `*.md` beside a changed file.
 - **Repo-level docs** are in scope only when the change touches a public boundary:
   exported API, the package's own README, manifest deps, schema/proto, CLI flags. Where
-  "exported" is not syntactic, the public surface is what the package README or
-  `CLAUDE.md` presents as public; when unsure, add only the package README and the
+  "exported" is not syntactic, the public surface is what the package README,
+  `AGENTS.md` or `CLAUDE.md` presents as public; when unsure, add only the package README and the
   repo-root README.
 - **No package markers:** use the longest common path prefix of the changed files as the
   root.
