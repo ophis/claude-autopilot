@@ -767,7 +767,7 @@ class SkillContractTests(unittest.TestCase):
                 s5 = step(fh.read(), 5)
             self.assertIn("Produce (S5)", s5, skill)
             self.assertNotIn("review", s5.lower(), skill)
-        for doc in ("skills/build/SKILL.md", "README.md", "CLAUDE.md"):
+        for doc in ("skills/build/SKILL.md", "README.md", "AGENTS.md"):
             with open(os.path.join(REPO, doc), encoding="utf-8") as fh:
                 self.assertNotIn("subagent-driven", fh.read(), doc)
 
@@ -854,7 +854,7 @@ class SkillContractTests(unittest.TestCase):
     def test_reviewer_template_exempts_verification_contract(self):
         with open(os.path.join(REPO, "agents", "reviewer-contract.md"), encoding="utf-8") as fh:
             template = fh.read()
-        with open(os.path.join(REPO, "CLAUDE.md"), encoding="utf-8") as fh:
+        with open(os.path.join(REPO, "AGENTS.md"), encoding="utf-8") as fh:
             guide = fh.read()
         self.assertIn("ordinary reviewers", template)
         self.assertIn("verification-reviewer.md", template)
