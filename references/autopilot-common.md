@@ -105,7 +105,10 @@ shapes.
   `-><actual native tool>` if the fallback fires.
 - Task done: `S5 task 3 done: <commit sha> red=<tests failing before the code, or none>`.
 - Review round, with the verdict roll-up and one gist per blocker: `S6 r1 @<reviewed_sha>: correctness=FAIL verification=PASS (command=<cmd>, exit code=0, tests=12, failures=0) -> correctness#1 off-by-one in slice bound; fixing`.
+- Fork, before convening: `fork(<topic>): options=[<A>, <B>, …]; prior=<your pick>`.
 - Decision, council or solo: `decision(<topic>): chose X over Y - <short reason>; dissent: <one phrase | none>`.
+  A council decision adds `; tally=<X:2 Y:1>` (members' picks; your prior is not a vote),
+  and `; against majority: <reason>` when X lost the vote.
 - Deferred pattern match outside the change: `deferred(<pattern>): <file:line>`.
 - At the end: the residual NON-BLOCKING items.
 
@@ -113,11 +116,20 @@ The blocker gists prime re-reviews; the full items are in the review items.
 
 ## Council
 
-1. At a genuine fork, convene 2–4 ad-hoc expert personas in one parallel subagent batch
-   (`Task`). Each returns a concise position: recommendation, rationale, trade-offs,
-   dissent.
-2. Synthesize and decide; you break ties. Log the decision.
-3. Use only personas with a genuinely distinct view. With fewer than two, decide solo.
+At a genuine fork:
+
+1. Log the fork line with your pick before convening.
+2. Convene 2–4 fresh subagents in one parallel batch (`Task`). Each gets the same brief
+   and nothing else (Brief workers fully does not apply):
+   - the fork questions and their options, worded without a lean;
+   - `input` verbatim;
+   - the absolute worktree path, read-only, with `.autopilot/` off-limits;
+   - the ask: for every question, check its claims against the code, add an option
+     nobody listed if one fits, and return a pick with rationale and trade-offs.
+
+   No spec doc beyond `input`, plan doc, persona or your pick.
+3. Wait for every answer, then decide. Log the decision with the tally. With fewer than
+   two answers, decide solo.
 
 Outside a genuine fork, decide solo and log it. Review catches a wrong guess.
 
@@ -201,8 +213,8 @@ FORK: <one-line question>
 - option B: <terse description + trade-off>
 ```
 
-Then you convene the council, decide, log the decision, and re-dispatch the producer with
-the decision in its prompt: `DECISION: <chosen option + one-line rationale>; proceed — do not re-fork on this`.
+Then you run the council on it (Council) and re-dispatch the producer with the decision
+in its prompt: `DECISION: <chosen option + one-line rationale>; proceed — do not re-fork on this`.
 
 ## Review round
 

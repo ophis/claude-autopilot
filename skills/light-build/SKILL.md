@@ -1,6 +1,6 @@
 ---
 name: light-build
-description: "Low-ceremony autonomous build: work on the current feature branch or a new isolated worktree, write a task list, implement each task itself, and run a capped correctness + requirement-fidelity + doc + verification review to a single review-ready branch, plus a draft PR when the repo has CI or you ask for one (never merges). No spec doc or spec review, and no other plugin needed. Use for simple tasks, or when you want autonomy and expert-council decisions without build's spec rigor. Pass the requirement text."
+description: "Low-ceremony autonomous build: work on the current feature branch or a new isolated worktree, write a task list, implement each task itself, and run a capped correctness + requirement-fidelity + doc + verification review to a single review-ready branch, plus a draft PR when the repo has CI or you ask for one (never merges). No spec doc or spec review, and no other plugin needed. Use for simple tasks, or when you want autonomy and council decisions without build's spec rigor. Pass the requirement text."
 argument-hint: "<requirements>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Agent, Task, Workflow, ToolSearch, EnterWorktree, ExitWorktree, TodoWrite
 ---

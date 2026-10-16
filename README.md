@@ -109,7 +109,7 @@ while the other reviewers read the code.
 ## Decisions and stops
 
 At a genuine fork (materially different trade-offs, or a choice costly to reverse) the run
-convenes an expert council of 2–4 ad-hoc subagents, decides and logs the decision. A
+convenes a council of 2–4 fresh subagents, decides and logs the decision. A
 delegated producer at a fork returns a `FORK:` marker instead, and the orchestrator decides
 and re-dispatches it.
 
