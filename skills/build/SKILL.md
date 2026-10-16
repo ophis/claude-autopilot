@@ -11,7 +11,8 @@ Paths are relative to this skill's directory.
 
 Drive one requirement through S1–S7 to a single review-ready branch, autonomously.
 
-**On start, before anything else (a resume included), read [`../../references/autopilot-common.md`](../../references/autopilot-common.md) in full.**
+**On start, before anything else (a resume included), read [`../../references/autopilot-common.md`](../../references/autopilot-common.md) and
+[`../../references/review-round.md`](../../references/review-round.md) in full.**
 This file adds build's input, spec doc, steps and review settings.
 
 ## Input
@@ -63,14 +64,14 @@ Per common: Finish (S7). Then emit the result block.
 
 |  | S3 spec review | S6 work review |
 | --- | --- | --- |
-| Panel source | `python3 scripts/select-panel.py --phase spec --spec-file <spec doc>` | `python3 scripts/select-panel.py --phase work --worktree <worktree> --base <base_ref>` |
+| Panel source | `python3 ../../scripts/select-panel.py --phase spec --spec-file <spec doc>` | `python3 ../../scripts/select-panel.py --phase work --worktree <worktree> --base <base_ref>` |
 | Cap | 3 rounds | 3 rounds |
 | Re-review set | the full panel, on the whole spec | the lenses that failed, plus every core lens |
 | Prompt doc fields | `spec_doc=…, plan_doc=…` | `spec_doc=…, plan_doc=…` |
 | Advance to | S4 | S7 |
 | Freeze line | `S3 panel: core=[…] +optional=[…] transport=Workflow` | `S6 panel: core=[…] +optional=[…] verification=<local\|ci> transport=Workflow` |
 
-- The selector returns a `selected` list of `{agent, subagent_type, tier, matched}`.
+- The selector returns a `selected` list of `{agent, subagent_type, file, tier, matched}`.
 - The panel is every `core` agent, plus the `optional` agents you judge relevant; drop a
   marginal optional one only with a logged `decision(panel)` line naming it and why.
 - Change a cap only when the requirement says so, and only for this run.

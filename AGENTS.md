@@ -32,9 +32,9 @@ claude --plugin-dir .
 
 Also run the [contributor smoke protocol](CONTRIBUTING.md#smoke-protocol).
 
-There is no build step. `tests/test_scripts.py` exercises `skills/build/scripts/select-panel.py`,
-`skills/build/scripts/check-spec.py`, `skills/build/scripts/ci-verdict.py` and `skills/build/scripts/pr.py` (against a fake `gh` on `PATH`),
-`skills/build/scripts/resolve-branch.py` (on temp git repos) and `scripts/lint-roster.py` as CLIs via subprocess (they have hyphenated names,
+There is no build step. `tests/test_scripts.py` exercises `scripts/select-panel.py`,
+`skills/build/scripts/check-spec.py`, `scripts/ci-verdict.py` and `scripts/pr.py` (against a fake `gh` on `PATH`),
+`scripts/resolve-branch.py` (on temp git repos) and `scripts/lint-roster.py` as CLIs via subprocess (they have hyphenated names,
 so they're not importable — the CLI is the contract).
 
 ## Architecture (the big picture)
@@ -48,20 +48,24 @@ capped at 3 rounds
 (correctness + requirement-fidelity + doc + verification). It does not gate scope — surface choice is
 the user's responsibility. When invoked, the *main-session agent implements the work itself* (S5 tasks and S6 fixes,
 optionally handing a self-contained task to a fresh producer) while independent reviewer
-subagents judge it; only their verdicts decide. Both read `references/autopilot-common.md` first: the rules they share (disciplines,
-state, council, worktree, review round, fixes, safety stops, result block); each SKILL.md
-keeps only its own input, state, steps and review settings. Understanding the system means
-reading those three files plus `agents/` and the bundled `skills/build/scripts/` helpers together:
+subagents judge it; only their verdicts decide. Both read `references/autopilot-common.md` (the run rules they share:
+disciplines, state, worktree, fixes, safety stops, result block) and `references/review-round.md`
+(how a review round runs and loops) first; each SKILL.md keeps only its own input, state, steps
+and review settings. Understanding the system means reading those four files plus `agents/`,
+`skills/council/SKILL.md` and the bundled `scripts/` helpers together:
 
 - **Shared spine.** `build` runs a single **S1–S7** pipeline: S1 worktree → S2 spec →
   S3 spec-review → S4 task list → S5 produce → S6 work-review → S7 finish.
   `light-build` skips S2, S3 (same number = same step).
   **It never merges** — the deliverable is a review-ready branch, plus a draft PR when
-  publishing (S1 `publish`, all `gh` steps in `skills/build/scripts/pr.py`): `pr` when the
+  publishing (S1 `publish`, all `gh` steps in `scripts/pr.py`): `pr` when the
   requirement asks for a PR (each commit pushed as it lands, build posts the reviewed spec,
   ready on convergence), `ci` when the repo has a pull_request workflow (pushed at S6 pins,
   a draft during the run). Either way the repo's CI is the verifier's backend, read by
-  `skills/build/scripts/ci-verdict.py`; a full suite never runs locally while CI can run it.
+  `scripts/ci-verdict.py`; a full suite never runs locally while CI can run it.
+  Each publishing work round peeks at the PR before dispatching the panel, so a conflict
+  or an already-red CI is fixed before any reviewer runs; running CI never delays the
+  panel. In `pr` mode S5 also peeks at the previous push's CI before each task push.
 
 - **Ralph convergence loops (S3, S6).** review → fix → re-review until the frozen
   review panel all-PASSes or a per-phase cap (build: 3 total rounds) is hit. Convergence is decided
@@ -92,8 +96,16 @@ reading those three files plus `agents/` and the bundled `skills/build/scripts/`
   lenses that failed plus every core lens, the verifier included (light-build: failed
   lenses plus the verifier every round, and correctness after a verifier FAIL).
 
-- **Selection stage (`skills/build/scripts/select-panel.py`).** Deterministic, stdlib-only router:
-  `(phase, signals) → JSON panel` of `{agent, subagent_type, tier, matched}`. Every
+- **Standalone skills (`skills/review`, `skills/council`).** `review` runs the spec-phase
+  loop over any document against its author's verbatim words, with or without a repo,
+  with this roster or an outside reviewer folder (`lenses=`), and returns a `review-result`
+  block instead of stopping. `council` is the fork procedure: a neutral brief to 2–4 fresh
+  subagents, the caller's pick logged before and the tally after. build and light-build run
+  it and decide everything themselves; another caller may hand an author's call back.
+
+- **Selection stage (`scripts/select-panel.py`).** Deterministic, stdlib-only router:
+  `(phase, signals) → JSON panel` of `{agent, subagent_type, file, tier, matched}`; `file`
+  lets a caller give a reviewer from an outside `--agents-dir` to a generic agent. Every
   `core` agent is a mandatory floor; `optional` agents route in when their `applies_to`
   matches the signals (spec keywords for S3; changed paths for S6). `tier` is usually a
   scalar but may be a per-phase JSON map (`tier: {"spec":"core","work":"optional"}` —
@@ -108,7 +120,7 @@ reading those three files plus `agents/` and the bundled `skills/build/scripts/`
   transport when Workflow is exposed; native host dispatch is the fallback.
   Contract in README "Plugin workflow".
 
-- **S1 resolver (`skills/build/scripts/resolve-branch.py`).** Decides where a run works:
+- **S1 resolver (`scripts/resolve-branch.py`).** Decides where a run works:
   resume this input's unfinished plan doc (by `input_sha`), stay on a non-default branch,
   reuse or create a worktree, or stop on a dirty checkout. It changes nothing but may
   record origin's default branch, and prints JSON.
@@ -121,7 +133,7 @@ reading those three files plus `agents/` and the bundled `skills/build/scripts/`
   Re-hydrate after compaction); an interrupted review round re-runs whole. At finish the
   docs are copied to the project's plan location if its AGENTS.md / CLAUDE.md names one.
 
-- **No plugin dependencies.** Both surfaces use only native tools, the plugin's own
+- **No plugin dependencies.** The skills use only native tools, the plugin's own
   scripts, or inline logic; neither invokes another plugin's skill or preflights for one.
   build and light-build S4 both say "invoke no planning skill" so an installed one
   isn't pulled into S4.
@@ -132,8 +144,8 @@ reading those three files plus `agents/` and the bundled `skills/build/scripts/`
   the *installed* plugin.** After adding/renaming an agent, the new `subagent_type` resolves only once
   the plugin is reloaded/updated — a fresh agent can't be dispatched natively in the
   same run that creates it (dispatch it ad-hoc via `general-purpose` until shipped).
-  The same applies to the `skills/build` + `skills/light-build` skills: edits to a
-  `SKILL.md` or `references/autopilot-common.md` (and `/autopilot:build` / `/autopilot:light-build` by-name invocability) go live only after `/reload-plugins`.
+  The same applies to the skills: edits to a `SKILL.md` or a `references/*.md` file (and
+  by-name invocability such as `/autopilot:review`) go live only after `/reload-plugins`.
 - **Give a subagent the worktree-absolute path for `AGENTS.md` edits.** Told to edit
   `AGENTS.md` in a worktree, one edited the repo-root copy loaded in its context;
   `git -C <worktree> add -A` doesn't see it, so the edit strands on `main`.

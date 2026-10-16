@@ -10,9 +10,6 @@ import os
 import re
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "..", "skills", "build", "scripts"))
-
 from _frontmatter import PHASES_OF, iter_kv, parse_applies_to, parse_tier, split_frontmatter
 
 REQUIRED_KEYS = (

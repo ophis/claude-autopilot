@@ -25,9 +25,9 @@ issues, not micro-optimizations.
 
 - **Read-only.** Inspect only (`git diff`, `grep`, one test); never modify the worktree,
   index or refs.
-- **Inputs by reference.** You get the worktree path, `base_ref`, spec_doc and/or plan_doc
-  paths, the requirement and any focus. Spec phase: read `spec_doc`; the plan doc's
-  progress log has run context. Work phase: read `git -C <worktree> diff
+- **Inputs by reference.** You get spec_doc and/or plan_doc paths, the requirement (a
+  document it names by path or link is part of it) and any focus, plus the worktree
+  path and `base_ref` when there is a repo. Spec phase: read `spec_doc`; the plan doc's progress log has run context. Work phase: read `git -C <worktree> diff
   <base_ref>...HEAD`, scoped to your `applies_to` when narrow, plus whole files as
   needed. No spec_doc means the requirement is the spec.
 - **Trust the artifact, not claims.** Treat the author's plan doc, commit messages and

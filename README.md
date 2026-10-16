@@ -49,6 +49,18 @@ commits, and the same PR.
 
 light-build gates no scope. It runs whatever you give it. Picking the skill is your call.
 
+Two smaller skills run alone or inside another skill:
+
+```
+/autopilot:review doc=path/to/prd.md requirement=path/to/request.md
+/autopilot:council requirement=path/to/request.md <question and its options>
+```
+
+`review` reviews one document against its author's own words, fixing it until the
+reviewers pass or 3 rounds, with or without a git repo; `lenses=<dir>` swaps in your own
+reviewers. `council` gets independent picks at a fork: 2–4 fresh subagents see only the
+question, the requirement, the documents it names and read-only code.
+
 ## How a run works
 
 ```mermaid
@@ -102,6 +114,13 @@ while the other reviewers read the code.
 - An open PR on the branch is adopted. A ready one goes back to draft for the run and is
   marked ready on convergence, so nobody merges it mid-review.
 - S4 names the CI checks that run the tests. If none does, verification runs locally.
+- Before dispatching a review round, the run peeks at the PR for up to 20 seconds. A
+  merge conflict, or CI that already failed for the pinned commit, is fixed before any
+  reviewer runs; a red CI still counts as a round. CI still running never holds the round
+  up: the verifier waits for it alongside the other reviewers.
+- In `pr` mode, before pushing each task after the first, the run peeks at the previous
+  push's CI, which ran while it wrote the task, and fixes a red result or a conflict
+  right then, so it doesn't cost a review round.
 - A CI failure enters the fix loop like any blocker.
 - CI still unfinished an hour after the verifier's first look stops the run. It never
   falls back to a local full suite.
@@ -109,7 +128,9 @@ while the other reviewers read the code.
 ## Decisions and stops
 
 At a genuine fork (materially different trade-offs, or a choice costly to reverse) the run
-convenes a council of 2–4 fresh subagents, decides and logs the decision. A
+runs the council (`skills/council`): it logs its own pick, 2–4 fresh subagents answer from
+the question, the requirement, the documents it names and read-only code, and it decides
+and logs the tally. A
 delegated producer at a fork returns a `FORK:` marker instead, and the orchestrator decides
 and re-dispatches it.
 
@@ -133,7 +154,8 @@ items when not converged.
 
 ## Call it from a workflow
 
-Both surfaces are skills, so another skill or workflow can call them by name. A nested run
+Both surfaces are skills, so another skill or workflow can call them by name, as it can
+`review` and `council` on their own. A nested run
 stays on the caller's branch unless that is a default branch, where it creates its own
 worktree. Its docs are named per requirement, so runs don't collide. The caller integrates
 the returned branch, read from the `autopilot-result` block.
@@ -166,9 +188,10 @@ reviewers are read-only and never run the full suite.
 | `performance-reviewer.md` | Complexity, N+1, allocation, leaks, hotspots | work | optional: code files |
 | `security-reviewer.md` | Authz, input validation, secrets, injection, supply chain | both | optional: auth, input, network, I/O, dependency or crypto signals |
 
-`skills/build/scripts/select-panel.py` builds build's panel from each file's frontmatter
+`scripts/select-panel.py` builds build's panel from each file's frontmatter
 (`lens`, `phase`, `tier`, `applies_to`), so a new lens is a new file. build runs every core
-lens and drops a marginal optional one only with a logged reason. On Claude Code each
+lens and drops a marginal optional one only with a logged reason. `review` also takes an
+outside folder of reviewers written to `reviewer-contract.md`; they run as generic agents. On Claude Code each
 reviewer runs as `autopilot:<name>` with its frontmatter `model:` and `effort:`; on Codex
 it inherits the session model. A re-reviewed lens starts fresh with its prior items and,
 in S6, the fix diff.
@@ -208,16 +231,19 @@ claude-autopilot/
 ├── skills/
 │   ├── build/SKILL.md            # /autopilot:build
 │   ├── build/spec.md             # spec-writing guide for S2
-│   ├── build/scripts/select-panel.py   # (phase, signals) → panel JSON
 │   ├── build/scripts/check-spec.py     # S2 spec structure and AC coverage
-│   ├── build/scripts/ci-verdict.py     # one commit's CI checks → verifier verdict
-│   ├── build/scripts/pr.py             # draft PR start / push / spec / finish
-│   ├── build/scripts/resolve-branch.py # S1: resume / stay / reuse / create / stop
-│   ├── build/scripts/_frontmatter.py   # parser shared with the roster lint
-│   └── light-build/SKILL.md      # /autopilot:light-build
+│   ├── light-build/SKILL.md      # /autopilot:light-build
+│   ├── review/SKILL.md           # /autopilot:review: review one document
+│   └── council/SKILL.md          # /autopilot:council: independent picks at a fork
 ├── references/
-│   └── autopilot-common.md       # rules both skills share
+│   ├── autopilot-common.md       # run rules build and light-build share
+│   └── review-round.md           # how a review round runs and loops
 ├── scripts/
+│   ├── select-panel.py           # (phase, signals) → panel JSON
+│   ├── ci-verdict.py             # one commit's CI checks → verifier verdict
+│   ├── pr.py                     # draft PR start / push / spec / finish
+│   ├── resolve-branch.py         # S1: resume / stay / reuse / create / stop
+│   ├── _frontmatter.py           # parser shared by the selector and the roster lint
 │   └── lint-roster.py            # roster lint
 ├── workflows/
 │   └── review-round.js           # plugin workflow: one parallel review round

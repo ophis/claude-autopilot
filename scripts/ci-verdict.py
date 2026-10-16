@@ -203,6 +203,7 @@ def verdict(args):
     deadline, appear_deadline = now + args.wait, now + args.appear
     until = first_call(args) + args.deadline
     check_mergeable(args, min(deadline, appear_deadline))
+    args.required = required_checks(args.plan_doc)
     finished = None
     while True:
         checks = fetch_checks(args.sha, args.worktree)
@@ -243,7 +244,6 @@ def main():
                         help="total seconds to wait for this commit's CI, counted from the first call")
     args = parser.parse_args()
     try:
-        args.required = required_checks(args.plan_doc)
         return verdict(args)
     except Timeout as exc:
         print("TIMEOUT: %s" % exc)

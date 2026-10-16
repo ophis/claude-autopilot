@@ -22,11 +22,11 @@ import unittest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(REPO, "scripts")
-SELECT_PANEL = os.path.join(REPO, "skills", "build", "scripts", "select-panel.py")
+SELECT_PANEL = os.path.join(SCRIPTS, "select-panel.py")
 CHECK_SPEC = os.path.join(REPO, "skills", "build", "scripts", "check-spec.py")
-CI_VERDICT = os.path.join(REPO, "skills", "build", "scripts", "ci-verdict.py")
-RESOLVE_BRANCH = os.path.join(REPO, "skills", "build", "scripts", "resolve-branch.py")
-PR_SCRIPT = os.path.join(REPO, "skills", "build", "scripts", "pr.py")
+CI_VERDICT = os.path.join(SCRIPTS, "ci-verdict.py")
+RESOLVE_BRANCH = os.path.join(SCRIPTS, "resolve-branch.py")
+PR_SCRIPT = os.path.join(SCRIPTS, "pr.py")
 LINT_ROSTER = os.path.join(SCRIPTS, "lint-roster.py")
 REVIEW_ROUND = os.path.join(REPO, "workflows", "review-round.js")
 SKILLS = os.path.join(REPO, "skills")
@@ -194,8 +194,9 @@ class SelectPanelTests(unittest.TestCase):
         entries = json.loads(
             run_select("--phase", "spec", "--agents-dir", self.agents).stdout)["selected"]
         for e in entries:
-            self.assertEqual(set(e), {"agent", "subagent_type", "tier", "matched"})
-            self.assertEqual(e["subagent_type"], "autopilot:" + e["agent"])
+            self.assertEqual(set(e), {"agent", "subagent_type", "file", "tier", "matched"})
+            self.assertEqual(e["subagent_type"], "general-purpose")   # not the bundled roster
+            self.assertEqual(e["file"], os.path.join(os.path.abspath(self.agents), e["agent"] + ".md"))
             self.assertEqual(e["matched"], "core")        # all spec selections are core here
 
     def test_core_sorted_before_optional(self):
@@ -259,9 +260,11 @@ class SelectPanelTests(unittest.TestCase):
         self.assertEqual(selected["verification-reviewer"], {
             "agent": "verification-reviewer",
             "subagent_type": "autopilot:verification-reviewer",
+            "file": os.path.join(REPO, "agents", "verification-reviewer.md"),
             "tier": "core",
             "matched": "core",
         })
+        self.assertTrue(all(e["subagent_type"] == "autopilot:" + e["agent"] for e in selected.values()))
         spec = run_select("--phase", "spec")
         self.assertEqual(spec.returncode, 0, spec.stderr)
         self.assertNotIn("verification-reviewer",
@@ -724,15 +727,18 @@ class SkillContractTests(unittest.TestCase):
 
     def test_common_bundled_paths_exist(self):
         refs = os.path.join(REPO, "references")
-        with open(os.path.join(refs, "autopilot-common.md"), encoding="utf-8") as fh:
-            paths = set(re.findall(r"\.\./[\w./-]+\.(?:py|md)", fh.read()))
-        self.assertIn("../skills/build/scripts/ci-verdict.py", paths)
+        paths = set()
+        for name in os.listdir(refs):
+            with open(os.path.join(refs, name), encoding="utf-8") as fh:
+                paths |= set(re.findall(r"\.\./[\w./-]+\.(?:py|md)", fh.read()))
+        self.assertIn("../scripts/ci-verdict.py", paths)
+        self.assertIn("../skills/council/SKILL.md", paths)
         for rel in paths:
             self.assertTrue(os.path.exists(os.path.join(refs, rel)), rel)
 
     def test_publish_steps_go_through_pr_py(self):
         text = flat(skill_text("light-build"))
-        for token in ("`python3 <abs path of ../skills/build/scripts/pr.py>`",
+        for token in ("`python3 <abs path of ../scripts/pr.py>`",
                       "RESUME. Then run `pr.py start` (Publish).",
                       "run `pr.py push --task` (Publish)", "Run `pr.py push` (Publish).",
                       "`pr.py spec --plan-doc <plan_doc> --spec-doc <spec doc>` at S4",
@@ -1204,6 +1210,14 @@ class CiVerdictTests(unittest.TestCase):
                 self.assertEqual(proc.returncode, 3, proc.stdout)
                 self.assertIn(reason, proc.stdout)
                 self.assertEqual(state["polls"], 0)
+
+    def test_conflict_is_reported_even_without_named_checks(self):
+        green = [{"check_runs": [check_run("unit", "success", run=7)]}]
+        proc, state = self.run_ci(green, "--appear", "5", "--wait", "5", plan="CI checks: []\n",
+                                  mergeable=["CONFLICTING"])
+        self.assertEqual(proc.returncode, 5, proc.stdout)
+        self.assertTrue(proc.stdout.startswith("CONFLICT: "), proc.stdout)
+        self.assertEqual(state["polls"], 0)
 
     def test_cancelled_run_is_rerun_once_then_passes(self):
         cancelled = {"check_runs": [check_run("unit", "cancelled", run=7)]}
@@ -1863,6 +1877,127 @@ class ReviewRoundScriptTests(unittest.TestCase):
                 stderr=subprocess.PIPE,
             )
             self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+
+
+class StandaloneSkillTests(unittest.TestCase):
+    """council and review run alone or from another skill, with a neutral brief and no repo."""
+
+    def read(self, *parts):
+        with open(os.path.join(REPO, *parts), encoding="utf-8") as fh:
+            return fh.read()
+
+    def test_frontmatter_and_links_resolve(self):
+        for skill in ("council", "review"):
+            text = self.read("skills", skill, "SKILL.md")
+            self.assertTrue(text.startswith("---\n"), skill)
+            self.assertIn("\nname: %s\n" % skill, text)
+            self.assertIn("\ndescription: ", text)
+            rels = re.findall(r"\]\((\.\.?/[^)]+)\)", text) + re.findall(r"\.\./[\w./-]+\.(?:py|md)", text)
+            for rel in rels:
+                with self.subTest(skill=skill, link=rel):
+                    self.assertTrue(os.path.exists(os.path.join(SKILLS, skill, rel)), rel)
+
+    def test_council_brief_is_neutral_and_vote_is_logged(self):
+        text = flat(self.read("skills", "council", "SKILL.md"))
+        for token in ("Before convening, log each question with your own pick", "prior=<your pick>", "worded without a lean", "the requirement verbatim",
+                      "check its claims against the code", "add an option nobody listed",
+                      "No other document (spec, plan or notes) beyond the requirement and the documents it names, no persona, and not your pick or criteria",
+                      "the requirement verbatim, and any document it names by path or link",
+                      "is no fork: run it, log `checked(<topic>): <command> -> <result>`",
+                      "criteria=[<c1>, <c2>, …]", "If no question remains, stop",
+                      "When another option has more than half the picks, add `; against majority: <reason>`",
+                      "When no option has more than half, decide on your logged criteria and add `; criterion: <c>`",
+                      "only by quoting the requirement clause that asks for it",
+                      "Without a quote, leave it out, log `omitted(<topic>): <addition>`, and show it to the author",
+                      "its final report lists the `omitted` lines",
+                      "A document these words name by path or link goes with them; documents that document names do not",
+                      "A caller that decides everything itself shows and returns nothing to the author",
+                      "options in alphabetical order of their short names, each with one pro line and one con line",
+                      "say whether the brief leans toward an option",
+                      '; adopted: <addition> per "<quote>"',
+                      "Each gets the same brief and nothing else", "the absolute repo path, read-only",
+                      "A question with fewer than two picks: decide it solo", "**Wait** for every answer",
+                      "decision(<topic>): author's call - <why>", "A question most members flag as the author's call goes back to the author instead",
+                      "tally=<X:2 Y:1>", "your prior is not a vote", "; against majority: <reason>",
+                      "Word whatever goes to the author so they can answer without reading code"):
+            with self.subTest(token=token):
+                self.assertIn(token, text)
+        self.assertLess(text.index("prior=<your pick>"), text.index("**Convene**"))
+
+    def test_logged_decisions_never_excuse_added_scope(self):
+        text = flat(self.read("agents", "requirement-fidelity-reviewer.md"))
+        self.assertIn("behavior added that the requirement does not ask for", text)
+        self.assertIn("A logged decision records how an ask is met, never added scope", text)
+        self.assertNotIn("A logged decision counts as a record", text)
+        self.assertNotIn("behavior added or changed without a recorded decision", text)
+        self.assertIn("nothing added that the requirement does not ask for", text)
+        self.assertIn("the work adds behavior the requirement never asked for, spec'd or not", text)
+
+    def test_runs_use_the_council_and_decide_themselves(self):
+        common = flat(self.read("references", "autopilot-common.md"))
+        self.assertIn("run the council per [`../skills/council/SKILL.md`]", common)
+        self.assertIn("Brief workers fully does not apply to members. You decide everything yourself, including a question members flag as the user's call", common)
+        self.assertNotIn("prior=<your pick>", common)
+        self.assertIn("A question a quick run can answer is not one: run it and log it, per the council's first step (Council)", common)
+
+    def test_review_works_without_a_repo_and_returns(self):
+        text = flat(self.read("skills", "review", "SKILL.md"))
+        for token in ("../../references/review-round.md", "--phase spec --spec-file <doc>",
+                      "--agents-dir <lenses>", "the full panel, on the whole document",
+                      "changing only what a blocker needs", "End every path with one fenced `review-result` block",
+                      "`capped`", "`needs-author`", "An empty panel: return `stopped`",
+                      "after its last `review-result`", "the caller decides what open blockers and questions mean"):
+            with self.subTest(token=token):
+                self.assertIn(token, text)
+        rounds = flat(self.read("references", "review-round.md"))
+        self.assertIn("With no repo, leave out `worktree=` and `base_ref=`", rounds)
+        self.assertIn('selector `subagent_type: "general-purpose"`', rounds)
+        self.assertIn("### The fix", rounds)
+        contract = flat(self.read("agents", "reviewer-contract.md"))
+        self.assertIn("plus the worktree path and `base_ref` when there is a repo", contract)
+        self.assertIn("the requirement (a document it names by path or link is part of it)", contract)
+        self.assertIn("A document these words name by path or link goes with them", text)
+
+    def test_ci_is_checked_before_reviewers_are_dispatched(self):
+        rounds = flat(self.read("references", "review-round.md"))
+        check = rounds.index("**Peek at the PR (work, `publish` other than `none`).** Before dispatching anyone")
+        self.assertLess(rounds.index("**Pin the revision (work).**"), check)
+        self.assertLess(check, rounds.index("**Write prompts.**"))
+        self.assertLess(check, rounds.index("**Dispatch all members together**"))
+        self.assertNotIn("again while it exits 4", rounds)
+        for token in ("--wait 20 --appear 20 --interval 5", "It never waits for CI to finish",
+                      "Exit 5 (`CONFLICT:`): resolve it (Publish)", "Exit 1, CI already failed: dispatch no one",
+                      "Exit 6: safety stop 3", "Any other exit, CI still running included: go on",
+                      "with `verification=ci` the verifier waits for CI alongside the other lenses",
+                      "one that has not reviewed yet is pending, not FAIL",
+                      "a dispatched lens with a missing or unparseable verdict is FAIL",
+                      "`verification=FAIL (CI check; panel not dispatched)`",
+                      "plus every lens that has not yet reviewed in the phase"):
+            with self.subTest(token=token):
+                self.assertIn(token, rounds)
+        common = flat(self.read("references", "autopilot-common.md"))
+        self.assertIn("A `CONFLICT:` from the PR peek before a round, or from the verifier", common)
+        self.assertIn("`Rules: <abs SKILL.md path> <abs path of this file> <abs path of review-round.md>`", common)
+        self.assertIn("the decisions and `omitted` lines", common)
+
+    def test_s5_peeks_at_the_previous_push_before_pushing(self):
+        common = self.read("references", "autopilot-common.md")
+        produce = flat(common[common.index("## Produce (S5)"):common.index("## Review round")])
+        peek = produce.index("first peek at the CI of the last pushed commit")
+        self.assertLess(peek, produce.index("Then run `pr.py push --task` (Publish)"))
+        for token in ("In `publish=pr` with checks named in `CI checks:`", "(none before the first push)",
+                      "`git -C <worktree> rev-parse @{upstream}`",
+                      "--sha <sha> --plan-doc <plan_doc> --wait 0 --appear 0 --interval 0",
+                      "Exit 1: fix the printed failures (S6 fixes) in one more commit, `fix(ci): <check names>`",
+                      "Exit 5: merge the base as in Publish (Conflicts), with no round to re-run",
+                      "Any other exit: go on"):
+            with self.subTest(token=token):
+                self.assertIn(token, produce)
+        self.assertIn("Re-read the plan doc whole (Resume first), the files on its `Rules:` line", flat(common))
+
+    def test_pipeline_skills_read_the_round_rules(self):
+        for skill in ("build", "light-build"):
+            self.assertIn("../../references/review-round.md", self.read("skills", skill, "SKILL.md"), skill)
 
 
 if __name__ == "__main__":

@@ -18,7 +18,8 @@ review (S3).
 - **Self-contained.** Name or invoke no external plugin skill, and run no dependency
   preflight.
 
-**On start, before anything else (a resume included), read [`../../references/autopilot-common.md`](../../references/autopilot-common.md) in full.**
+**On start, before anything else (a resume included), read [`../../references/autopilot-common.md`](../../references/autopilot-common.md) and
+[`../../references/review-round.md`](../../references/review-round.md) in full.**
 This file adds light-build's input, steps and review settings.
 
 ## Input

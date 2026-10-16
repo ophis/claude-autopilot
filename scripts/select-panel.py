@@ -124,11 +124,17 @@ def match_optional(applies_to, phase, paths, spec_text, structural):
     return matched
 
 
+ROSTER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "agents")
+
+
 def select(agents_dir, phase, paths, spec_text, structural):
     """Compute the selected panel for the phase. Returns a list of entry dicts.
 
-    Sorted core-first then optional, each group name-sorted.
+    Sorted core-first then optional, each group name-sorted. Only the bundled
+    roster dispatches by name; a lens from another folder runs as a generic agent
+    given its ``file``, so it never resolves to a same-named bundled lens.
     """
+    own = os.path.realpath(agents_dir) == os.path.realpath(ROSTER)
     pattern = os.path.join(agents_dir, "*.md")
     selected = []
     for path in sorted(glob.glob(pattern)):
@@ -156,7 +162,8 @@ def select(agents_dir, phase, paths, spec_text, structural):
         selected.append(
             {
                 "agent": name,
-                "subagent_type": "autopilot:" + name,
+                "subagent_type": "autopilot:" + name if own else "general-purpose",
+                "file": os.path.abspath(path),
                 "tier": eff_tier,
                 "matched": matched,
             }
@@ -174,12 +181,9 @@ def main(argv=None):
         "--phase", required=True, choices=["spec", "work"],
         help="review phase to select reviewers for",
     )
-    default_agents = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "agents"
-    )
     parser.add_argument(
-        "--agents-dir", default=default_agents,
-        help="directory of agent *.md files (default: <script_dir>/../../../agents)",
+        "--agents-dir", default=ROSTER,
+        help="directory of agent *.md files (default: <script_dir>/../agents)",
     )
     parser.add_argument(
         "--spec-file",
