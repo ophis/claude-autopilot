@@ -12,8 +12,6 @@
 Claude Code と Codex のプラグインです。作業そのもの（コード、ドキュメント、デザイン、データ、計画）は自分で行い、
 独立した reviewer agent がそれを判定し、全員が合格するまで修正を続けます。マージは決して行いません。
 
-> ステータス: **v1.10.0**
-
 ## インストール
 
 Claude Code では、このリポジトリ自体が marketplace です:
@@ -24,7 +22,7 @@ Claude Code では、このリポジトリ自体が marketplace です:
 ```
 
 `ophis/claude-autopilot`、ローカルパス、`/plugin` メニューでもインストールできます。リリースは明示的な
-semver を使います（現在は `1.10.0`）。更新するには `/plugin marketplace update claude-autopilot` を実行し、
+semver を使います。更新するには `/plugin marketplace update claude-autopilot` を実行し、
 もう一度インストールコマンドを実行します。他のプラグインは不要です。
 
 **Codex。** requirement を添えて `autopilot:build` または `autopilot:light-build` skill を呼び出すか、
@@ -215,7 +213,7 @@ python3 tests/test_scripts.py                              # helper-script tests
 ```
 claude-autopilot/
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 1.10.0)
+│   ├── plugin.json               # name: autopilot
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # /autopilot:build

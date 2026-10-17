@@ -12,8 +12,6 @@ requirement 하나를 아무것도 묻지 않고 리뷰할 준비가 된 git bra
 작업 자체(코드, 문서, 디자인, 데이터, 계획)는 직접 하고, 독립된 reviewer agent가 이를 판정하며, 모두 통과할 때까지 고칩니다.
 병합은 절대 하지 않습니다.
 
-> 상태: **v1.10.0**
-
 ## 설치
 
 Claude Code에서는 이 저장소가 곧 marketplace입니다:
@@ -23,8 +21,8 @@ Claude Code에서는 이 저장소가 곧 marketplace입니다:
 /plugin install autopilot@claude-autopilot
 ```
 
-`ophis/claude-autopilot`, 로컬 경로 또는 `/plugin` 메뉴로도 설치할 수 있습니다. 릴리스는 명시적인 semver를 씁니다
-(현재 `1.10.0`). 업데이트하려면 `/plugin marketplace update claude-autopilot`을 실행한 뒤 설치 명령을 다시 실행하세요.
+`ophis/claude-autopilot`, 로컬 경로 또는 `/plugin` 메뉴로도 설치할 수 있습니다. 릴리스는 명시적인 semver를 씁니다.
+업데이트하려면 `/plugin marketplace update claude-autopilot`을 실행한 뒤 설치 명령을 다시 실행하세요.
 다른 플러그인은 필요 없습니다.
 
 **Codex.** requirement와 함께 `autopilot:build` 또는 `autopilot:light-build` skill을 호출하거나, checkout에 있는
@@ -213,7 +211,7 @@ python3 tests/test_scripts.py                              # helper-script tests
 ```
 claude-autopilot/
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 1.10.0)
+│   ├── plugin.json               # name: autopilot
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # /autopilot:build

@@ -12,8 +12,6 @@ Um plugin para Claude Code e Codex que transforma um requirement em uma git bran
 sem perguntar nada a você. Ele faz o trabalho sozinho (código, documentação, designs, dados, planos),
 agentes reviewer independentes o avaliam, e ele corrige até que todos aprovem. Nunca faz merge.
 
-> Status: **v1.10.0**
-
 ## Instalação
 
 No Claude Code, este repositório é o seu próprio marketplace:
@@ -24,7 +22,7 @@ No Claude Code, este repositório é o seu próprio marketplace:
 ```
 
 `ophis/claude-autopilot`, um caminho local ou o menu `/plugin` também funcionam. As versões usam semver
-explícito (atualmente `1.10.0`). Para atualizar, execute `/plugin marketplace update claude-autopilot` e depois
+explícito. Para atualizar, execute `/plugin marketplace update claude-autopilot` e depois
 a linha de instalação de novo. Nenhum outro plugin é necessário.
 
 **Codex.** Invoque a skill `autopilot:build` ou `autopilot:light-build` com o seu requirement, ou peça ao Codex
@@ -225,7 +223,7 @@ O repositório é ao mesmo tempo o marketplace e o plugin:
 ```
 claude-autopilot/
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 1.10.0)
+│   ├── plugin.json               # name: autopilot
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # /autopilot:build
