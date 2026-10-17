@@ -1,4 +1,10 @@
-# Claude Autopilot
+<div align="center">
+
+# <img src="docs/images/icon.jpg" alt="" width="40" align="absmiddle"> Claude Autopilot
+
+English · [中文](docs/readme/README.zh-CN.md) · [日本語](docs/readme/README.ja.md) · [한국어](docs/readme/README.ko.md) · [Español](docs/readme/README.es.md) · [Français](docs/readme/README.fr.md) · [Português](docs/readme/README.pt.md)
+
+</div>
 
 A Claude Code and Codex plugin that turns one requirement into a review-ready git branch
 without asking you anything. It writes the work itself (code, docs, designs, data, plans),
