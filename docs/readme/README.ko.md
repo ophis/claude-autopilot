@@ -21,8 +21,8 @@ Claude Code에서는 이 저장소가 곧 marketplace입니다:
 /plugin install autopilot@claude-autopilot
 ```
 
-`ophis/claude-autopilot`, 로컬 경로 또는 `/plugin` 메뉴로도 설치할 수 있습니다. 릴리스는 명시적인 semver를 씁니다
-. 업데이트하려면 `/plugin marketplace update claude-autopilot`을 실행한 뒤 설치 명령을 다시 실행하세요.
+`ophis/claude-autopilot`, 로컬 경로 또는 `/plugin` 메뉴로도 설치할 수 있습니다. 릴리스는 명시적인 semver를 씁니다.
+업데이트하려면 `/plugin marketplace update claude-autopilot`을 실행한 뒤 설치 명령을 다시 실행하세요.
 다른 플러그인은 필요 없습니다.
 
 **Codex.** requirement와 함께 `autopilot:build` 또는 `autopilot:light-build` skill을 호출하거나, checkout에 있는
