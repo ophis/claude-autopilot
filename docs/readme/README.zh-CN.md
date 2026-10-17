@@ -12,8 +12,6 @@
 全程不向你提问。它自己完成工作（代码、文档、设计、数据、计划），由独立的 reviewer agent
 评判，并不断修复直到全部通过。它从不合并。
 
-> 状态：**v1.10.0**
-
 ## 安装
 
 在 Claude Code 中，本仓库就是它自己的 marketplace：
@@ -24,7 +22,7 @@
 ```
 
 也可以用 `ophis/claude-autopilot`、本地路径或 `/plugin` 菜单安装。版本采用明确的
-semver（当前为 `1.10.0`）。更新时先运行 `/plugin marketplace update claude-autopilot`，
+semver。更新时先运行 `/plugin marketplace update claude-autopilot`，
 再运行一次安装命令。不需要其他插件。
 
 **Codex。** 带上你的 requirement 调用 `autopilot:build` 或 `autopilot:light-build`
@@ -218,7 +216,7 @@ python3 tests/test_scripts.py                              # helper-script tests
 ```
 claude-autopilot/
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 1.10.0)
+│   ├── plugin.json               # name: autopilot
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # /autopilot:build
