@@ -1790,10 +1790,11 @@ class ReviewRoundScriptTests(unittest.TestCase):
         script = (
             "async function _wf(args, phase, log, parallel, agent) {\n%s\n}\n"
             "const verdicts = %s;\n"
+            "const schemas = {};\n"
             "const out = await _wf(%s, () => {}, () => {},\n"
             "  fns => Promise.all(fns.map(f => f())),\n"
-            "  async (prompt, opts) => verdicts[opts.label]);\n"
-            "console.log(JSON.stringify(out));\n"
+            "  async (prompt, opts) => { schemas[opts.label] = opts.schema; return verdicts[opts.label] });\n"
+            "console.log(JSON.stringify({...out, schemas}));\n"
         ) % (body, json.dumps(verdicts), args_js)
         with tempfile.TemporaryDirectory() as td:
             mjs = os.path.join(td, "round.mjs")
@@ -1824,6 +1825,30 @@ class ReviewRoundScriptTests(unittest.TestCase):
                 self.assertEqual(got["pass-with-blocker"], ("FAIL", ["x.py:1 off by one"], [], False))
                 self.assertEqual(got["clean"], ("PASS", [], ["nit"], False))
                 self.assertEqual(got["fail"], ("FAIL", ["y"], [], False))
+
+    @unittest.skipUnless(shutil.which("node"), "node not installed")
+    def test_schema_rejects_pass_with_blocking_items(self):
+        """The runtime validates each verdict against the schema and makes the
+        reviewer retry on a mismatch, so PASS + ["none"] is fixed by the
+        reviewer; one that reaches normalize anyway stays FAIL."""
+        members = [{"agent": a, "subagent_type": "autopilot:" + a, "prompt": "p"}
+                   for a in ("pass-empty", "pass-none", "fail-real")]
+        verdicts = {
+            "pass-empty": {"VERDICT": "PASS", "BLOCKING": [], "NON_BLOCKING": []},
+            "pass-none": {"VERDICT": "PASS", "BLOCKING": ["none"], "NON_BLOCKING": []},
+            "fail-real": {"VERDICT": "FAIL", "BLOCKING": ["x.py:3 null deref on empty input"], "NON_BLOCKING": []},
+        }
+        out = self.run_round(json.dumps({"phase": "work", "members": members}), verdicts)
+        got = {v["agent"]: (v["VERDICT"], v["BLOCKING"]) for v in out["verdicts"]}
+        self.assertEqual(got["pass-empty"], ("PASS", []))
+        self.assertEqual(got["pass-none"], ("FAIL", ["none"]))
+        self.assertEqual(got["fail-real"], ("FAIL", ["x.py:3 null deref on empty input"]))
+        for agent_name, schema in out["schemas"].items():
+            with self.subTest(agent=agent_name):
+                self.assertEqual(schema["if"], {"properties": {"VERDICT": {"const": "PASS"}}})
+                self.assertEqual(schema["then"], {"properties": {"BLOCKING": {"type": "array", "maxItems": 0}}})
+                for field in ("BLOCKING", "NON_BLOCKING"):
+                    self.assertIn("empty array []", schema["properties"][field]["description"])
 
     @unittest.skipUnless(shutil.which("node"), "node not installed")
     def test_unparseable_args_dispatch_nothing(self):
