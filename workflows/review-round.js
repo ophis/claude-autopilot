@@ -6,13 +6,16 @@ export const meta = {
 
 // `synthetic` is intentionally NOT in the schema: reviewers never set it —
 // normalize() populates it in code on every path.
+
+// A PASS with BLOCKING ["none"] reads as FAIL in normalize.
+const EMPTY_LIST = 'Empty array [] when there are none; never a "none" item.'
 const VERDICT_SCHEMA = {
   type: 'object',
   properties: {
     agent: { type: 'string' },
     VERDICT: { type: 'string', enum: ['PASS', 'FAIL'] },
-    BLOCKING: { type: 'array', items: { type: 'string' } },
-    NON_BLOCKING: { type: 'array', items: { type: 'string' } },
+    BLOCKING: { type: 'array', items: { type: 'string' }, description: EMPTY_LIST },
+    NON_BLOCKING: { type: 'array', items: { type: 'string' }, description: EMPTY_LIST },
   },
   required: ['VERDICT', 'BLOCKING', 'NON_BLOCKING'],
   additionalProperties: false,

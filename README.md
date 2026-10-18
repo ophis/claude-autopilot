@@ -10,7 +10,7 @@ A Claude Code and Codex plugin that turns one requirement into a review-ready gi
 without asking you anything. It writes the work itself (code, docs, designs, data, plans),
 independent reviewer agents judge it, and it fixes until they all pass. It never merges.
 
-> Status: **v1.10.0**
+> Status: **v1.10.1**
 
 ## Install
 
@@ -22,7 +22,7 @@ In Claude Code, this repo is its own marketplace:
 ```
 
 `ophis/claude-autopilot`, a local path or the `/plugin` menu also work. Releases use
-explicit semver (currently `1.10.0`). To update, run `/plugin marketplace update claude-autopilot`,
+explicit semver (currently `1.10.1`). To update, run `/plugin marketplace update claude-autopilot`,
 then the install line again. No other plugin is needed.
 
 **Codex.** Invoke the `autopilot:build` or `autopilot:light-build` skill with your
@@ -232,7 +232,7 @@ The repo is both the marketplace and the plugin:
 ```
 claude-autopilot/
 ├── .claude-plugin/
-│   ├── plugin.json               # name: autopilot (version 1.10.0)
+│   ├── plugin.json               # name: autopilot (version 1.10.1)
 │   └── marketplace.json          # name: claude-autopilot, plugins:[{source:"./"}]
 ├── skills/
 │   ├── build/SKILL.md            # /autopilot:build
