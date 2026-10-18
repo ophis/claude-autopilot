@@ -857,14 +857,6 @@ class SkillContractTests(unittest.TestCase):
                 with self.subTest(reviewer=name, section=title):
                     self.assertEqual(mine.get(title), template[title])
 
-    def test_grammar_maps_none_to_an_empty_array_under_a_schema(self):
-        rule = 'Under a JSON output schema, `none` is an empty array (`"BLOCKING": []`), never a `"none"` item.'
-        for name in ("reviewer-contract.md", "verification-reviewer.md"):
-            with open(os.path.join(REPO, "agents", name), encoding="utf-8") as fh:
-                grammar = fh.read().split("## Verdict grammar (strict)", 1)[1]
-            with self.subTest(file=name):
-                self.assertIn(rule, flat(grammar))
-
     def test_reviewer_template_exempts_verification_contract(self):
         with open(os.path.join(REPO, "agents", "reviewer-contract.md"), encoding="utf-8") as fh:
             template = fh.read()
@@ -1790,10 +1782,11 @@ class ReviewRoundScriptTests(unittest.TestCase):
         script = (
             "async function _wf(args, phase, log, parallel, agent) {\n%s\n}\n"
             "const verdicts = %s;\n"
+            "const schemas = {};\n"
             "const out = await _wf(%s, () => {}, () => {},\n"
             "  fns => Promise.all(fns.map(f => f())),\n"
-            "  async (prompt, opts) => verdicts[opts.label]);\n"
-            "console.log(JSON.stringify(out));\n"
+            "  async (prompt, opts) => { schemas[opts.label] = opts.schema; return verdicts[opts.label] });\n"
+            "console.log(JSON.stringify({...out, schemas}));\n"
         ) % (body, json.dumps(verdicts), args_js)
         with tempfile.TemporaryDirectory() as td:
             mjs = os.path.join(td, "round.mjs")
@@ -1802,6 +1795,15 @@ class ReviewRoundScriptTests(unittest.TestCase):
             proc = subprocess.run(["node", mjs], capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         return json.loads(proc.stdout)
+
+    @unittest.skipUnless(shutil.which("node"), "node not installed")
+    def test_schema_tells_reviewers_an_empty_list_is_brackets(self):
+        members = [{"agent": "a", "subagent_type": "autopilot:a", "prompt": "p"}]
+        verdicts = {"a": {"VERDICT": "PASS", "BLOCKING": [], "NON_BLOCKING": []}}
+        schema = self.run_round(json.dumps({"phase": "work", "members": members}), verdicts)["schemas"]["a"]
+        for field in ("BLOCKING", "NON_BLOCKING"):
+            self.assertEqual(schema["properties"][field]["description"],
+                             'Empty array [] when there are none; never a "none" item.')
 
     @unittest.skipUnless(shutil.which("node"), "node not installed")
     def test_round_normalizes_every_verdict(self):
