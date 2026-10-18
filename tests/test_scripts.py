@@ -857,6 +857,14 @@ class SkillContractTests(unittest.TestCase):
                 with self.subTest(reviewer=name, section=title):
                     self.assertEqual(mine.get(title), template[title])
 
+    def test_grammar_maps_none_to_an_empty_array_under_a_schema(self):
+        rule = 'Under a JSON output schema, `none` is an empty array (`"BLOCKING": []`), never a `"none"` item.'
+        for name in ("reviewer-contract.md", "verification-reviewer.md"):
+            with open(os.path.join(REPO, "agents", name), encoding="utf-8") as fh:
+                grammar = fh.read().split("## Verdict grammar (strict)", 1)[1]
+            with self.subTest(file=name):
+                self.assertIn(rule, flat(grammar))
+
     def test_reviewer_template_exempts_verification_contract(self):
         with open(os.path.join(REPO, "agents", "reviewer-contract.md"), encoding="utf-8") as fh:
             template = fh.read()
