@@ -11,23 +11,11 @@ const VERDICT_SCHEMA = {
   properties: {
     agent: { type: 'string' },
     VERDICT: { type: 'string', enum: ['PASS', 'FAIL'] },
-    BLOCKING: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'One blocker per item; none is an empty array [], never a "none" item.',
-    },
-    NON_BLOCKING: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'One point per item; none is an empty array [], never a "none" item.',
-    },
+    BLOCKING: { type: 'array', items: { type: 'string' } },
+    NON_BLOCKING: { type: 'array', items: { type: 'string' } },
   },
   required: ['VERDICT', 'BLOCKING', 'NON_BLOCKING'],
   additionalProperties: false,
-  // PASS ⟹ BLOCKING empty: the runtime rejects a PASS that lists any item, so
-  // the reviewer retries instead of the round recording a FAIL it never gave.
-  if: { properties: { VERDICT: { const: 'PASS' } } },
-  then: { properties: { BLOCKING: { type: 'array', maxItems: 0 } } },
 }
 
 function normalize(member, v) {
@@ -45,7 +33,7 @@ function normalize(member, v) {
   }
   const blocking = Array.isArray(v.BLOCKING) ? v.BLOCKING.filter(x => typeof x === 'string') : []
   const nonBlocking = Array.isArray(v.NON_BLOCKING) ? v.NON_BLOCKING.filter(x => typeof x === 'string') : []
-  // Recorded PASS ⟺ reviewer PASS with blocking empty; rechecks the schema's rule.
+  // Semantic invariant the schema cannot express: PASS ⟺ blocking empty.
   const verdict = v.VERDICT === 'PASS' && blocking.length === 0 ? 'PASS' : 'FAIL'
   return { agent: member.agent, VERDICT: verdict, BLOCKING: blocking, NON_BLOCKING: nonBlocking, synthetic: false }
 }
